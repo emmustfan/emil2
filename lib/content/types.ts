@@ -1,0 +1,54 @@
+export type ContentStatus = "DRAFT" | "REVIEW" | "PUBLISHED";
+export type SubjectDTO = {
+  id: string;
+  title: string;
+  slug: string;
+  shortDescription: string;
+  descriptionMd: string | null;
+  courses: number[];
+  order: number;
+  status: ContentStatus;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  editRevision: number;
+};
+export type SectionDTO = {
+  id: string;
+  subjectId: string;
+  title: string;
+  order: number;
+  editRevision: number;
+};
+export type QuestionDTO = {
+  id: string;
+  topicId: string;
+  stem: string;
+  options: { id: string; text: string }[];
+  correctOptionIds: string[];
+  explanation: string;
+  sourceBlockKey: string | null;
+  isDiagnostic: boolean;
+  order: number;
+};
+export type TopicDTO = {
+  id: string;
+  subjectId: string;
+  sectionId: string | null;
+  title: string;
+  slug: string;
+  order: number;
+  isFree: boolean;
+  contentMd: string;
+  readingMinutes: number | null;
+  authorName: string | null;
+  reviewerName: string | null;
+  referencesMd: string | null;
+  needsExpertReview: boolean;
+  reviewedAt: string | null;
+  status: ContentStatus;
+  version: number;
+  editRevision: number;
+  publishedAt: string | null;
+  subject: { id: string; title: string; slug: string };
+  questions: QuestionDTO[];
+};

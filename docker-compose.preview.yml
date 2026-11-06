@@ -1,0 +1,26 @@
+name: emil2-local-preview
+x-preview-environment: &preview-environment
+  DATABASE_URL: postgresql://app:app@postgres:5432/dental_preview_000000000001
+  APP_URL: http://localhost:3000
+  LLM_PROVIDER: mock
+  PAYMENTS_PROVIDER: mock
+  STORAGE_DRIVER: local
+  MAIL_TRANSPORT: smtp
+  SMTP_HOST: mailpit
+  ADMIN_EMAILS: owner@example.ru
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_BOT_USERNAME: ""
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: dental_preview_000000000001
+  migrate:
+    environment: *preview-environment
+    command:
+      - sh
+      - -c
+      - pnpm db:migrate && pnpm db:seed && pnpm exec tsx scripts/preview/seed.ts
+  web:
+    environment: *preview-environment
+  worker:
+    environment: *preview-environment

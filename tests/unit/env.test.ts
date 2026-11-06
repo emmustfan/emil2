@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+import { parseEnv } from "../../lib/env";
+const base = { DATABASE_URL: "postgresql://app:app@localhost:5432/app" };
+describe("environment", () => {
+  it("accepts development defaults with only a database URL", () => {
+    expect(parseEnv(base)).toMatchObject({
+      LLM_PROVIDER: "mock",
+      PAYMENTS_PROVIDER: "mock",
+      MAIL_TRANSPORT: "log",
+      STORAGE_DRIVER: "local",
+    });
+  });
+  it("reports missing fields without exposing secret values", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        PAYMENTS_PROVIDER: "yookassa",
+        YOOKASSA_SECRET_KEY: "do-not-print-me",
+      }),
+    ).toThrow("YOOKASSA_SHOP_ID");
+    try {
+      parseEnv({
+        ...base,
+        PAYMENTS_PROVIDER: "yookassa",
+        YOOKASSA_SECRET_KEY: "do-not-print-me",
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain("do-not-print-me");
+    }
+  });
+  it.each([
+    "LLM_PROVIDER",
+    "PAYMENTS_PROVIDER",
+    "MAIL_TRANSPORT",
+    "STORAGE_DRIVER",
+  ])("forbids development %s in production", (key) => {
+    expect(() => parseEnv({ ...base, NODE_ENV: "production" })).toThrow(key);
+  });
+  it("validates database protocol and embedding dimension", () => {
+    expect(() => parseEnv({ DATABASE_URL: "file:database.db" })).toThrow(
+      "DATABASE_URL",
+    );
+    expect(() => parseEnv({ ...base, EMBEDDING_DIM: 0 })).toThrow(
+      "EMBEDDING_DIM",
+    );
+  });
+  it("requires credentials for real provider selection", () => {
+    expect(() =>
+      parseEnv({ ...base, LLM_PROVIDER: "openai_compatible" }),
+    ).toThrow("LLM_API_KEY");
+    expect(() => parseEnv({ ...base, MAIL_TRANSPORT: "smtp" })).toThrow(
+      "SMTP_HOST",
+    );
+    expect(() => parseEnv({ ...base, STORAGE_DRIVER: "s3" })).toThrow(
+      "S3_BUCKET",
+    );
+  });
+});

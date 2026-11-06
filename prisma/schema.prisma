@@ -1,0 +1,624 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// В Prisma каждое значение enum — на отдельной строке
+enum Role {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+}
+
+enum CardSource {
+  GAP
+  QUESTION
+}
+
+enum CardState {
+  NEW
+  LEARNING
+  REVIEW
+}
+
+enum Rating {
+  HARD
+  GOOD
+  EASY
+}
+
+enum PlanKind {
+  FREE
+  SUBJECT
+  ALL_SUBJECTS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  CANCELED
+  REFUNDED
+}
+
+enum TestMode {
+  TOPIC
+  DIAGNOSTIC
+  EXAM
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+// ---------- Пользователи и вход ----------
+model User {
+  id                       String              @id @default(cuid())
+  email                    String?             @unique
+  emailVerifiedAt          DateTime?
+  telegramId               BigInt?             @unique
+  telegramUsername         String?
+  telegramNotify           Boolean             @default(false)
+  vkId                     String?             @unique
+  name                     String?
+  role                     Role                @default(USER)
+  university               String?
+  course                   Int? // 1–5, 6 = выпускник
+  goal                     String?
+  timezone                 String              @default("Europe/Moscow")
+  consentPdVersion         String?
+  consentPdAt              DateTime?
+  offerVersion             String?
+  utm                      Json?
+  anonId                   String?
+  blockedAt                DateTime?
+  createdAt                DateTime            @default(now())
+  deletedAt                DateTime?
+  session_userId           Session[]           @relation("Session_userId")
+  loginToken_intentUserId  LoginToken[]        @relation("LoginToken_intentUserId")
+  demoSession_userId       DemoSession[]       @relation("DemoSession_userId")
+  gapAnswer_userId         GapAnswer[]         @relation("GapAnswer_userId")
+  testRun_userId           TestRun[]           @relation("TestRun_userId")
+  topicProgress_userId     TopicProgress[]     @relation("TopicProgress_userId")
+  card_userId              Card[]              @relation("Card_userId")
+  tutorConversation_userId TutorConversation[] @relation("TutorConversation_userId")
+  subscription_userId      Subscription[]      @relation("Subscription_userId")
+  payment_userId           Payment[]           @relation("Payment_userId")
+  promoCode_userId         PromoCode[]         @relation("PromoCode_userId")
+  accessGrant_userId       AccessGrant[]       @relation("AccessGrant_userId")
+  accessGrant_grantedById  AccessGrant[]       @relation("AccessGrant_grantedById")
+  event_userId             Event[]             @relation("Event_userId")
+  featureInterest_userId   FeatureInterest[]   @relation("FeatureInterest_userId")
+  importJob_createdById    ImportJob[]         @relation("ImportJob_createdById")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation("Session_userId", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model LoginToken {
+  id               String    @id @default(cuid())
+  email            String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  usedAt           DateTime?
+  ip               String?
+  createdAt        DateTime  @default(now())
+  requestNonceHash String
+  intentUserId     String?
+
+  intentUser User? @relation("LoginToken_intentUserId", fields: [intentUserId], references: [id], onDelete: Restrict)
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+model DemoSession {
+  id                              String              @id @default(cuid())
+  anonId                          String
+  goal                            String?
+  goalText                        String?
+  subjectId                       String?
+  step                            Int                 @default(1)
+  stepsCompleted                  Int[]
+  diagnostic                      Json? // { correct, strongTopicIds[], weakTopicIds[] }
+  discountPercent                 Int                 @default(0)
+  userId                          String? // заполняется при входе
+  utm                             Json?
+  createdAt                       DateTime            @default(now())
+  completedAt                     DateTime?
+  subject                         Subject?            @relation("DemoSession_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  user                            User?               @relation("DemoSession_userId", fields: [userId], references: [id], onDelete: Restrict)
+  gapAnswer_demoSessionId         GapAnswer[]         @relation("GapAnswer_demoSessionId")
+  testRun_demoSessionId           TestRun[]           @relation("TestRun_demoSessionId")
+  card_demoSessionId              Card[]              @relation("Card_demoSessionId")
+  tutorConversation_demoSessionId TutorConversation[] @relation("TutorConversation_demoSessionId")
+}
+
+// ---------- Контент ----------
+model Subject {
+  editRevision                Int                 @default(0)
+  id                          String              @id @default(cuid())
+  slug                        String              @unique
+  title                       String
+  shortDescription            String
+  descriptionMd               String?
+  courses                     Int[]
+  order                       Int                 @default(0)
+  status                      ContentStatus       @default(DRAFT)
+  seoTitle                    String?
+  seoDescription              String?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  demoSession_subjectId       DemoSession[]       @relation("DemoSession_subjectId")
+  section_subjectId           Section[]           @relation("Section_subjectId")
+  topic_subjectId             Topic[]             @relation("Topic_subjectId")
+  contentChunk_subjectId      ContentChunk[]      @relation("ContentChunk_subjectId")
+  testRun_subjectId           TestRun[]           @relation("TestRun_subjectId")
+  card_subjectId              Card[]              @relation("Card_subjectId")
+  tutorConversation_subjectId TutorConversation[] @relation("TutorConversation_subjectId")
+  subscription_subjectId      Subscription[]      @relation("Subscription_subjectId")
+  payment_subjectId           Payment[]           @relation("Payment_subjectId")
+  accessGrant_subjectId       AccessGrant[]       @relation("AccessGrant_subjectId")
+  importJob_subjectId         ImportJob[]         @relation("ImportJob_subjectId")
+}
+
+model Section {
+  editRevision        Int         @default(0)
+  id                  String      @id @default(cuid())
+  subjectId           String
+  title               String
+  order               Int         @default(0)
+  subject             Subject     @relation("Section_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  topic_sectionId     Topic[]     @relation("Topic_sectionId")
+  importJob_sectionId ImportJob[] @relation("ImportJob_sectionId")
+}
+
+model Topic {
+  editRevision              Int                 @default(0)
+  id                        String              @id @default(cuid())
+  subjectId                 String
+  sectionId                 String?
+  slug                      String
+  title                     String
+  order                     Int                 @default(0)
+  isFree                    Boolean             @default(false)
+  status                    ContentStatus       @default(DRAFT)
+  contentMd                 String              @db.Text
+  readingMinutes            Int?
+  referencesMd              String? // список литературы
+  authorName                String?
+  reviewerName              String?
+  reviewedAt                DateTime?
+  aiGenerated               Boolean             @default(false)
+  needsExpertReview         Boolean             @default(true)
+  version                   Int                 @default(0)
+  publishedAt               DateTime?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  subject                   Subject             @relation("Topic_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  section                   Section?            @relation("Topic_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
+  gap_topicId               Gap[]               @relation("Gap_topicId")
+  question_topicId          Question[]          @relation("Question_topicId")
+  contentChunk_topicId      ContentChunk[]      @relation("ContentChunk_topicId")
+  testRun_topicId           TestRun[]           @relation("TestRun_topicId")
+  topicProgress_topicId     TopicProgress[]     @relation("TopicProgress_topicId")
+  card_topicId              Card[]              @relation("Card_topicId")
+  tutorConversation_topicId TutorConversation[] @relation("TutorConversation_topicId")
+
+  @@unique([subjectId, slug])
+}
+
+model Gap {
+  id              String      @id @default(cuid())
+  topicId         String
+  gapKey          String // sha1(нормализованное предложение + ответ)
+  blockKey        String
+  order           Int
+  answer          String
+  distractors     String[]
+  sentence        String // предложение с "____"
+  archivedAt      DateTime?
+  topic           Topic       @relation("Gap_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  gapAnswer_gapId GapAnswer[] @relation("GapAnswer_gapId")
+  card_gapId      Card[]      @relation("Card_gapId")
+
+  @@unique([topicId, gapKey])
+}
+
+model Question {
+  id                         String            @id @default(cuid())
+  topicId                    String
+  stem                       String
+  options                    Json // [{ id: "a", text: "…" }]
+  correctOptionIds           String[] // в MVP ровно один
+  explanation                String
+  sourceBlockKey             String?
+  isDiagnostic               Boolean           @default(false)
+  order                      Int               @default(0)
+  archivedAt                 DateTime?
+  topic                      Topic             @relation("Question_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  questionAttempt_questionId QuestionAttempt[] @relation("QuestionAttempt_questionId")
+  card_questionId            Card[]            @relation("Card_questionId")
+}
+
+model ContentChunk {
+  id          String                       @id @default(cuid())
+  topicId     String
+  subjectId   String
+  blockKey    String
+  heading     String?
+  text        String                       @db.Text
+  tokenCount  Int
+  isFreeTopic Boolean
+  embedding   Unsupported("vector(1536)")? // размерность = EMBEDDING_DIM
+  createdAt   DateTime                     @default(now())
+  topic       Topic                        @relation("ContentChunk_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  subject     Subject                      @relation("ContentChunk_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@index([subjectId])
+}
+
+// ---------- Прогресс и повторение ----------
+model GapAnswer {
+  id            String       @id @default(cuid())
+  gapId         String
+  userId        String?
+  demoSessionId String?
+  chosen        String
+  isCorrect     Boolean
+  createdAt     DateTime     @default(now())
+  gap           Gap          @relation("GapAnswer_gapId", fields: [gapId], references: [id], onDelete: Restrict)
+  user          User?        @relation("GapAnswer_userId", fields: [userId], references: [id], onDelete: Restrict)
+  demoSession   DemoSession? @relation("GapAnswer_demoSessionId", fields: [demoSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, gapId])
+  @@unique([demoSessionId, gapId])
+}
+
+model TestRun {
+  topicVersion Int?
+  id                        String            @id @default(cuid())
+  mode                      TestMode
+  subjectId                 String
+  topicId                   String?
+  userId                    String?
+  demoSessionId             String?
+  total                     Int
+  correct                   Int               @default(0)
+  score                     Float?
+  timeLimitSec              Int?
+  startedAt                 DateTime          @default(now())
+  finishedAt                DateTime?
+  subject                   Subject           @relation("TestRun_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  topic                     Topic?            @relation("TestRun_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  user                      User?             @relation("TestRun_userId", fields: [userId], references: [id], onDelete: Restrict)
+  demoSession               DemoSession?      @relation("TestRun_demoSessionId", fields: [demoSessionId], references: [id], onDelete: Restrict)
+  questionAttempt_testRunId QuestionAttempt[] @relation("QuestionAttempt_testRunId")
+}
+
+model QuestionAttempt {
+  id              String   @id @default(cuid())
+  testRunId       String
+  questionId      String
+  chosenOptionIds String[]
+  isCorrect       Boolean
+  createdAt       DateTime @default(now())
+  testRun         TestRun  @relation("QuestionAttempt_testRunId", fields: [testRunId], references: [id], onDelete: Restrict)
+  question        Question @relation("QuestionAttempt_questionId", fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([testRunId, questionId])
+}
+
+model TopicProgress {
+  userId        String
+  topicId       String
+  gapsAnswered  Int       @default(0)
+  gapsCorrect   Int       @default(0)
+  testBestScore Float?
+  completedAt   DateTime?
+  lastOpenedAt  DateTime  @default(now())
+  user          User      @relation("TopicProgress_userId", fields: [userId], references: [id], onDelete: Restrict)
+  topic         Topic     @relation("TopicProgress_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+
+  @@id([userId, topicId])
+}
+
+model Card {
+  id            String     @id @default(cuid())
+  userId        String?
+  demoSessionId String?
+  source        CardSource
+  gapId         String?
+  questionId    String?
+  subjectId     String
+  topicId       String
+  state         CardState  @default(NEW)
+  ease          Float      @default(2.5)
+  intervalDays  Float      @default(0)
+  dueAt         DateTime
+  reps          Int        @default(0)
+  lapses        Int        @default(0)
+  suspended     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+
+  user             User?        @relation("Card_userId", fields: [userId], references: [id], onDelete: Restrict)
+  demoSession      DemoSession? @relation("Card_demoSessionId", fields: [demoSessionId], references: [id], onDelete: Restrict)
+  gap              Gap?         @relation("Card_gapId", fields: [gapId], references: [id], onDelete: Restrict)
+  question         Question?    @relation("Card_questionId", fields: [questionId], references: [id], onDelete: Restrict)
+  subject          Subject      @relation("Card_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  topic            Topic        @relation("Card_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  reviewLog_cardId ReviewLog[]  @relation("ReviewLog_cardId")
+
+  @@unique([userId, gapId])
+  @@unique([userId, questionId])
+  @@unique([demoSessionId, gapId])
+  @@unique([demoSessionId, questionId])
+  @@index([userId, dueAt])
+}
+
+model ReviewLog {
+  id               String   @id @default(cuid())
+  cardId           String
+  rating           Rating
+  prevIntervalDays Float
+  newIntervalDays  Float
+  reviewedAt       DateTime @default(now())
+  card             Card     @relation("ReviewLog_cardId", fields: [cardId], references: [id], onDelete: Restrict)
+}
+
+// ---------- ИИ-тьютор ----------
+model TutorConversation {
+  id                          String         @id @default(cuid())
+  userId                      String?
+  demoSessionId               String?
+  subjectId                   String
+  topicId                     String?
+  createdAt                   DateTime       @default(now())
+  user                        User?          @relation("TutorConversation_userId", fields: [userId], references: [id], onDelete: Restrict)
+  demoSession                 DemoSession?   @relation("TutorConversation_demoSessionId", fields: [demoSessionId], references: [id], onDelete: Restrict)
+  subject                     Subject        @relation("TutorConversation_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  topic                       Topic?         @relation("TutorConversation_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  tutorMessage_conversationId TutorMessage[] @relation("TutorMessage_conversationId")
+}
+
+model TutorMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String            @db.Text
+  citations      Json? // [{ n, topicId, blockKey, heading }]
+  model          String?
+  tokensIn       Int?
+  tokensOut      Int?
+  latencyMs      Int?
+  feedback       Int? // 1 = полезно, -1 = неточно
+  createdAt      DateTime          @default(now())
+  conversation   TutorConversation @relation("TutorMessage_conversationId", fields: [conversationId], references: [id], onDelete: Restrict)
+}
+
+model UsageCounter {
+  id          String   @id @default(cuid())
+  actorKey    String // "user:<id>" | "demo:<id>"
+  feature     String // "tutor"
+  periodStart DateTime
+  count       Int      @default(0)
+
+  @@unique([actorKey, feature, periodStart])
+}
+
+// ---------- Оплата ----------
+model Plan {
+  id                  String         @id @default(cuid())
+  code                String         @unique // free | subject_month | all_month
+  kind                PlanKind
+  title               String
+  priceKopecks        Int
+  periodMonths        Int            @default(1)
+  tutorDailyLimit     Int
+  features            String[]
+  isActive            Boolean        @default(true)
+  order               Int            @default(0)
+  subscription_planId Subscription[] @relation("Subscription_planId")
+  payment_planId      Payment[]      @relation("Payment_planId")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String
+  planId                 String
+  subjectId              String? // для PlanKind.SUBJECT
+  status                 SubscriptionStatus
+  autoRenew              Boolean            @default(true)
+  priceKopecks           Int
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  paymentMethodId        String?
+  paymentMethodTitle     String? // "Visa •• 4417"
+  failedAttempts         Int                @default(0)
+  nextRetryAt            DateTime?
+  canceledAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation("Subscription_userId", fields: [userId], references: [id], onDelete: Restrict)
+  plan                   Plan               @relation("Subscription_planId", fields: [planId], references: [id], onDelete: Restrict)
+  subject                Subject?           @relation("Subscription_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  payment_subscriptionId Payment[]          @relation("Payment_subscriptionId")
+
+  @@index([userId, status])
+  @@index([currentPeriodEnd])
+}
+
+model Payment {
+  id                 String        @id @default(cuid())
+  userId             String
+  subscriptionId     String?
+  planId             String
+  subjectId          String?
+  providerPaymentId  String?       @unique
+  amountKopecks      Int
+  status             PaymentStatus @default(PENDING)
+  isRecurring        Boolean       @default(false)
+  promoCodeId        String?
+  cancellationReason String?
+  raw                Json?
+  createdAt          DateTime      @default(now())
+  paidAt             DateTime?
+  refundedAt         DateTime?
+  user               User          @relation("Payment_userId", fields: [userId], references: [id], onDelete: Restrict)
+  subscription       Subscription? @relation("Payment_subscriptionId", fields: [subscriptionId], references: [id], onDelete: Restrict)
+  plan               Plan          @relation("Payment_planId", fields: [planId], references: [id], onDelete: Restrict)
+  subject            Subject?      @relation("Payment_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  promoCode          PromoCode?    @relation("Payment_promoCodeId", fields: [promoCodeId], references: [id], onDelete: Restrict)
+}
+
+model PromoCode {
+  id                  String    @id @default(cuid())
+  code                String    @unique
+  percentOff          Int?
+  amountOffKopecks    Int?
+  validUntil          DateTime?
+  maxUses             Int?
+  usedCount           Int       @default(0)
+  userId              String? // персональный (скидка за демо)
+  firstPaymentOnly    Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  payment_promoCodeId Payment[] @relation("Payment_promoCodeId")
+  user                User?     @relation("PromoCode_userId", fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model AccessGrant {
+  id          String   @id @default(cuid())
+  userId      String
+  subjectId   String? // null = все предметы
+  expiresAt   DateTime
+  reason      String?
+  grantedById String
+  createdAt   DateTime @default(now())
+  user        User     @relation("AccessGrant_userId", fields: [userId], references: [id], onDelete: Restrict)
+  subject     Subject? @relation("AccessGrant_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  grantedBy   User     @relation("AccessGrant_grantedById", fields: [grantedById], references: [id], onDelete: Restrict)
+}
+
+// ---------- Аналитика, настройки, служебное ----------
+model Event {
+  id        BigInt   @id @default(autoincrement())
+  name      String
+  userId    String?
+  anonId    String?
+  props     Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation("Event_userId", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([name, createdAt])
+  @@index([userId])
+}
+
+model FakeDoorFeature {
+  code        String            @id
+  title       String
+  description String
+  isActive    Boolean           @default(true)
+  order       Int               @default(0)
+  interests   FeatureInterest[]
+}
+
+model FeatureInterest {
+  id          String          @id @default(cuid())
+  featureCode String
+  userId      String?
+  email       String?
+  createdAt   DateTime        @default(now())
+  user        User?           @relation("FeatureInterest_userId", fields: [userId], references: [id], onDelete: Restrict)
+  feature     FakeDoorFeature @relation(fields: [featureCode], references: [code], onDelete: Restrict)
+}
+
+model LandingContent {
+  key       String   @id // "hero", "faq", "howItWorks" …
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model LegalDocument {
+  id          String   @id @default(cuid())
+  kind        String // oferta | privacy | consent | refund
+  version     String
+  contentMd   String   @db.Text
+  publishedAt DateTime
+
+  @@unique([kind, version])
+}
+
+model Calculator {
+  slug       String        @id
+  title      String
+  config     Json // поля, функция, пороги интерпретации
+  sourceRef  String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  status     ContentStatus @default(DRAFT)
+}
+
+model ImportJob {
+  id          String    @id @default(cuid())
+  createdById String
+  subjectId   String
+  sectionId   String?
+  fileKey     String
+  status      String // queued | processing | done | failed
+  error       String?
+  topicIds    String[]
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  createdBy   User      @relation("ImportJob_createdById", fields: [createdById], references: [id], onDelete: Restrict)
+  subject     Subject   @relation("ImportJob_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  section     Section?  @relation("ImportJob_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// Replay protection for Telegram login payloads (never stores bot tokens).
+model TelegramAuthUse {
+  hash      String   @id
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// Rolling rate limit for signed/invalid Telegram authentication attempts.
+model AuthAttempt {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}

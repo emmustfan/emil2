@@ -1,0 +1,61 @@
+name: dental-learning
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://app:app@postgres:5432/app
+    NEXT_TELEMETRY_DISABLED: "1"
+    SMTP_HOST: mailpit
+  volumes:
+    - uploads:/app/tmp/uploads
+    - mails:/app/tmp/mails
+  depends_on:
+    postgres:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  minio:
+    build: ./infra/minio
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: localminio
+      MINIO_ROOT_PASSWORD: localminio-password
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: ["minio:/data"]
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+  migrate:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://app:app@postgres:5432/app
+    command: ["sh", "-c", "pnpm db:migrate && pnpm db:seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  web:
+    <<: *app
+    ports: ["127.0.0.1:3000:3000"]
+  worker:
+    <<: *app
+    command: pnpm worker
+volumes:
+  postgres:
+  minio:
+  uploads:
+  mails:
