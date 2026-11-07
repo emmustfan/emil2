@@ -6,15 +6,17 @@ export function Pagination({
   page,
   pages,
   total,
+  filters = {},
 }: {
   base: string;
   q: string;
   page: number;
   pages: number;
   total: number;
+  filters?: Record<string, string>;
 }) {
   const href = (next: number) =>
-    `${base}?${new URLSearchParams({ q, page: String(next) })}`;
+    `${base}?${new URLSearchParams({ ...filters, q, page: String(next) })}`;
   return (
     <div className="mt-5 flex flex-wrap items-center gap-5 text-sm">
       <p className="text-stone-500">

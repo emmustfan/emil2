@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
+import { redirect } from "next/navigation";
 import { listSubjects } from "@/lib/content/service";
 import { searchState } from "@/lib/content/page";
-import { contentRu as t, authRu } from "@/lib/i18n/ru";
+import { contentRu as t, rolesRu } from "@/lib/i18n/ru";
 import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/admin/pagination";
 export default async function Admin({
@@ -10,12 +11,19 @@ export default async function Admin({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireEditor();
+  const user = await requireEditor();
+  if (user.role === "EDITOR") redirect("/teacher");
   const { q, page } = searchState(await searchParams);
-  const data = await listSubjects(q, page);
+  const data = await listSubjects(q, page, user.id);
   return (
     <main>
-      <h1 className="text-3xl font-semibold">{authRu.adminTitle}</h1>
+      <h1 className="text-3xl font-semibold">{rolesRu.adminTitle}</h1>
+      <Link
+        href="/admin/users"
+        className="mt-5 inline-flex min-h-11 items-center text-emerald-800 underline"
+      >
+        {rolesRu.users}
+      </Link>
       <p className="mt-3 text-sm text-stone-600">{t.description}</p>
       <section className="mt-8 rounded-2xl border border-stone-200 bg-white p-5 sm:p-7">
         <div className="flex flex-wrap items-center justify-between gap-4">

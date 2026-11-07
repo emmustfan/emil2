@@ -8,10 +8,10 @@ export default async function NewTopic({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireEditor();
+  const user = await requireEditor();
   const { id } = await params;
-  const subject = await contentPage(() => getSubject(id));
-  const sections = await listSections(id);
+  const subject = await contentPage(() => getSubject(id, user.id));
+  const sections = await listSections(id, user.id);
   return (
     <main className="mx-auto max-w-3xl">
       <h1 className="mb-3 text-3xl font-semibold">{t.newTopic}</h1>

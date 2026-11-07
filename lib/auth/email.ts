@@ -4,6 +4,7 @@ import { getSetting } from "../settings";
 import { createMailTransport } from "../mail";
 import { hashToken, isToken, matchesToken, newToken } from "./crypto";
 import { adminRole } from "./validation";
+import { lockRoleAccess } from "./role-lock";
 import { AuthError } from "./errors";
 import { createSession, lock, sessionLimits } from "./session";
 import { authRu } from "../i18n/ru";
@@ -89,6 +90,7 @@ export async function verifyEmail(
   const db = getDb();
   const limits = await sessionLimits();
   return db.$transaction(async (tx) => {
+    await lockRoleAccess(tx);
     await lock(tx, `login-token:${hashToken(token)}`);
     const record = await tx.loginToken.findUnique({
       where: { tokenHash: hashToken(token) },

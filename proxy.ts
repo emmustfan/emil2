@@ -50,6 +50,18 @@ export async function proxy(request: NextRequest) {
         "Cache-Control": "no-store",
       },
     });
+  if (
+    (path.startsWith("/admin/users") && session.user.role !== "ADMIN") ||
+    (path.startsWith("/teacher") &&
+      !["ADMIN", "EDITOR"].includes(session.user.role))
+  )
+    return new NextResponse(authRu.forbidden, {
+      status: 403,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "private, no-store",
+      },
+    });
   const consent = await hasCurrentConsent(session.user);
   const response =
     !consent && path !== "/onboarding"
@@ -68,5 +80,7 @@ export const config = {
     "/admin/:path*",
     "/review/:path*",
     "/tutor/:path*",
+    "/teacher/:path*",
+    "/student/:path*",
   ],
 };

@@ -47,7 +47,7 @@ async function finishOnboarding(page: Page) {
     .fill("Студент Тест");
   await checkbox.check();
   await page.getByRole("button", { name: "Продолжить" }).click();
-  await expect(page).toHaveURL(/\/cabinet$/);
+  await expect(page).toHaveURL(/\/(?:cabinet|admin)$/);
 }
 async function enter(page: Page, email = address()) {
   await page.goto("/login");
@@ -310,7 +310,7 @@ test("synthetic Telegram login and replay protection", async ({
   await expect(page).toHaveURL(/\/cabinet$/);
 });
 
-test("admin list elevates an authenticated owner, editors stay authorized server-side", async ({
+test("admin list elevates an authenticated owner and staff use distinct workspaces", async ({
   page,
   context,
 }, info) => {
@@ -319,12 +319,15 @@ test("admin list elevates an authenticated owner, editors stay authorized server
   await enter(page, email);
   await page.goto("/admin");
   await expect(
-    page.getByRole("heading", { name: "Рабочее пространство редактора" }),
+    page.getByRole("heading", { name: "Кабинет администратора" }),
   ).toBeVisible();
   await db.user.update({ where: { email }, data: { role: "EDITOR" } });
-  expect(
-    (await context.request.get("/admin", { maxRedirects: 0 })).status(),
-  ).toBe(200);
+  const teacherRedirect = await context.request.get("/admin", {
+    maxRedirects: 0,
+  });
+  expect(teacherRedirect.status()).toBe(307);
+  expect(teacherRedirect.headers().location).toContain("/teacher");
+  expect((await context.request.get("/teacher")).status()).toBe(200);
   await db.user.update({ where: { email }, data: { role: "USER" } });
   expect(
     (await context.request.get("/admin", { maxRedirects: 0 })).status(),

@@ -75,6 +75,7 @@ enum MessageRole {
 
 // ---------- Пользователи и вход ----------
 model User {
+  roleRevision             Int                 @default(0)
   id                       String              @id @default(cuid())
   email                    String?             @unique
   emailVerifiedAt          DateTime?
@@ -112,6 +113,36 @@ model User {
   event_userId             Event[]             @relation("Event_userId")
   featureInterest_userId   FeatureInterest[]   @relation("FeatureInterest_userId")
   importJob_createdById    ImportJob[]         @relation("ImportJob_createdById")
+  teachingAssignments      TeacherSubject[]    @relation("TeacherSubject_teacher")
+  assignedTeachingSubjects TeacherSubject[]    @relation("TeacherSubject_assigner")
+  securityChangesMade      SecurityAudit[]     @relation("SecurityAudit_actor")
+  securityChangesReceived  SecurityAudit[]     @relation("SecurityAudit_target")
+}
+
+model TeacherSubject {
+  teacherId    String
+  subjectId    String
+  assignedById String?
+  createdAt    DateTime @default(now())
+  teacher      User     @relation("TeacherSubject_teacher", fields: [teacherId], references: [id], onDelete: Restrict)
+  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  assignedBy   User?    @relation("TeacherSubject_assigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([teacherId, subjectId])
+  @@index([subjectId])
+}
+
+model SecurityAudit {
+  id        String   @id @default(cuid())
+  actorId   String?
+  targetId  String?
+  action    String
+  changes   Json
+  createdAt DateTime @default(now())
+  actor     User?    @relation("SecurityAudit_actor", fields: [actorId], references: [id], onDelete: SetNull)
+  target    User?    @relation("SecurityAudit_target", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([targetId, createdAt])
 }
 
 model Session {
@@ -168,6 +199,7 @@ model DemoSession {
 
 // ---------- Контент ----------
 model Subject {
+  teachingAssignments         TeacherSubject[]
   editRevision                Int                 @default(0)
   id                          String              @id @default(cuid())
   slug                        String              @unique

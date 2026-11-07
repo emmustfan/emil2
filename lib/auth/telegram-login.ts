@@ -4,6 +4,7 @@ import { getSetting } from "../settings";
 import { verifyTelegram } from "./telegram";
 import { AuthError } from "./errors";
 import { createSession, sessionLimits } from "./session";
+import { lockRoleAccess } from "./role-lock";
 export async function loginTelegram(
   data: unknown,
   intentUserId: string | null,
@@ -20,6 +21,7 @@ export async function loginTelegram(
   if (!verified) throw new AuthError("invalid");
   const limits = await sessionLimits();
   return getDb().$transaction(async (tx) => {
+    await lockRoleAccess(tx);
     const replay = await tx.telegramAuthUse.findUnique({
       where: { hash: verified.hash },
     });

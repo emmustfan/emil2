@@ -4,6 +4,7 @@ import { getEnv } from "../env";
 import { getSetting } from "../settings";
 import { hashToken, isToken, newToken } from "./crypto";
 import { AuthError } from "./errors";
+import { lockRoleAccess } from "./role-lock";
 export const SID = "sid";
 export const LOGIN_FLOW = "login_flow";
 export function cookieOptions(expires: Date) {
@@ -26,6 +27,7 @@ export async function createSession(
   days: number,
   maxSessions: number,
 ) {
+  await lockRoleAccess(tx);
   await lock(tx, `sessions:${userId}`);
   const token = newToken();
   const now = new Date();

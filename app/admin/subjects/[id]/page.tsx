@@ -19,28 +19,30 @@ export default async function SubjectPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireEditor();
+  const user = await requireEditor();
   const { id } = await params;
   const { q, page } = searchState(await searchParams);
-  const subject = await contentPage(() => getSubject(id));
+  const subject = await contentPage(() => getSubject(id, user.id));
   const [sections, topics] = await Promise.all([
-    listSections(id),
-    listTopics(id, q, page),
+    listSections(id, user.id),
+    listTopics(id, q, page, user.id),
   ]);
   return (
     <main className="space-y-8">
       <h1 className="text-3xl font-semibold">{subject.title}</h1>
-      <details className="rounded-2xl border border-stone-200 bg-white p-6">
-        <summary className="min-h-11 cursor-pointer text-lg font-semibold">
-          {t.editSubject}
-        </summary>
-        <div className="mt-6">
-          <SubjectForm
-            key={`${subject.id}-${subject.editRevision}`}
-            initial={subjectDTO(subject)}
-          />
-        </div>
-      </details>
+      {user.role === "ADMIN" && (
+        <details className="rounded-2xl border border-stone-200 bg-white p-6">
+          <summary className="min-h-11 cursor-pointer text-lg font-semibold">
+            {t.editSubject}
+          </summary>
+          <div className="mt-6">
+            <SubjectForm
+              key={`${subject.id}-${subject.editRevision}`}
+              initial={subjectDTO(subject)}
+            />
+          </div>
+        </details>
+      )}
       <section className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-7">
         <h2 className="mb-5 text-2xl font-semibold">{t.sections}</h2>
         <div className="space-y-4">

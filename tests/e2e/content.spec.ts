@@ -138,7 +138,7 @@ test.beforeEach(async ({ context }) => {
   const user = await db.user.create({
     data: {
       email: `${prefix}@example.test`,
-      role: "EDITOR",
+      role: "ADMIN",
       name: "Редактор фикстуры",
       consentPdAt: new Date(),
       consentPdVersion: documents.find((d) => d.kind === "consent")!.version,
@@ -197,7 +197,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test("editor creates a subject, section, ten gaps, five questions and publishes with stable IDs", async ({
+test("administrator creates a subject, section, ten gaps, five questions and publishes with stable IDs", async ({
   page,
 }) => {
   await page.goto("/admin");
@@ -442,7 +442,7 @@ test("content APIs enforce role and Origin, validate references, and support saf
     });
     expect(response.status()).toBe(403);
   }
-  await db.user.update({ where: { id: userId }, data: { role: "EDITOR" } });
+  await db.user.update({ where: { id: userId }, data: { role: "ADMIN" } });
   expect(
     (
       await context.request.post("/api/admin/content/preview", {

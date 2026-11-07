@@ -19,3 +19,9 @@ export async function requireEditor() {
   if (!(await hasCurrentConsent(user))) redirect("/onboarding");
   return user;
 }
+export async function requireAdmin() {
+  const user = await requireUser(false);
+  if (user.role !== "ADMIN") forbidden();
+  if (!(await hasCurrentConsent(user))) redirect("/onboarding");
+  return user;
+}

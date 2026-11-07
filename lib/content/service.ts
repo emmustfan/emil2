@@ -1,3 +1,4 @@
+import { contentActor, authorizeSubject, contentWrite } from "./permissions";
 import { gapDefinition, gapExercisesSchema } from "../exercises";
 import { z } from "zod";
 import { getDb } from "../db";
@@ -30,7 +31,8 @@ async function lock(tx: Db, key: string) {
 function checkRevision(actual: number, expected: number) {
   if (actual !== expected) throw conflict();
 }
-export async function listSubjects(q = "", page = 1) {
+export async function listSubjects(q = "", page = 1, actorId?: string) {
+  const actor = await contentActor(actorId);
   const size = await getSetting("content.pageSize");
   const where = q
     ? {
@@ -40,9 +42,17 @@ export async function listSubjects(q = "", page = 1) {
         ],
       }
     : {};
+  const scopedWhere: Prisma.SubjectWhereInput = {
+    AND: [
+      where,
+      actor?.role === "EDITOR"
+        ? { teachingAssignments: { some: { teacherId: actor.id } } }
+        : {},
+    ],
+  };
   const [items, total] = await Promise.all([
     getDb().subject.findMany({
-      where,
+      where: scopedWhere,
       orderBy: [{ order: "asc" }, { id: "asc" }],
       skip: (page - 1) * size,
       take: size,
@@ -50,22 +60,30 @@ export async function listSubjects(q = "", page = 1) {
         _count: { select: { topic_subjectId: true, section_subjectId: true } },
       },
     }),
-    getDb().subject.count({ where }),
+    getDb().subject.count({ where: scopedWhere }),
   ]);
   return { items, total, page, pages: Math.max(1, Math.ceil(total / size)) };
 }
-export async function getSubject(id: string) {
+export async function getSubject(id: string, actorId?: string) {
+  await authorizeSubject(id, actorId);
   const row = await getDb().subject.findUnique({ where: { id } });
   if (!row) throw notFound();
   return row;
 }
-export async function listSections(subjectId: string) {
+export async function listSections(subjectId: string, actorId?: string) {
+  await authorizeSubject(subjectId, actorId);
   return getDb().section.findMany({
     where: { subjectId },
     orderBy: [{ order: "asc" }, { id: "asc" }],
   });
 }
-export async function listTopics(subjectId: string, q = "", page = 1) {
+export async function listTopics(
+  subjectId: string,
+  q = "",
+  page = 1,
+  actorId?: string,
+) {
+  await authorizeSubject(subjectId, actorId);
   const size = await getSetting("content.pageSize");
   const where = {
     subjectId,
@@ -98,6 +116,7 @@ export async function listTopics(subjectId: string, q = "", page = 1) {
 export async function getTopic(
   id: string,
   db: Db = getDb(),
+  actorId?: string,
 ): Promise<TopicDTO> {
   const row = await db.topic.findUnique({
     where: { id },
@@ -110,6 +129,7 @@ export async function getTopic(
     },
   });
   if (!row) throw notFound();
+  await authorizeSubject(row.subjectId, actorId, db);
   const questions: QuestionDTO[] = row.question_topicId.map((q) => ({
     id: q.id,
     topicId: q.topicId,
@@ -147,15 +167,20 @@ export async function getTopic(
     questions,
   };
 }
-export async function createSubject(data: SubjectInput) {
-  return getDb().subject.create({ data });
+export async function createSubject(data: SubjectInput, actorId?: string) {
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, true);
+    return tx.subject.create({ data });
+  });
 }
 export async function updateSubject(
   id: string,
   revision: number,
   data: SubjectInput,
+  actorId?: string,
 ) {
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, true);
     await lock(tx, `subject:${id}`);
     const row = await tx.subject.findUnique({ where: { id } });
     if (!row) throw notFound();
@@ -166,8 +191,13 @@ export async function updateSubject(
     });
   });
 }
-export async function deleteSubject(id: string, revision: number) {
+export async function deleteSubject(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, true);
     await lock(tx, `subject:${id}`);
     const row = await tx.subject.findUnique({ where: { id } });
     if (!row) throw notFound();
@@ -178,29 +208,54 @@ export async function deleteSubject(id: string, revision: number) {
     return { id };
   });
 }
-export async function createSection(subjectId: string, data: SectionInput) {
-  if (!(await getDb().subject.findUnique({ where: { id: subjectId } })))
-    throw notFound();
-  return getDb().section.create({ data: { ...data, subjectId } });
+export async function createSection(
+  subjectId: string,
+  data: SectionInput,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId);
+    await authorizeSubject(subjectId, actorId, tx);
+    if (!(await tx.subject.count({ where: { id: subjectId } })))
+      throw notFound();
+    return tx.section.create({ data: { ...data, subjectId } });
+  });
 }
 export async function updateSection(
   id: string,
   revision: number,
   data: SectionInput,
+  actorId?: string,
 ) {
-  const changed = await getDb().section.updateMany({
-    where: { id, editRevision: revision },
-    data: { ...data, editRevision: { increment: 1 } },
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId);
+    const row = await tx.section.findUnique({ where: { id } });
+    if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
+    const changed = await tx.section.updateMany({
+      where: { id, editRevision: revision },
+      data: { ...data, editRevision: { increment: 1 } },
+    });
+    if (!changed.count) throw conflict();
+    return tx.section.findUniqueOrThrow({ where: { id } });
   });
-  if (!changed.count) throw conflict();
-  return getDb().section.findUniqueOrThrow({ where: { id } });
 }
-export async function deleteSection(id: string, revision: number) {
-  const deleted = await getDb().section.deleteMany({
-    where: { id, editRevision: revision },
+export async function deleteSection(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId);
+    const row = await tx.section.findUnique({ where: { id } });
+    if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
+    const removed = await tx.section.deleteMany({
+      where: { id, editRevision: revision },
+    });
+    if (!removed.count) throw conflict();
+    return { id };
   });
-  if (!deleted.count) throw conflict();
-  return { id };
 }
 async function validSection(
   db: Db,
@@ -236,10 +291,16 @@ function validateReview(data: ReturnType<typeof topicData>) {
       "Для отметки проверки укажите автора, рецензента и источники.",
     );
 }
-export async function createTopic(subjectId: string, input: TopicInput) {
+export async function createTopic(
+  subjectId: string,
+  input: TopicInput,
+  actorId?: string,
+) {
   const data = topicData(input);
   validateReview(data);
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
+    await authorizeSubject(subjectId, actorId, tx);
     if (!(await tx.subject.findUnique({ where: { id: subjectId } })))
       throw notFound();
     await validSection(tx, subjectId, data.fields.sectionId);
@@ -258,13 +319,16 @@ export async function updateTopic(
   id: string,
   revision: number,
   input: TopicInput,
+  actorId?: string,
 ) {
   const data = topicData(input);
   validateReview(data);
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     await lock(tx, `topic:${id}`);
     const row = await tx.topic.findUnique({ where: { id } });
     if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
     checkRevision(row.editRevision, revision);
     await validSection(tx, row.subjectId, data.fields.sectionId);
     const unchanged =
@@ -291,11 +355,14 @@ export async function setTopicStatus(
   id: string,
   revision: number,
   status: "DRAFT" | "REVIEW",
+  actorId?: string,
 ) {
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     await lock(tx, `topic:${id}`);
     const row = await tx.topic.findUnique({ where: { id } });
     if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
     checkRevision(row.editRevision, revision);
     if (row.status !== status)
       await tx.topic.update({
@@ -336,12 +403,15 @@ export async function createQuestion(
   topicId: string,
   revision: number,
   input: QuestionInput,
+  actorId?: string,
 ) {
   const data = questionFields.parse(input);
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     await lock(tx, `topic:${topicId}`);
     const topic = await tx.topic.findUnique({ where: { id: topicId } });
     if (!topic) throw notFound();
+    await authorizeSubject(topic.subjectId, actorId, tx);
     checkRevision(topic.editRevision, revision);
     await validQuestionSource(tx, topicId, data);
     await tx.question.create({ data: { ...data, topicId } });
@@ -353,15 +423,18 @@ export async function updateQuestion(
   id: string,
   revision: number,
   input: QuestionInput,
+  actorId?: string,
 ) {
   const data = questionFields.parse(input);
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
     if (!q || q.archivedAt) throw notFound();
     await lock(tx, `topic:${q.topicId}`);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
     });
+    await authorizeSubject(topic.subjectId, actorId, tx);
     checkRevision(topic.editRevision, revision);
     await validQuestionSource(tx, q.topicId, data);
     const current = await tx.question.findUniqueOrThrow({ where: { id } });
@@ -378,14 +451,20 @@ export async function updateQuestion(
     return getTopic(q.topicId, tx);
   });
 }
-export async function deleteQuestion(id: string, revision: number) {
+export async function deleteQuestion(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
     if (!q || q.archivedAt) throw notFound();
     await lock(tx, `topic:${q.topicId}`);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
     });
+    await authorizeSubject(topic.subjectId, actorId, tx);
     checkRevision(topic.editRevision, revision);
     await tx.question.update({
       where: { id },
@@ -399,11 +478,17 @@ export async function deleteQuestion(id: string, revision: number) {
     return getTopic(q.topicId, tx);
   });
 }
-export async function deleteTopic(id: string, revision: number) {
+export async function deleteTopic(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
   return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId, false);
     await lock(tx, `topic:${id}`);
     const topic = await tx.topic.findUnique({ where: { id } });
     if (!topic) throw notFound();
+    await authorizeSubject(topic.subjectId, actorId, tx);
     checkRevision(topic.editRevision, revision);
     if (topic.status === "PUBLISHED")
       throw new ContentError("Сначала переведите тему в черновик.", 409);
@@ -414,7 +499,11 @@ export async function deleteTopic(id: string, revision: number) {
     return { id };
   });
 }
-export async function publishTopic(id: string, revision: number) {
+export async function publishTopic(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
   const [minQuestions, maxQuestions] = await Promise.all([
     getSetting("content.minQuestions"),
     getSetting("content.maxQuestions"),
@@ -422,8 +511,10 @@ export async function publishTopic(id: string, revision: number) {
   await getContentQueue();
   return getDb().$transaction(
     async (tx) => {
+      await contentWrite(tx, actorId, false);
       await lock(tx, `topic:${id}`);
       const topic = await getTopic(id, tx);
+      await authorizeSubject(topic.subjectId, actorId, tx);
       checkRevision(topic.editRevision, revision);
       const parsed = parseTopic(topic.contentMd);
       if (parsed.errors.length)
@@ -597,4 +688,22 @@ export function subjectDTO(row: SubjectDTO): SubjectDTO {
     seoDescription,
     editRevision,
   };
+}
+
+export async function getSection(id: string, actorId: string) {
+  const row = await getDb().section.findUnique({ where: { id } });
+  if (!row) throw notFound();
+  await authorizeSubject(row.subjectId, actorId);
+  return row;
+}
+export async function getQuestion(id: string, actorId: string) {
+  const row = await getDb().question.findFirst({
+    where: { id, archivedAt: null },
+    include: { topic: { select: { subjectId: true } } },
+  });
+  if (!row) throw notFound();
+  await authorizeSubject(row.topic.subjectId, actorId);
+  const { topic, ...question } = row;
+  void topic;
+  return question;
 }

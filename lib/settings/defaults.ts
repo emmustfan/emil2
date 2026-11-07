@@ -54,6 +54,8 @@ export const DEFAULT_SETTINGS = {
   "content.minQuestions": 5,
   "content.maxQuestions": 15,
   "content.autosaveMs": 1000,
+  "admin.usersPageSize": 20,
+  "admin.maxTeacherSubjects": 200,
 };
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;
 export function decodeSetting<K extends SettingKey>(
@@ -72,7 +74,8 @@ export function decodeSetting<K extends SettingKey>(
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
     !result.success ||
-    ((key.startsWith("content.") ||
+    ((key.startsWith("admin.") ||
+      key.startsWith("content.") ||
       key === "srs.newCardsPerDay" ||
       key === "srs.queuePageSize" ||
       (key.startsWith("lesson.") && !key.endsWith("Threshold"))) &&
@@ -80,6 +83,12 @@ export function decodeSetting<K extends SettingKey>(
     (key === "srs.queuePageSize" &&
       typeof result.data === "number" &&
       result.data > 100) ||
+    (key === "admin.usersPageSize" &&
+      typeof result.data === "number" &&
+      result.data > 100) ||
+    (key === "admin.maxTeacherSubjects" &&
+      typeof result.data === "number" &&
+      result.data > 1000) ||
     (key.startsWith("tutor.") &&
       !["tutor.minSimilarity", "tutor.topicBonus"].includes(key) &&
       (typeof result.data !== "number" || !Number.isInteger(result.data))) ||

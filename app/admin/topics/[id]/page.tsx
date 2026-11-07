@@ -10,10 +10,10 @@ export default async function TopicPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireEditor();
+  const user = await requireEditor();
   const { id } = await params;
-  const topic = await contentPage(() => getTopic(id));
-  const sections = await listSections(topic.subjectId);
+  const topic = await contentPage(() => getTopic(id, undefined, user.id));
+  const sections = await listSections(topic.subjectId, user.id);
   return (
     <main>
       <h1 className="mb-7 text-3xl font-semibold">{t.editTopic}</h1>

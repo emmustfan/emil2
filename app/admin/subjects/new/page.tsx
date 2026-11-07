@@ -1,8 +1,8 @@
-import { requireEditor } from "@/lib/auth/server";
+import { requireAdmin } from "@/lib/auth/server";
 import { SubjectForm } from "@/components/admin/subject-form";
 import { contentRu as t } from "@/lib/i18n/ru";
 export default async function NewSubject() {
-  await requireEditor();
+  await requireAdmin();
   return (
     <main className="mx-auto max-w-3xl">
       <h1 className="mb-7 text-3xl font-semibold">{t.newSubject}</h1>
