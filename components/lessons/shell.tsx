@@ -1,3 +1,4 @@
+import { ReviewLink } from "@/components/review/link";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { getCurrentSession } from "@/lib/auth/server";
@@ -20,12 +21,13 @@ export async function LearningShell({
           Учебная платформа
         </Link>
         <nav
-          className="flex items-center gap-5 text-sm"
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"
           aria-label="Основная навигация"
         >
           <Link className="inline-flex min-h-11 items-center" href="/subjects">
             Предметы
           </Link>
+          <ReviewLink />
           <Link
             className="inline-flex min-h-11 items-center text-emerald-800 underline"
             href={session ? "/cabinet" : "/login"}

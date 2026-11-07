@@ -1,3 +1,9 @@
+import {
+  creationSettings,
+  cardFromGap,
+  cardFromWrongQuestion,
+  lessonReview,
+} from "../srs/cards";
 import { gradeAnswer, type Definition, type Submission } from "../exercises";
 import { getDb } from "../db";
 import type {
@@ -194,6 +200,7 @@ export async function loadLesson(
         gaps: [],
         test: null,
         progress: null,
+        review: null,
       };
     const gaps = await tx.gap.findMany({
       where: { topicId, archivedAt: null },
@@ -222,6 +229,7 @@ export async function loadLesson(
       gaps: publicGaps,
       test: await testFor(topicId, topic.version, actor, tx),
       progress: await progressFor(topicId, actor, threshold, tx),
+      review: await lessonReview(tx, actor, topicId),
     };
   });
 }
@@ -233,7 +241,10 @@ export async function answerGap(
   practice = false,
 ) {
   await consumeLimit(actorKey(actor));
-  const threshold = await getSetting("lesson.passThreshold");
+  const [threshold, cardSettings] = await Promise.all([
+    getSetting("lesson.passThreshold"),
+    creationSettings(),
+  ]);
   return getDb().$transaction(async (tx) => {
     const initial = await tx.gap.findUnique({
       where: { id: gapId },
@@ -284,9 +295,19 @@ export async function answerGap(
       (await tx.gapAnswer.create({
         data: { ...actor, gapId, ...snapshot },
       }));
+    if (!existing)
+      await cardFromGap(
+        tx,
+        actor,
+        gap,
+        topic.subjectId,
+        answer.isCorrect,
+        cardSettings,
+      );
     return {
       feedback: gapFeedback(gap, practice && existing ? snapshot : answer),
       progress: await progressFor(topic.id, actor, threshold, tx),
+      review: await lessonReview(tx, actor, topic.id),
     };
   });
 }
@@ -337,7 +358,10 @@ export async function answerQuestion(
   actor: Actor,
 ) {
   await consumeLimit(actorKey(actor));
-  const threshold = await getSetting("lesson.passThreshold");
+  const [threshold, cardSettings] = await Promise.all([
+    getSetting("lesson.passThreshold"),
+    creationSettings(),
+  ]);
   return getDb().$transaction(async (tx) => {
     await lock(tx, `content:topic:${topicId}`);
     const topic = await accessibleTopic(topicId, actor, tx);
@@ -379,6 +403,14 @@ export async function answerQuestion(
           isCorrect: checked.isCorrect,
         },
       });
+      if (!attempt.isCorrect)
+        await cardFromWrongQuestion(
+          tx,
+          actor,
+          q,
+          topic.subjectId,
+          cardSettings,
+        );
       const attempts = await tx.questionAttempt.findMany({
         where: { testRunId: runId },
         select: { isCorrect: true },
@@ -398,6 +430,7 @@ export async function answerQuestion(
       feedback: questionFeedback(q, attempt),
       test: await testFor(topicId, topic.version, actor, tx),
       progress: await progressFor(topicId, actor, threshold, tx),
+      review: await lessonReview(tx, actor, topicId),
     };
   });
 }

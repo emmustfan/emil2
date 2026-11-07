@@ -23,6 +23,8 @@ export type ParsedBlock = {
   rootIndex: number;
 };
 export type ParsedGap = {
+  beforeGap: string;
+  afterGap: string;
   answerType: AnswerType;
   gapKey: string;
   blockKey: string;
@@ -303,6 +305,12 @@ export function parseTopic(md: string): ParsedTopic {
       keys.add(gapKey);
       result.gaps.push({
         ...gap,
+        beforeGap: plain
+          .slice(left, position)
+          .replace(/\uE000\d+\uE001/g, "____"),
+        afterGap: plain
+          .slice(position + `\uE000${gap.order}\uE001`.length, right)
+          .replace(/\uE000\d+\uE001/g, "____"),
         gapKey,
         sentence,
         line: md.slice(0, gap.start).split("\n").length,

@@ -206,7 +206,7 @@ model Section {
 }
 
 model Topic {
-  gapExercises Json @default("{}")
+  gapExercises              Json                @default("{}")
   editRevision              Int                 @default(0)
   id                        String              @id @default(cuid())
   subjectId                 String
@@ -242,10 +242,10 @@ model Topic {
 }
 
 model Gap {
-  answerType AnswerType @default(SINGLE_CHOICE)
-  correctAnswers String[] @default([])
-  acceptedAnswers String[] @default([])
-  explanation String @default("")
+  answerType      AnswerType  @default(SINGLE_CHOICE)
+  correctAnswers  String[]    @default([])
+  acceptedAnswers String[]    @default([])
+  explanation     String      @default("")
   id              String      @id @default(cuid())
   topicId         String
   gapKey          String // sha1(нормализованное предложение + ответ)
@@ -263,8 +263,8 @@ model Gap {
 }
 
 model Question {
-  answerType AnswerType @default(SINGLE_CHOICE)
-  acceptedAnswers String[] @default([])
+  answerType                 AnswerType        @default(SINGLE_CHOICE)
+  acceptedAnswers            String[]          @default([])
   id                         String            @id @default(cuid())
   topicId                    String
   stem                       String
@@ -299,9 +299,9 @@ model ContentChunk {
 
 // ---------- Прогресс и повторение ----------
 model GapAnswer {
-  chosenValues String[] @default([])
-  correctValues String[] @default([])
-  explanation String @default("")
+  chosenValues  String[]     @default([])
+  correctValues String[]     @default([])
+  explanation   String       @default("")
   id            String       @id @default(cuid())
   gapId         String
   userId        String?
@@ -318,7 +318,7 @@ model GapAnswer {
 }
 
 model TestRun {
-  topicVersion Int?
+  topicVersion              Int?
   id                        String            @id @default(cuid())
   mode                      TestMode
   subjectId                 String
@@ -339,7 +339,7 @@ model TestRun {
 }
 
 model QuestionAttempt {
-  chosenText String?
+  chosenText      String?
   id              String   @id @default(cuid())
   testRunId       String
   questionId      String
@@ -367,22 +367,26 @@ model TopicProgress {
 }
 
 model Card {
-  id            String     @id @default(cuid())
-  userId        String?
-  demoSessionId String?
-  source        CardSource
-  gapId         String?
-  questionId    String?
-  subjectId     String
-  topicId       String
-  state         CardState  @default(NEW)
-  ease          Float      @default(2.5)
-  intervalDays  Float      @default(0)
-  dueAt         DateTime
-  reps          Int        @default(0)
-  lapses        Int        @default(0)
-  suspended     Boolean    @default(false)
-  createdAt     DateTime   @default(now())
+  revision             Int        @default(0)
+  firstShownAt         DateTime?
+  revealedAt           DateTime?
+  revealedTopicVersion Int?
+  id                   String     @id @default(cuid())
+  userId               String?
+  demoSessionId        String?
+  source               CardSource
+  gapId                String?
+  questionId           String?
+  subjectId            String
+  topicId              String
+  state                CardState  @default(NEW)
+  ease                 Float      @default(2.5)
+  intervalDays         Float      @default(0)
+  dueAt                DateTime
+  reps                 Int        @default(0)
+  lapses               Int        @default(0)
+  suspended            Boolean    @default(false)
+  createdAt            DateTime   @default(now())
 
   user             User?        @relation("Card_userId", fields: [userId], references: [id], onDelete: Restrict)
   demoSession      DemoSession? @relation("Card_demoSessionId", fields: [demoSessionId], references: [id], onDelete: Restrict)
@@ -397,9 +401,11 @@ model Card {
   @@unique([demoSessionId, gapId])
   @@unique([demoSessionId, questionId])
   @@index([userId, dueAt])
+  @@index([userId, firstShownAt])
 }
 
 model ReviewLog {
+  cardRevision     Int?
   id               String   @id @default(cuid())
   cardId           String
   rating           Rating
@@ -407,6 +413,9 @@ model ReviewLog {
   newIntervalDays  Float
   reviewedAt       DateTime @default(now())
   card             Card     @relation("ReviewLog_cardId", fields: [cardId], references: [id], onDelete: Restrict)
+
+  @@unique([cardId, cardRevision])
+  @@index([cardId, reviewedAt])
 }
 
 // ---------- ИИ-тьютор ----------

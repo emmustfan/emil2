@@ -52,7 +52,9 @@ export type LessonTest = {
   score: number | null;
   finished: boolean;
 };
+export type LessonReview = { cards: number; signedIn: boolean };
 export type LessonData = {
+  review: LessonReview | null;
   topicId: string;
   version: number;
   locked: boolean;

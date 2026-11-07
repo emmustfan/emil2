@@ -9,6 +9,7 @@ import type {
   LessonData,
   LessonProgress,
   LessonTest,
+  LessonReview,
 } from "@/lib/lessons/types";
 import { LessonMarkdown } from "./markdown";
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -34,6 +35,7 @@ export function Lesson({
   const [gaps, setGaps] = useState(initial.gaps);
   const [test, setTest] = useState(initial.test!);
   const [progress, setProgress] = useState(initial.progress!);
+  const [review, setReview] = useState(initial.review!);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [practice, setPractice] = useState(false);
@@ -58,6 +60,7 @@ export function Lesson({
       const data = await post<{
         feedback: GapFeedback;
         progress: LessonProgress;
+        review: LessonReview;
       }>(`/api/gaps/${gapId}/answer`, {
         ...input,
         version: initial.version,
@@ -69,6 +72,8 @@ export function Lesson({
         ),
       );
       setProgress(data.progress);
+      setReview(data.review);
+      window.dispatchEvent(new Event("srs:changed"));
     });
   }
   function resetGaps() {
@@ -233,6 +238,7 @@ export function Lesson({
                         const data = await post<{
                           test: LessonTest;
                           progress: LessonProgress;
+                          review: LessonReview;
                         }>(`/api/tests/${initial.topicId}/answer`, {
                           runId: test.runId,
                           questionId: q.id,
@@ -240,6 +246,8 @@ export function Lesson({
                         });
                         setTest(data.test);
                         setProgress(data.progress);
+                        setReview(data.review);
+                        window.dispatchEvent(new Event("srs:changed"));
                       })
                     }
                   />
@@ -268,6 +276,21 @@ export function Lesson({
                   ? " Ответьте на оставшиеся пропуски, чтобы завершить тему."
                   : ""}
               </p>
+              {review?.signedIn ? (
+                <div className="mt-4">
+                  <p className="text-sm leading-7">
+                    Карточек этой темы в повторении: {review.cards}.
+                  </p>
+                  <Link href="/review" className="lesson-primary mt-3">
+                    Перейти к повторению
+                  </Link>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-7">
+                  Войдите перед следующим уроком, чтобы собирать личную очередь
+                  повторения в кабинете.
+                </p>
+              )}
               <div className="mt-5 flex flex-wrap gap-4">
                 <a
                   href={`#b-${initial.blocks[0]?.blockKey}`}

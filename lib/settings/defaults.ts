@@ -1,6 +1,9 @@
 import { z } from "zod";
 export const DEFAULT_SETTINGS = {
   "srs.hardMinutes": 10,
+  "srs.hardEasePenalty": 0.2,
+  "srs.easyEaseGain": 0.15,
+  "srs.queuePageSize": 20,
   "srs.goodFirstDays": 1,
   "srs.easyFirstDays": 3,
   "srs.easeDefault": 2.5,
@@ -56,8 +59,13 @@ export function decodeSetting<K extends SettingKey>(
   if (
     !result.success ||
     ((key.startsWith("content.") ||
+      key === "srs.newCardsPerDay" ||
+      key === "srs.queuePageSize" ||
       (key.startsWith("lesson.") && !key.endsWith("Threshold"))) &&
       (typeof result.data !== "number" || !Number.isInteger(result.data))) ||
+    (key === "srs.queuePageSize" &&
+      typeof result.data === "number" &&
+      result.data > 100) ||
     (key === "lesson.guestDays" &&
       typeof result.data === "number" &&
       result.data > 365) ||

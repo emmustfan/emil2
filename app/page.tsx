@@ -1,3 +1,4 @@
+import { ReviewLink } from "@/components/review/link";
 import Link from "next/link";
 import { ArrowDown, BookOpen, Layers3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ export default function Home() {
         >
           Предметы
         </Link>
+        <ReviewLink />
         <Button asChild variant="outline">
           <a href="/login">{authRu.login}</a>
         </Button>

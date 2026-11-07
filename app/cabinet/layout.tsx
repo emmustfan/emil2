@@ -1,3 +1,4 @@
+import { ReviewLink } from "@/components/review/link";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/server";
 import { authRu } from "@/lib/i18n/ru";
@@ -25,6 +26,7 @@ export default async function CabinetLayout({
         >
           {authRu.profile}
         </Link>
+        <ReviewLink />
         <form method="POST" action="/api/auth/logout">
           <button className="min-h-11 cursor-pointer underline">
             {authRu.logout}
