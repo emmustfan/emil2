@@ -77,8 +77,10 @@ export function SafeMarkdown({
 export function LessonMarkdown({
   blocks,
   gap,
+  afterBlock,
 }: {
   blocks: LessonBlock[];
+  afterBlock?: (block: LessonBlock) => ReactNode;
   gap?: (id: string) => ReactNode;
 }) {
   return (
@@ -90,6 +92,7 @@ export function LessonMarkdown({
           className="lesson-block"
         >
           <SafeMarkdown markdown={b.markdown} gap={gap} />
+          {afterBlock?.(b)}
         </section>
       ))}
     </>

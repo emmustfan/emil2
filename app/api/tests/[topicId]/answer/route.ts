@@ -15,7 +15,10 @@ export async function POST(
         (await params).topicId,
         input.runId,
         input.questionId,
-        input.chosenId,
+        input.chosenId ??
+          (input.text !== undefined
+            ? { text: input.text }
+            : { optionIds: input.optionIds }),
         await lessonActor(),
       ),
     );

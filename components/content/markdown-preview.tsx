@@ -1,69 +1,49 @@
 "use client";
-import { useState } from "react";
-import Markdown from "react-markdown";
+import { AnswerPreview } from "@/components/exercises/preview";
+import {
+  gapDefinition,
+  type GapExercise,
+  type GapExercises,
+} from "@/lib/exercises";
+import Markdown, { type Components, type ExtraProps } from "react-markdown";
+import { createElement, type HTMLAttributes } from "react";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { Root } from "mdast";
 import type { ParsedTopic, ParsedGap } from "@/lib/content/parse";
 import { previewMarkdown } from "@/lib/content/preview";
 import { contentRu } from "@/lib/i18n/ru";
-function PreviewGap({ gap }: { gap: ParsedGap }) {
-  const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState<string | null>(null);
-  const variants = [gap.answer, ...gap.distractors];
-  const at = parseInt(gap.gapKey.slice(0, 8), 16) % variants.length;
-  const options = [...variants.slice(at), ...variants.slice(0, at)];
+function PreviewGap({ gap, config }: { gap: ParsedGap; config?: GapExercise }) {
+  let definition;
+  try {
+    definition = gapDefinition(gap, config);
+  } catch (e) {
+    return (
+      <span className="text-red-800">
+        {e instanceof Error ? e.message : "Проверьте настройки пропуска"}
+      </span>
+    );
+  }
   return (
-    <span className="relative inline-block align-baseline">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={contentRu.chooseGap}
-        onClick={() => setOpen(!open)}
-        className={`min-h-11 rounded-lg border px-3 font-medium ${chosen === null ? "border-emerald-300 bg-emerald-50 text-emerald-900" : chosen === gap.answer ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-800"}`}
-      >
-        {chosen ?? "____"}
-      </button>
-      {open && (
-        <span
-          className="absolute top-full left-0 z-20 flex min-w-52 flex-col gap-1 rounded-xl border border-stone-200 bg-white p-2 shadow-lg"
-          role="group"
-          aria-label={contentRu.chooseGap}
-        >
-          {options.map((option) => (
-            <button
-              type="button"
-              key={option}
-              className="min-h-11 rounded-lg px-3 py-2 text-left text-sm text-stone-800 hover:bg-emerald-50"
-              onClick={() => {
-                setChosen(option);
-                setOpen(false);
-              }}
-            >
-              {option}
-            </button>
-          ))}
-        </span>
-      )}
-      {chosen !== null && (
-        <span
-          className={`ml-2 text-xs ${chosen === gap.answer ? "text-emerald-800" : "text-red-800"}`}
-          role="status"
-        >
-          {chosen === gap.answer
-            ? `✓ ${contentRu.correctAnswer}`
-            : `✕ ${contentRu.wrongAnswer} ${gap.answer}`}
-        </span>
-      )}
-    </span>
+    <div className="my-4 max-w-full">
+      <AnswerPreview
+        key={JSON.stringify(definition)}
+        id={`markdown-${gap.gapKey}`}
+        title={`Пропуск ${gap.order + 1}`}
+        description={gap.sentence}
+        definition={definition}
+      />
+    </div>
   );
 }
 export function MarkdownPreview({
   markdown,
   parsed,
+  exercises = {},
 }: {
   markdown: string;
   parsed: ParsedTopic;
+  exercises?: GapExercises;
 }) {
   const blocks = new Map(parsed.blocks.map((b) => [b.rootIndex, b]));
   function anchors() {
@@ -101,6 +81,46 @@ export function MarkdownPreview({
       });
     };
   }
+  function cards(id: unknown) {
+    const key = typeof id === "string" ? id.replace(/^b-/, "") : null;
+    return parsed.gaps
+      .filter((g) => g.blockKey === key)
+      .map((gap) => (
+        <PreviewGap
+          key={gap.gapKey + JSON.stringify(exercises[gap.gapKey])}
+          gap={gap}
+          config={exercises[gap.gapKey]}
+        />
+      ));
+  }
+  const blockComponents = Object.fromEntries(
+    [
+      "p",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "ul",
+      "ol",
+      "blockquote",
+      "table",
+      "pre",
+    ].map((tag) => [
+      tag,
+      ({
+        node,
+        children,
+        ...props
+      }: HTMLAttributes<HTMLElement> & ExtraProps) => (
+        <>
+          {createElement(tag, props, children)}
+          {cards(node?.properties.id)}
+        </>
+      ),
+    ]),
+  ) as Components;
   if (!markdown.trim())
     return <p className="text-sm text-stone-500">{contentRu.previewEmpty}</p>;
   return (
@@ -119,6 +139,7 @@ export function MarkdownPreview({
           ],
         ]}
         components={{
+          ...blockComponents,
           a: ({ href, children, ...props }) => {
             const order = href?.match(/^#preview-gap-(\d+)$/)?.[1];
             const gap =
@@ -126,10 +147,12 @@ export function MarkdownPreview({
                 ? undefined
                 : parsed.gaps.find((g) => g.order === Number(order));
             return gap ? (
-              <PreviewGap
-                key={gap.gapKey + gap.distractors.join("|")}
-                gap={gap}
-              />
+              <a
+                href={`#exercise-markdown-${gap.gapKey}`}
+                className="rounded bg-emerald-50 px-2 text-emerald-800"
+              >
+                ____ {gap.order + 1}
+              </a>
             ) : (
               <a
                 {...props}

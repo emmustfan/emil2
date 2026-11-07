@@ -95,7 +95,7 @@ async function fillQuestion(page: Page, index: number) {
       .fill(`Ответ ${index}-${i}`);
   await form.getByRole("radio", { name: "2", exact: true }).check();
   await form
-    .getByRole("textbox", { name: "Объяснение ответа", exact: true })
+    .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
     .fill("Тестовое объяснение без медицинских утверждений.");
   await form
     .getByRole("spinbutton", { name: "Порядок", exact: true })
@@ -258,12 +258,14 @@ test("editor creates a subject, section, ten gaps, five questions and publishes 
     exact: true,
   });
   await expect(preview.getByText(/Пропусков: 10/)).toBeVisible();
-  await preview
-    .getByRole("button", { name: "Выберите вариант", exact: true })
-    .first()
+  const firstPreview = preview.locator("div[id^='exercise-markdown-']").first();
+  await firstPreview
+    .getByRole("radio", { name: "ответ-0", exact: true })
+    .check();
+  await firstPreview
+    .getByRole("button", { name: "Проверить", exact: true })
     .click();
-  await preview.getByRole("button", { name: "ответ-0", exact: true }).click();
-  await expect(preview.getByRole("status")).toContainText("Верно");
+  await expect(firstPreview.getByRole("status")).toContainText("Верно");
   for (let i = 0; i < 5; i++) await fillQuestion(page, i);
   await page
     .getByRole("textbox", { name: "Автор", exact: true })
@@ -532,4 +534,163 @@ test("subject search and pagination show the matching records", async ({
   await expect(
     page.getByRole("link", { name: "Назад", exact: true }),
   ).toBeVisible();
+});
+
+test("editor configures multi and text questions, inserts a typed gap and publishes", async ({
+  page,
+}, testInfo) => {
+  const f = await fixture(page.request);
+  const topic = await fiveQuestions(page.request, f.topic);
+  await page.goto(`/admin/topics/${topic.id}`);
+  const edit = (name: string) =>
+    page
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name, exact: true }) })
+      .getByRole("button", { name: "Изменить", exact: true });
+  const form = () =>
+    page.locator("form").filter({
+      has: page.getByRole("heading", {
+        name: "Редактировать вопрос",
+        exact: true,
+      }),
+    });
+  await edit("Фикстура 1").click();
+  await form()
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .selectOption("MULTIPLE_CHOICE");
+  await form().getByRole("checkbox", { name: "1", exact: true }).check();
+  await form()
+    .getByRole("button", { name: "Сохранить вопрос", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.question.findUniqueOrThrow({
+            where: { id: topic.questions[1].id },
+          })
+        ).correctOptionIds,
+    )
+    .toEqual(["b", "a"]);
+  await edit("Фикстура 2").click();
+  await form()
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .selectOption("SHORT_TEXT");
+  await form()
+    .getByRole("textbox", { name: "Эталон ответа", exact: true })
+    .fill("зелёная ёлка");
+  await form()
+    .getByRole("textbox", {
+      name: "Допустимые формулировки — по одной на строке",
+      exact: true,
+    })
+    .fill("ель");
+  await form()
+    .getByRole("button", { name: "Сохранить вопрос", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.question.findUniqueOrThrow({
+            where: { id: topic.questions[2].id },
+          })
+        ).acceptedAnswers,
+    )
+    .toEqual(["зелёная ёлка", "ель"]);
+  const detail = page.locator("details").filter({
+    has: page.locator("summary").filter({ hasText: /^Пропуск 1:/ }),
+  });
+  await detail.locator("summary").click();
+  await detail
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .selectOption("MULTIPLE_CHOICE");
+  await detail.getByRole("checkbox", { name: "2", exact: true }).check();
+  await detail
+    .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
+    .fill("Оба варианта верны в этом синтетическом примере.");
+  await detail
+    .getByRole("button", { name: "Сохранить настройки пропуска", exact: true })
+    .click();
+  const insert = page.locator("details").filter({
+    has: page
+      .locator("summary")
+      .filter({ hasText: /^Добавить задание в методичку$/ }),
+  });
+  await insert.locator("summary").click();
+  await insert
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .selectOption("SHORT_TEXT");
+  await insert
+    .getByRole("textbox", { name: "Эталон ответа", exact: true })
+    .fill("ёлка");
+  await insert
+    .getByRole("textbox", {
+      name: "Допустимые формулировки — по одной на строке",
+      exact: true,
+    })
+    .fill("ель");
+  await insert
+    .getByRole("textbox", { name: "Текст вокруг пропуска", exact: true })
+    .fill("Дерево: ____.");
+  await insert
+    .getByRole("button", { name: "Вставить задание", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", {
+      name: "Текст методички (Markdown)",
+      exact: true,
+    }),
+  ).toHaveValue(/\[\[=ёлка\]\]/);
+  await page
+    .getByRole("button", { name: "Сохранить черновик", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
+          .contentMd,
+    )
+    .toContain("[[=ёлка]]");
+  await page.reload();
+  await expect(
+    page.getByRole("textbox", {
+      name: "Текст методички (Markdown)",
+      exact: true,
+    }),
+  ).toHaveValue(/\[\[=ёлка\]\]/);
+  await page
+    .getByRole("checkbox", { name: "Проверено экспертом", exact: true })
+    .check();
+  await page
+    .getByRole("button", { name: "Отправить на проверку", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).status,
+    )
+    .toBe("REVIEW");
+  await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+  await expect(
+    page.getByText("Материал опубликован", { exact: true }),
+  ).toBeVisible();
+  const gaps = await db.gap.findMany({
+    where: { topicId: topic.id, archivedAt: null },
+    orderBy: { order: "asc" },
+  });
+  expect(gaps).toHaveLength(11);
+  expect(gaps[0].answerType).toBe("MULTIPLE_CHOICE");
+  expect(gaps[0].correctAnswers).toHaveLength(2);
+  expect(gaps[10]).toMatchObject({
+    answerType: "SHORT_TEXT",
+    acceptedAnswers: ["ёлка", "ель"],
+  });
+  await edit("Фикстура 2").click();
+  await form()
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: `tmp/screenshots/exercise-editor-${testInfo.project.name}.png`,
+  });
 });

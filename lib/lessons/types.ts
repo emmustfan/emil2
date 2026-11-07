@@ -1,10 +1,22 @@
+import type { AnswerType } from "../exercises";
 // Public DTOs: never import editor DTOs into the lesson UI.
 export type Actor =
   | { userId: string; demoSessionId?: never }
   | { userId?: never; demoSessionId: string };
 export type Option = { id: string; text: string };
-export type GapFeedback = { chosen: string; correct: boolean; answer: string };
+export type GapFeedback = {
+  chosen: string;
+  correct: boolean;
+  answer: string;
+  chosenValues: string[];
+  correctValues: string[];
+  explanation: string;
+};
 export type QuestionFeedback = {
+  chosenIds: string[];
+  correctIds: string[];
+  chosenText: string | null;
+  answerText: string | null;
   chosenId: string;
   correct: boolean;
   correctId: string;
@@ -12,11 +24,15 @@ export type QuestionFeedback = {
   sourceBlockKey: string | null;
 };
 export type LessonGap = {
+  answerType: AnswerType;
+  blockKey: string;
+  stem: string;
   id: string;
   options: Option[];
   feedback: GapFeedback | null;
 };
 export type LessonQuestion = {
+  answerType: AnswerType;
   id: string;
   stem: string;
   options: Option[];

@@ -1,3 +1,4 @@
+import type { AnswerType } from "../exercises";
 import { headingSlug } from "./slug";
 import { createHash } from "node:crypto";
 import { unified } from "unified";
@@ -22,6 +23,7 @@ export type ParsedBlock = {
   rootIndex: number;
 };
 export type ParsedGap = {
+  answerType: AnswerType;
   gapKey: string;
   blockKey: string;
   order: number;
@@ -112,6 +114,7 @@ export function parseTopic(md: string): ParsedTopic {
     heading: string | null = null,
     ordinal = 0;
   type Candidate = {
+    answerType: AnswerType;
     start: number;
     end: number;
     answer: string;
@@ -192,8 +195,15 @@ export function parseTopic(md: string): ParsedTopic {
           );
           continue;
         }
-        const options = inner.split("|").map((v) => v.trim());
-        if (options.length < 2 || options.length > 5) {
+        const shortText = inner.startsWith("=") && !inner.includes("|");
+        const options = shortText
+          ? [inner.slice(1).trim()]
+          : inner.split("|").map((v) => v.trim());
+        if (
+          (!shortText && options.length < 2) ||
+          options.length > 5 ||
+          (shortText && inner.includes("|"))
+        ) {
           error(
             "options_count",
             "Укажите правильный ответ и от 1 до 4 дистракторов.",
@@ -218,6 +228,7 @@ export function parseTopic(md: string): ParsedTopic {
           continue;
         }
         candidates.push({
+          answerType: shortText ? "SHORT_TEXT" : "SINGLE_CHOICE",
           start: index,
           end: finish,
           answer: options[0],

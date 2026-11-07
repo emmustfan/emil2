@@ -8,6 +8,12 @@ datasource db {
 }
 
 // В Prisma каждое значение enum — на отдельной строке
+enum AnswerType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  SHORT_TEXT
+}
+
 enum Role {
   USER
   EDITOR
@@ -200,6 +206,7 @@ model Section {
 }
 
 model Topic {
+  gapExercises Json @default("{}")
   editRevision              Int                 @default(0)
   id                        String              @id @default(cuid())
   subjectId                 String
@@ -235,6 +242,10 @@ model Topic {
 }
 
 model Gap {
+  answerType AnswerType @default(SINGLE_CHOICE)
+  correctAnswers String[] @default([])
+  acceptedAnswers String[] @default([])
+  explanation String @default("")
   id              String      @id @default(cuid())
   topicId         String
   gapKey          String // sha1(нормализованное предложение + ответ)
@@ -252,11 +263,13 @@ model Gap {
 }
 
 model Question {
+  answerType AnswerType @default(SINGLE_CHOICE)
+  acceptedAnswers String[] @default([])
   id                         String            @id @default(cuid())
   topicId                    String
   stem                       String
   options                    Json // [{ id: "a", text: "…" }]
-  correctOptionIds           String[] // в MVP ровно один
+  correctOptionIds           String[] // один/несколько ID; для SHORT_TEXT — пустой массив
   explanation                String
   sourceBlockKey             String?
   isDiagnostic               Boolean           @default(false)
@@ -286,6 +299,9 @@ model ContentChunk {
 
 // ---------- Прогресс и повторение ----------
 model GapAnswer {
+  chosenValues String[] @default([])
+  correctValues String[] @default([])
+  explanation String @default("")
   id            String       @id @default(cuid())
   gapId         String
   userId        String?
@@ -323,6 +339,7 @@ model TestRun {
 }
 
 model QuestionAttempt {
+  chosenText String?
   id              String   @id @default(cuid())
   testRunId       String
   questionId      String

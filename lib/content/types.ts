@@ -1,3 +1,4 @@
+import type { AnswerType, GapExercises } from "../exercises";
 export type ContentStatus = "DRAFT" | "REVIEW" | "PUBLISHED";
 export type SubjectDTO = {
   id: string;
@@ -20,6 +21,8 @@ export type SectionDTO = {
   editRevision: number;
 };
 export type QuestionDTO = {
+  answerType: AnswerType;
+  acceptedAnswers: string[];
   id: string;
   topicId: string;
   stem: string;
@@ -31,6 +34,7 @@ export type QuestionDTO = {
   order: number;
 };
 export type TopicDTO = {
+  gapExercises: GapExercises;
   id: string;
   subjectId: string;
   sectionId: string | null;

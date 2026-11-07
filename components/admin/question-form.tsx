@@ -1,5 +1,11 @@
 "use client";
 import { useState } from "react";
+import {
+  DefinitionEditor,
+  cleanDefinition,
+} from "@/components/exercises/definition-editor";
+import { AnswerPreview } from "@/components/exercises/preview";
+import type { Definition } from "@/lib/exercises";
 import { Button } from "@/components/ui/button";
 import { contentRu as t } from "@/lib/i18n/ru";
 import type { QuestionDTO } from "@/lib/content/types";
@@ -19,14 +25,18 @@ export function QuestionForm({
   onSave: (input: QuestionInput, id?: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [options, setOptions] = useState(
-    initial?.options ?? [
+  const [definition, setDefinition] = useState<Definition>({
+    answerType: initial?.answerType ?? "SINGLE_CHOICE",
+    options: initial?.options ?? [
       { id: "a", text: "" },
       { id: "b", text: "" },
       { id: "c", text: "" },
     ],
-  );
-  const [correct, setCorrect] = useState(initial?.correctOptionIds[0] ?? "");
+    correctOptionIds: initial?.correctOptionIds ?? [],
+    acceptedAnswers: initial?.acceptedAnswers ?? [],
+    explanation: initial?.explanation ?? "",
+  });
+  const [stem, setStem] = useState(initial?.stem ?? "");
   const [error, setError] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,9 +46,7 @@ export function QuestionForm({
       await onSave(
         {
           stem: String(values.get("stem")),
-          options,
-          correctOptionIds: correct ? [correct] : [],
-          explanation: String(values.get("explanation")),
+          ...cleanDefinition(definition),
           sourceBlockKey: String(values.get("sourceBlockKey")) || null,
           isDiagnostic: values.get("isDiagnostic") === "on",
           order: Number(values.get("order")),
@@ -66,82 +74,11 @@ export function QuestionForm({
             className={fieldClass}
             required
             maxLength={3000}
-            defaultValue={initial?.stem}
+            value={stem}
+            onChange={(e) => setStem(e.target.value)}
           />
         </label>
-        <fieldset className="space-y-3">
-          <legend className="mb-2 text-sm font-medium">{t.correct}</legend>
-          {options.map((option, index) => (
-            <div key={option.id} className="flex items-start gap-3">
-              <label className="flex min-h-11 items-center gap-2 pt-2 text-sm">
-                <input
-                  type="radio"
-                  name="correct"
-                  value={option.id}
-                  required
-                  checked={correct === option.id}
-                  onChange={() => setCorrect(option.id)}
-                  className="size-5 accent-emerald-800"
-                />
-                <span>{index + 1}</span>
-              </label>
-              <label className="flex-1 text-sm">
-                {t.option} {index + 1}
-                <input
-                  aria-label={`${t.option} ${index + 1}`}
-                  className={fieldClass}
-                  required
-                  maxLength={1000}
-                  value={option.text}
-                  onChange={(e) =>
-                    setOptions(
-                      options.map((o) =>
-                        o.id === option.id ? { ...o, text: e.target.value } : o,
-                      ),
-                    )
-                  }
-                />
-              </label>
-              {options.length > 3 && (
-                <button
-                  type="button"
-                  className="mt-7 min-h-11 px-2 text-sm text-red-800 underline"
-                  onClick={() => {
-                    setOptions(options.filter((o) => o.id !== option.id));
-                    if (correct === option.id) setCorrect("");
-                  }}
-                >
-                  {t.removeOption}
-                </button>
-              )}
-            </div>
-          ))}
-          {options.length < 5 && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                const id = ["a", "b", "c", "d", "e"].find(
-                  (id) => !options.some((o) => o.id === id),
-                )!;
-                setOptions([...options, { id, text: "" }]);
-              }}
-            >
-              {t.addOption}
-            </Button>
-          )}
-        </fieldset>
-        <label className="block text-sm font-medium">
-          {t.explanation}
-          <textarea
-            name="explanation"
-            rows={3}
-            required
-            maxLength={5000}
-            className={fieldClass}
-            defaultValue={initial?.explanation}
-          />
-        </label>
+        <DefinitionEditor value={definition} onChange={setDefinition} />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium">
             {t.source}
@@ -184,6 +121,18 @@ export function QuestionForm({
           {t.diagnostic}
         </label>
       </fieldset>
+      <section
+        className="border-t border-stone-200 pt-5"
+        aria-label="Предпросмотр задания"
+      >
+        <h4 className="mb-3 text-sm font-semibold">Предпросмотр задания</h4>
+        <AnswerPreview
+          key={JSON.stringify(definition) + stem}
+          id={`question-preview-${initial?.id ?? "new"}`}
+          title={stem || "Текст вопроса"}
+          definition={cleanDefinition(definition)}
+        />
+      </section>
       {error && (
         <p role="alert" className="text-sm text-red-800">
           {error}

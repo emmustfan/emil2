@@ -1,3 +1,4 @@
+import { gradeAnswer, type Definition, type Submission } from "../exercises";
 import { getDb } from "../db";
 import type {
   Prisma,
@@ -42,12 +43,24 @@ async function accessibleTopic(id: string, actor: Actor, db: Db) {
 }
 function gapFeedback(
   gap: Gap,
-  answer: Pick<GapAnswer, "chosen" | "isCorrect">,
+  answer: Pick<
+    GapAnswer,
+    "chosen" | "isCorrect" | "chosenValues" | "correctValues" | "explanation"
+  >,
 ): GapFeedback {
+  const chosenValues = answer.chosenValues.length
+    ? answer.chosenValues
+    : [answer.chosen];
+  const correctValues = answer.correctValues.length
+    ? answer.correctValues
+    : [gap.answer];
   return {
     chosen: answer.chosen,
     correct: answer.isCorrect,
-    answer: gap.answer,
+    answer: correctValues.join("; "),
+    chosenValues,
+    correctValues,
+    explanation: answer.explanation,
   };
 }
 function questionFeedback(
@@ -55,12 +68,30 @@ function questionFeedback(
   attempt: QuestionAttempt,
 ): QuestionFeedback {
   return {
-    chosenId: attempt.chosenOptionIds[0],
+    chosenId: attempt.chosenOptionIds[0] ?? "",
     correct: attempt.isCorrect,
-    correctId: q.correctOptionIds[0],
+    correctId: q.correctOptionIds[0] ?? "",
+    chosenIds: attempt.chosenOptionIds,
+    correctIds: q.correctOptionIds,
+    chosenText: attempt.chosenText,
+    answerText: q.answerType === "SHORT_TEXT" ? q.acceptedAnswers[0] : null,
     explanation: q.explanation,
     sourceBlockKey: q.sourceBlockKey,
   };
+}
+function gapOptions(g: Gap, actor: Actor) {
+  return g.answerType === "SHORT_TEXT"
+    ? []
+    : shuffledOptions([g.answer, ...g.distractors], actorKey(actor), g.id);
+}
+function grade(definition: Definition, input: Submission) {
+  try {
+    return gradeAnswer(definition, input);
+  } catch (error) {
+    throw new ContentError(
+      error instanceof Error ? error.message : "Проверьте ответ.",
+    );
+  }
 }
 export async function progressFor(
   topicId: string,
@@ -128,6 +159,7 @@ async function testFor(
       // Explicit allowlist; explanation and correctness only after this question was answered.
       return {
         id: q.id,
+        answerType: q.answerType,
         stem: q.stem,
         options: optionsFromJSON(q.options),
         feedback: attempt ? questionFeedback(q, attempt) : null,
@@ -174,11 +206,10 @@ export async function loadLesson(
       const answer = answers.find((a) => a.gapId === g.id);
       return {
         id: g.id,
-        options: shuffledOptions(
-          [g.answer, ...g.distractors],
-          actorKey(actor),
-          g.id,
-        ),
+        answerType: g.answerType,
+        blockKey: g.blockKey,
+        stem: g.sentence,
+        options: gapOptions(g, actor),
         feedback: answer ? gapFeedback(g, answer) : null,
       };
     });
@@ -196,7 +227,7 @@ export async function loadLesson(
 }
 export async function answerGap(
   gapId: string,
-  optionId: string,
+  submission: string | Submission,
   version: number,
   actor: Actor,
   practice = false,
@@ -216,28 +247,45 @@ export async function answerGap(
     const gap = await tx.gap.findUnique({ where: { id: gapId } });
     if (!gap || gap.archivedAt)
       throw new ContentError("Пропуск больше не доступен.", 409);
-    const chosen = shuffledOptions(
-      [gap.answer, ...gap.distractors],
-      actorKey(actor),
-      gap.id,
-    ).find((o) => o.id === optionId)?.text;
-    if (chosen === undefined)
-      throw new ContentError("Выберите один из предложенных вариантов.");
+    const options = gapOptions(gap, actor);
+    const correct = gap.correctAnswers.length
+      ? gap.correctAnswers
+      : [gap.answer];
+    const checked = grade(
+      {
+        answerType: gap.answerType,
+        options,
+        correctOptionIds: options
+          .filter((o) => correct.includes(o.text))
+          .map((o) => o.id),
+        acceptedAnswers:
+          gap.answerType === "SHORT_TEXT"
+            ? gap.acceptedAnswers.length
+              ? gap.acceptedAnswers
+              : [gap.answer]
+            : [],
+        explanation: gap.explanation,
+      },
+      typeof submission === "string" ? { optionIds: [submission] } : submission,
+    );
+    const chosen = checked.chosenValues.join("; ");
+    const snapshot = {
+      chosen,
+      isCorrect: checked.isCorrect,
+      chosenValues: checked.chosenValues,
+      correctValues: checked.correctValues,
+      explanation: gap.explanation,
+    };
     const existing = await tx.gapAnswer.findFirst({
       where: { ...actor, gapId },
     });
     const answer =
       existing ??
       (await tx.gapAnswer.create({
-        data: { ...actor, gapId, chosen, isCorrect: chosen === gap.answer },
+        data: { ...actor, gapId, ...snapshot },
       }));
     return {
-      feedback: gapFeedback(
-        gap,
-        practice && existing
-          ? { chosen, isCorrect: chosen === gap.answer }
-          : answer,
-      ),
+      feedback: gapFeedback(gap, practice && existing ? snapshot : answer),
       progress: await progressFor(topic.id, actor, threshold, tx),
     };
   });
@@ -285,7 +333,7 @@ export async function answerQuestion(
   topicId: string,
   runId: string,
   questionId: string,
-  chosenId: string,
+  submission: string | Submission,
   actor: Actor,
 ) {
   await consumeLimit(actorKey(actor));
@@ -302,8 +350,19 @@ export async function answerQuestion(
     const q = await tx.question.findFirst({
       where: { id: questionId, topicId, archivedAt: null },
     });
-    if (!q || !optionsFromJSON(q.options).some((o) => o.id === chosenId))
-      throw new ContentError("Вопрос или вариант ответа не найден.", 422);
+    if (!q) throw new ContentError("Вопрос или вариант ответа не найден.", 422);
+    const input =
+      typeof submission === "string" ? { optionIds: [submission] } : submission;
+    const checked = grade(
+      {
+        answerType: q.answerType,
+        options: optionsFromJSON(q.options),
+        correctOptionIds: q.correctOptionIds,
+        acceptedAnswers: q.acceptedAnswers,
+        explanation: q.explanation,
+      },
+      input,
+    );
     let attempt = await tx.questionAttempt.findUnique({
       where: { testRunId_questionId: { testRunId: runId, questionId } },
     });
@@ -314,10 +373,10 @@ export async function answerQuestion(
         data: {
           testRunId: runId,
           questionId,
-          chosenOptionIds: [chosenId],
-          isCorrect:
-            q.correctOptionIds.length === 1 &&
-            q.correctOptionIds[0] === chosenId,
+          chosenOptionIds: input.optionIds ?? [],
+          chosenText:
+            q.answerType === "SHORT_TEXT" ? checked.chosenValues[0] : null,
+          isCorrect: checked.isCorrect,
         },
       });
       const attempts = await tx.questionAttempt.findMany({

@@ -119,3 +119,73 @@ export async function cleanupLessonFixture(
     await db.user.delete({ where: { id: userId } });
   }
 }
+
+export async function addMixedExercises(f: LessonFixture) {
+  const db = getDb();
+  const contentMd =
+    f.free.contentMd.replace(
+      "[[верный-два|неверный-два]]",
+      "[[верный-два|неверный-два|дополнительный-верный]]",
+    ) + "\n\nТекстовый ответ [[=ёлка]].";
+  const parsed = parseTopic(contentMd),
+    multi = parsed.gaps[1],
+    text = parsed.gaps[2];
+  const configs = {
+    [multi.gapKey]: {
+      answerType: "MULTIPLE_CHOICE" as const,
+      correctAnswers: [multi.answer, "дополнительный-верный"],
+      acceptedAnswers: [],
+      explanation: "ОБЪЯСНЕНИЕ_ПРОПУСКА_ПОСЛЕ_ОТВЕТА",
+    },
+    [text.gapKey]: {
+      answerType: "SHORT_TEXT" as const,
+      correctAnswers: [],
+      acceptedAnswers: ["ель"],
+      explanation: "Текстовый пример",
+    },
+  };
+  await db.topic.update({
+    where: { id: f.free.id },
+    data: { contentMd, gapExercises: configs },
+  });
+  await db.gap.update({
+    where: { id: f.free.gap_topicId.find((g) => g.order === 1)!.id },
+    data: {
+      answerType: "MULTIPLE_CHOICE",
+      distractors: multi.distractors,
+      correctAnswers: [multi.answer, "дополнительный-верный"],
+      explanation: configs[multi.gapKey].explanation,
+    },
+  });
+  await db.gap.create({
+    data: {
+      topicId: f.free.id,
+      gapKey: text.gapKey,
+      blockKey: text.blockKey,
+      order: 2,
+      answer: text.answer,
+      distractors: [],
+      sentence: text.sentence,
+      answerType: "SHORT_TEXT",
+      acceptedAnswers: ["ёлка", "ель"],
+      explanation: "Текстовый пример",
+    },
+  });
+  const questions = [...f.free.question_topicId].sort(
+    (a, b) => a.order - b.order,
+  );
+  await db.question.update({
+    where: { id: questions[1].id },
+    data: { answerType: "MULTIPLE_CHOICE", correctOptionIds: ["a", "c"] },
+  });
+  await db.question.update({
+    where: { id: questions[2].id },
+    data: {
+      answerType: "SHORT_TEXT",
+      options: [],
+      correctOptionIds: [],
+      acceptedAnswers: ["ёлка", "ель"],
+    },
+  });
+  return { contentMd, parsed, configs, questions };
+}

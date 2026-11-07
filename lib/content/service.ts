@@ -1,3 +1,4 @@
+import { gapDefinition, gapExercisesSchema } from "../exercises";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
@@ -112,6 +113,8 @@ export async function getTopic(
   const questions: QuestionDTO[] = row.question_topicId.map((q) => ({
     id: q.id,
     topicId: q.topicId,
+    answerType: q.answerType,
+    acceptedAnswers: q.acceptedAnswers,
     stem: q.stem,
     options: optionsSchema.parse(q.options),
     correctOptionIds: q.correctOptionIds,
@@ -129,6 +132,7 @@ export async function getTopic(
     order: row.order,
     isFree: row.isFree,
     contentMd: row.contentMd,
+    gapExercises: gapExercisesSchema.parse(row.gapExercises),
     readingMinutes: row.readingMinutes,
     authorName: row.authorName,
     reviewerName: row.reviewerName,
@@ -333,13 +337,14 @@ export async function createQuestion(
   revision: number,
   input: QuestionInput,
 ) {
+  const data = questionFields.parse(input);
   return getDb().$transaction(async (tx) => {
     await lock(tx, `topic:${topicId}`);
     const topic = await tx.topic.findUnique({ where: { id: topicId } });
     if (!topic) throw notFound();
     checkRevision(topic.editRevision, revision);
-    await validQuestionSource(tx, topicId, input);
-    await tx.question.create({ data: { ...input, topicId } });
+    await validQuestionSource(tx, topicId, data);
+    await tx.question.create({ data: { ...data, topicId } });
     await changedTopic(tx, topicId);
     return getTopic(topicId, tx);
   });
@@ -349,6 +354,7 @@ export async function updateQuestion(
   revision: number,
   input: QuestionInput,
 ) {
+  const data = questionFields.parse(input);
   return getDb().$transaction(async (tx) => {
     const q = await tx.question.findUnique({ where: { id } });
     if (!q || q.archivedAt) throw notFound();
@@ -357,16 +363,16 @@ export async function updateQuestion(
       where: { id: q.topicId },
     });
     checkRevision(topic.editRevision, revision);
-    await validQuestionSource(tx, q.topicId, input);
+    await validQuestionSource(tx, q.topicId, data);
     const current = await tx.question.findUniqueOrThrow({ where: { id } });
     if (
-      Object.entries(input).some(
+      Object.entries(data).some(
         ([key, value]) =>
           JSON.stringify(current[key as keyof typeof current]) !==
           JSON.stringify(value),
       )
     ) {
-      await tx.question.update({ where: { id }, data: input });
+      await tx.question.update({ where: { id }, data });
       await changedTopic(tx, q.topicId);
     }
     return getTopic(q.topicId, tx);
@@ -437,6 +443,8 @@ export async function publishTopic(id: string, revision: number) {
         );
       for (const q of topic.questions) {
         questionFields.parse({
+          answerType: q.answerType,
+          acceptedAnswers: q.acceptedAnswers,
           stem: q.stem,
           options: q.options,
           correctOptionIds: q.correctOptionIds,
@@ -489,12 +497,40 @@ export async function publishTopic(id: string, revision: number) {
       }
       for (const gap of parsed.gaps) {
         const { gapKey, blockKey, order, answer, distractors, sentence } = gap;
+        let definition;
+        try {
+          definition = gapDefinition(gap, topic.gapExercises[gap.gapKey]);
+        } catch (error) {
+          throw new ContentError(
+            `Пропуск ${gap.order + 1}: ${error instanceof Error ? error.message : "проверьте настройки"}`,
+            422,
+            [
+              {
+                code: "exercise",
+                message:
+                  error instanceof Error ? error.message : "Проверьте задание",
+                line: gap.line,
+                column: 1,
+              },
+            ],
+          );
+        }
+        const exercise = {
+          answerType: definition.answerType,
+          correctAnswers:
+            definition.answerType === "SHORT_TEXT"
+              ? []
+              : definition.correctOptionIds,
+          acceptedAnswers: definition.acceptedAnswers,
+          explanation: definition.explanation,
+        };
         const previous = await tx.gap.findUnique({
           where: { topicId_gapKey: { topicId: id, gapKey } },
         });
         const row = await tx.gap.upsert({
           where: { topicId_gapKey: { topicId: id, gapKey } },
           create: {
+            ...exercise,
             topicId: id,
             gapKey,
             blockKey,
@@ -504,6 +540,7 @@ export async function publishTopic(id: string, revision: number) {
             sentence,
           },
           update: {
+            ...exercise,
             blockKey,
             order,
             answer,

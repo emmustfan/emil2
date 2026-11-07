@@ -1,3 +1,4 @@
+import { ensureExerciseDemo } from "./exercise-demo";
 import { getDb } from "../../lib/db";
 import { parseTopic } from "../../lib/content/parse";
 import { decodeSetting } from "../../lib/settings/defaults";
@@ -120,6 +121,7 @@ if (!existing) {
     });
   }
 }
+await ensureExerciseDemo();
 await db.$disconnect();
 console.log(
   "Preview lessons are ready: /subjects/platform-demo and /learn/platform-demo/first-lesson",

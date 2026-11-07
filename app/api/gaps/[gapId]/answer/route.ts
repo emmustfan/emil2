@@ -14,7 +14,10 @@ export async function POST(
     return contentJSON(
       await answerGap(
         gapId,
-        input.optionId,
+        input.optionId ??
+          (input.text !== undefined
+            ? { text: input.text }
+            : { optionIds: input.optionIds }),
         input.version,
         await lessonActor(),
         input.practice,

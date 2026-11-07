@@ -148,7 +148,7 @@ describe("question validation and safe preview", () => {
     expect(html).toContain('id="b-razdel-1"');
     expect(html).toContain("Важно");
     expect(html).toContain('href="https://example.test"');
-    expect(html).toContain("Выберите вариант");
+    expect(html).toContain("Выберите один вариант");
   });
   it("removes active HTML, images and unsafe link protocols", () => {
     const md =

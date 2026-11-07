@@ -4,6 +4,7 @@ import { getDb } from "../../lib/db";
 import { hashToken } from "../../lib/auth/crypto";
 import {
   createLessonFixture,
+  addMixedExercises,
   cleanupLessonFixture,
   type LessonFixture,
 } from "../helpers/lesson-fixture";
@@ -74,45 +75,38 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
     path: `tmp/screenshots/lesson-stage-3-start-${testInfo.project.name}.png`,
     fullPage: true,
   });
-  // The first gap works with arrows and Enter; use text to choose the fixture's correct option.
-  const first = page
-    .getByRole("button", { name: "Заполнить пропуск", exact: true })
-    .first();
-  await first.focus();
-  await first.press("ArrowDown");
-  await expect(
-    page.getByRole("menu", { name: "Варианты ответа" }),
-  ).toBeVisible();
-  const texts = await page.getByRole("menuitem").allTextContents();
-  const right = texts.indexOf("верный-один");
-  expect(right).toBeGreaterThanOrEqual(0);
-  if (right) await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("button", {
-      name: "Пропуск: верный-один. Верно",
-      exact: true,
-    }),
-  ).toBeVisible();
+  const gap1 = page.locator("form").filter({
+    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
+  });
+  const gap2 = page.locator("form").filter({
+    has: page.getByRole("group", { name: "Пропуск 2", exact: true }),
+  });
+  await expect(gap1.getByRole("radio")).toHaveCount(2);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  const radios = gap1.getByRole("radio");
+  const right =
+    (await radios.all()).length === 2
+      ? (await gap1.locator("label").allTextContents()).findIndex(
+          (t) => t.trim() === "верный-один",
+        )
+      : 0;
+  await radios.first().focus();
+  await page.keyboard.press("Space");
+  if (right === 1) await page.keyboard.press("ArrowDown");
+  await gap1
+    .getByRole("button", { name: "Проверить", exact: true })
+    .press("Enter");
+  await expect(gap1.getByRole("status")).toContainText("Верно");
   await page.reload();
   await expect(
-    page.getByRole("button", {
-      name: "Пропуск: верный-один. Верно",
-      exact: true,
-    }),
-  ).toBeVisible();
+    gap1.getByRole("radio", { name: "верный-один", exact: true }),
+  ).toBeChecked();
   await expect(
     page.getByText("Пропуски: 1 / 2", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Заполнить пропуск", exact: true })
-    .click();
-  await page
-    .getByRole("menuitem", { name: "неверный-два", exact: true })
-    .click();
-  await expect(
-    page.getByText("Неверно. Правильно:", { exact: false }),
-  ).toBeVisible();
+  await gap2.getByRole("radio", { name: "неверный-два", exact: true }).check();
+  await gap2.getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(gap2.getByRole("status")).toContainText("Неверно");
   await page.getByRole("button", { name: "Начать тест", exact: true }).click();
   for (let i = 0; i < 5; i++) {
     const form = page.locator("form").filter({
@@ -121,7 +115,7 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
       }),
     });
     await form.getByRole("radio", { name: "Вариант Б", exact: true }).check();
-    await form.getByRole("button", { name: "Ответить", exact: true }).click();
+    await form.getByRole("button", { name: "Проверить", exact: true }).click();
     await expect(
       form.getByText(`ОБЪЯСНЕНИЕ_ПОСЛЕ_ОТВЕТА_${i + 1}`, { exact: true }),
     ).toBeVisible();
@@ -158,10 +152,18 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
     .getByRole("button", { name: "Пройти заново", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Заполнить пропуск", exact: true }),
-  ).toHaveCount(2);
+    gap1.getByRole("button", { name: "Проверить", exact: true }),
+  ).toBeVisible();
+  await gap1.getByRole("radio", { name: "неверный-один", exact: true }).check();
+  await page
+    .getByRole("button", { name: "Пройти заново", exact: true })
+    .click();
+  await expect(gap1.locator("input:checked")).toHaveCount(0);
+
   await page.reload();
-  await expect(page.getByRole("button", { name: /Пропуск:/ })).toHaveCount(2);
+  await expect(
+    gap1.getByRole("radio", { name: "верный-один", exact: true }),
+  ).toBeDisabled();
 });
 test("paid lesson sends only a safe preview and protects all answer endpoints", async ({
   page,
@@ -181,9 +183,7 @@ test("paid lesson sends only a safe preview and protects all answer endpoints", 
     f.paid.question_topicId[0].stem,
   ])
     expect(html).not.toContain(secret);
-  await expect(
-    page.getByRole("button", { name: "Заполнить пропуск" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("group", { name: /^Пропуск/ })).toHaveCount(0);
   for (const [path, data] of [
     [
       `/api/gaps/${f.paid.gap_topicId[0].id}/answer`,
@@ -223,13 +223,11 @@ test("guest sessions are isolated and unpublished topics cannot be opened", asyn
 }) => {
   const f = fixture!;
   await page.goto(`/learn/${f.subject.slug}/free`);
-  await page
-    .getByRole("button", { name: "Заполнить пропуск", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("menuitem", { name: "верный-один", exact: true })
-    .click();
+  const first = page.locator("form").filter({
+    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
+  });
+  await first.getByRole("radio", { name: "верный-один", exact: true }).check();
+  await first.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(
     page.getByText("Пропуски: 1 / 2", { exact: true }),
   ).toBeVisible();
@@ -237,9 +235,7 @@ test("guest sessions are isolated and unpublished topics cannot be opened", asyn
   contexts.push(other);
   const fresh = await other.newPage();
   await fresh.goto(`${origin}/learn/${f.subject.slug}/free`);
-  await expect(
-    fresh.getByRole("button", { name: "Заполнить пропуск", exact: true }),
-  ).toHaveCount(2);
+  await expect(fresh.getByRole("group", { name: /^Пропуск/ })).toHaveCount(2);
   await expect(
     fresh.getByText("Пропуски: 0 / 2", { exact: true }),
   ).toBeVisible();
@@ -255,4 +251,90 @@ test("guest sessions are isolated and unpublished topics cannot be opened", asyn
   });
   const s = await page.goto(`/subjects/${f.subject.slug}`);
   expect(s?.status()).toBe(404);
+});
+
+test("mixed choices and typed answers are checked on submit and persist", async ({
+  page,
+}, testInfo) => {
+  const f = fixture!;
+  await addMixedExercises(f);
+  await page.goto(`/learn/${f.subject.slug}/free`);
+  const card = (n: number) =>
+    page.locator("form").filter({
+      has: page.getByRole("group", { name: `Пропуск ${n}`, exact: true }),
+    });
+  const html = await (
+    await page.request.get(`/learn/${f.subject.slug}/free`)
+  ).text();
+  for (const secret of [
+    "ёлка",
+    '"acceptedAnswers"',
+    "ОБЪЯСНЕНИЕ_ПРОПУСКА_ПОСЛЕ_ОТВЕТА",
+  ])
+    expect(html).not.toContain(secret);
+  await expect(card(2).getByRole("checkbox")).toHaveCount(3);
+  await expect(
+    card(3).getByRole("textbox", { name: "Ваш ответ", exact: true }),
+  ).toBeVisible();
+  await card(1)
+    .getByRole("radio", { name: "верный-один", exact: true })
+    .check();
+  await expect(
+    page.getByText("Пропуски: 0 / 3", { exact: true }),
+  ).toBeVisible();
+  await card(1).getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(card(1).getByRole("status")).toContainText("Верно");
+  await card(2)
+    .getByRole("checkbox", { name: "верный-два", exact: true })
+    .check();
+  await card(2).getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(card(2).getByRole("status")).toContainText("Неверно");
+  await card(3)
+    .getByRole("textbox", { name: "Ваш ответ", exact: true })
+    .fill("  ЕЛКА  ");
+  await card(3).getByRole("button", { name: "Проверить", exact: true }).click();
+  await expect(card(3).getByRole("status")).toContainText("Верно");
+  await page.reload();
+  await expect(card(3).getByRole("textbox")).toHaveValue("ЕЛКА");
+  await expect(
+    card(2).getByRole("checkbox", { name: "верный-два", exact: true }),
+  ).toBeChecked();
+  await page.getByRole("button", { name: "Начать тест", exact: true }).click();
+  for (let i = 0; i < 5; i++) {
+    const form = page.locator("form").filter({
+      has: page.getByRole("group", { name: new RegExp(`Вопрос ${i + 1}:`) }),
+    });
+    if (i === 1) {
+      await form
+        .getByRole("checkbox", { name: "Вариант А", exact: true })
+        .check();
+      await form
+        .getByRole("checkbox", { name: "Вариант В", exact: true })
+        .check();
+    } else if (i === 2)
+      await form
+        .getByRole("textbox", { name: "Ваш ответ", exact: true })
+        .fill("ЕЛЬ");
+    else
+      await form.getByRole("radio", { name: "Вариант Б", exact: true }).check();
+    await form.getByRole("button", { name: "Проверить", exact: true }).click();
+    await expect(form.getByRole("status")).toContainText("Верно");
+  }
+  await expect(
+    page.getByRole("heading", { name: "Тема пройдена!", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Тема пройдена!", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({
+    path: `tmp/screenshots/exercise-types-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
 });

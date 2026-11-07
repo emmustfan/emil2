@@ -9,6 +9,9 @@ import type { TopicDTO, SectionDTO, QuestionDTO } from "@/lib/content/types";
 import type { TopicInput, QuestionInput } from "@/lib/content/validation";
 import type { ParsedTopic } from "@/lib/content/parse";
 import { requestContent, EditorRequestError, fieldClass } from "./helpers";
+import { GapInsertForm } from "./gap-insert-form";
+import type { GapExercise } from "@/lib/exercises";
+import { GapExercisesEditor } from "./gap-exercises";
 import { QuestionForm } from "./question-form";
 function fields(row: TopicDTO): TopicInput {
   return {
@@ -18,6 +21,7 @@ function fields(row: TopicDTO): TopicInput {
     order: row.order,
     isFree: row.isFree,
     contentMd: row.contentMd,
+    gapExercises: row.gapExercises,
     readingMinutes: row.readingMinutes,
     authorName: row.authorName,
     reviewerName: row.reviewerName,
@@ -237,6 +241,25 @@ export function TopicEditor({
         return current;
       });
     } catch {}
+  }
+  async function insertExercise(markdown: string, config: GapExercise) {
+    const before = formRef.current.contentMd;
+    const contentMd = before.trimEnd() + "\n\n" + markdown;
+    const result = await requestContent<ParsedTopic>("preview", "POST", {
+      contentMd,
+    });
+    if (result.errors.length) throw new Error(result.errors[0].message);
+    if (formRef.current.contentMd !== before)
+      throw new Error("Текст методички изменился. Повторите вставку.");
+    const gap = result.gaps.at(-1);
+    if (!gap) throw new Error("Пропуск не найден. Проверьте текст задания.");
+    change("contentMd", contentMd);
+    change("gapExercises", {
+      ...formRef.current.gapExercises,
+      [gap.gapKey]: config,
+    });
+    setParsed(result);
+    setPreviewSource(contentMd);
   }
   const issues = publishIssues.length ? publishIssues : parsed.errors;
   return (
@@ -524,9 +547,20 @@ export function TopicEditor({
               {t.previewNote}
             </p>
           </div>
-          <MarkdownPreview markdown={previewSource} parsed={parsed} />
+          <MarkdownPreview
+            markdown={previewSource}
+            parsed={parsed}
+            exercises={form.gapExercises ?? {}}
+          />
         </section>
       </div>
+      <GapInsertForm busy={busy || conflict} onInsert={insertExercise} />
+      <GapExercisesEditor
+        gaps={parsed.gaps}
+        configs={form.gapExercises ?? {}}
+        busy={busy || conflict}
+        onChange={(configs) => change("gapExercises", configs)}
+      />
       <section className="space-y-5 border-t border-stone-200 pt-7">
         <h2 className="text-2xl font-semibold">
           {t.questions} · {row.questions.length}
