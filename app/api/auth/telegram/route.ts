@@ -1,3 +1,5 @@
+import { transferGuest } from "@/lib/demo/transfer";
+import { visitFrom } from "@/lib/demo/request";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -32,6 +34,8 @@ export async function POST(request: NextRequest) {
       input.data,
       input.intent === "link" ? current!.userId : null,
     );
+    if (await hasCurrentConsent(result.user))
+      await transferGuest(result.user.id, visitFrom(request));
     const response = NextResponse.json(
       {
         redirect: (await hasCurrentConsent(result.user))

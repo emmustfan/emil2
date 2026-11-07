@@ -82,7 +82,12 @@ export async function cleanupLessonFixture(
   userIds: string[] = [],
 ) {
   const db = getDb(),
-    topicIds = [f.free.id, f.paid.id];
+    topicIds = (
+      await db.topic.findMany({
+        where: { subjectId: f.subject.id },
+        select: { id: true },
+      })
+    ).map((t) => t.id);
   await db.teacherSubject.deleteMany({
     where: {
       OR: [{ subjectId: f.subject.id }, { teacherId: { in: userIds } }],
@@ -109,9 +114,9 @@ export async function cleanupLessonFixture(
     where: { gap: { topicId: { in: topicIds } } },
   });
   await db.questionAttempt.deleteMany({
-    where: { testRun: { topicId: { in: topicIds } } },
+    where: { testRun: { subjectId: f.subject.id } },
   });
-  await db.testRun.deleteMany({ where: { topicId: { in: topicIds } } });
+  await db.testRun.deleteMany({ where: { subjectId: f.subject.id } });
   await db.topicProgress.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.contentChunk.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.question.deleteMany({ where: { topicId: { in: topicIds } } });
@@ -120,7 +125,23 @@ export async function cleanupLessonFixture(
   await db.accessGrant.deleteMany({ where: { subjectId: f.subject.id } });
   await db.subscription.deleteMany({ where: { subjectId: f.subject.id } });
   await db.section.deleteMany({ where: { subjectId: f.subject.id } });
+  await db.demoSession.updateMany({
+    where: { subjectId: f.subject.id },
+    data: { subjectId: null },
+  });
   await db.subject.delete({ where: { id: f.subject.id } });
+  const demoRows = await db.demoSession.findMany({
+    where: { id: { in: demoIds } },
+    select: { anonId: true },
+  });
+  await db.event.deleteMany({
+    where: {
+      OR: [
+        { anonId: { in: demoRows.map((d) => d.anonId) } },
+        { userId: { in: userIds } },
+      ],
+    },
+  });
   for (const demoSessionId of demoIds) {
     await db.usageCounter.deleteMany({
       where: { actorKey: `demo:${demoSessionId}` },

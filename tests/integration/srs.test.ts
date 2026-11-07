@@ -153,8 +153,10 @@ it("keeps canonical answers and explanations off the front and reveals all exerc
   }
 });
 it("requires reveal, applies simultaneous retries once and returns HARD exactly ten minutes later", async () => {
+  // Keep both reviews in one known local day regardless of the test runner clock.
   const c = await gapCard(),
-    now = new Date();
+    now = new Date("2026-11-07T10:00:00Z");
+  await db.card.update({ where: { id: c.id }, data: { dueAt: now } });
   await expect(rateCard(userId, c.id, 0, 1, "HARD", now)).rejects.toMatchObject(
     { status: 409 },
   );

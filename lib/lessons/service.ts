@@ -1,3 +1,4 @@
+import { track } from "../analytics/events";
 import {
   creationSettings,
   cardFromGap,
@@ -17,7 +18,7 @@ import { hasAccess, consumeLimit } from "../access";
 import { getSetting } from "../settings";
 import { lock } from "../auth/session";
 import { ContentError } from "../content/errors";
-import { actorKey } from "./actor";
+import { actorKey, lockLearningActor } from "./actor";
 import {
   completedLesson,
   optionsFromJSON,
@@ -180,6 +181,7 @@ export async function loadLesson(
   await consumeLimit(actorKey(actor));
   const threshold = await getSetting("lesson.passThreshold");
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, actor);
     await lock(tx, `content:topic:${topicId}`);
     const topic = await publishedTopic(topicId, tx);
     const allowed = await hasAccess(actor.userId ?? null, topic, tx);
@@ -189,6 +191,12 @@ export async function loadLesson(
       locked: !allowed,
       passThreshold: threshold,
     };
+    await track(
+      allowed ? "topic_opened" : "paywall_shown",
+      allowed ? { topicId, isFree: topic.isFree } : { topicId },
+      actor,
+      tx,
+    );
     if (!allowed)
       return {
         ...base,
@@ -246,6 +254,7 @@ export async function answerGap(
     creationSettings(),
   ]);
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, actor);
     const initial = await tx.gap.findUnique({
       where: { id: gapId },
       select: { topicId: true },
@@ -296,6 +305,14 @@ export async function answerGap(
         data: { ...actor, gapId, ...snapshot },
       }));
     if (!existing)
+      await track(
+        "gap_answered",
+        { gapId, isCorrect: answer.isCorrect },
+        actor,
+        tx,
+        `gap:${answer.id}`,
+      );
+    if (!existing)
       await cardFromGap(
         tx,
         actor,
@@ -318,6 +335,7 @@ export async function startTest(
 ) {
   await consumeLimit(actorKey(actor));
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, actor);
     await lock(tx, `content:topic:${topicId}`);
     const topic = await accessibleTopic(topicId, actor, tx);
     if (topic.version !== version)
@@ -363,6 +381,7 @@ export async function answerQuestion(
     creationSettings(),
   ]);
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, actor);
     await lock(tx, `content:topic:${topicId}`);
     const topic = await accessibleTopic(topicId, actor, tx);
     const run = await tx.testRun.findFirst({
@@ -416,6 +435,14 @@ export async function answerQuestion(
         select: { isCorrect: true },
       });
       const correct = attempts.filter((a) => a.isCorrect).length;
+      if (attempts.length === run.total)
+        await track(
+          "test_completed",
+          { topicId, score: correct / run.total },
+          actor,
+          tx,
+          `test:${runId}`,
+        );
       await tx.testRun.update({
         where: { id: runId },
         data: {

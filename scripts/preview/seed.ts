@@ -1,3 +1,4 @@
+import { ensureFunnelDemo } from "./demo-funnel";
 import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
 import { getDb } from "../../lib/db";
@@ -122,6 +123,7 @@ if (!existing) {
     });
   }
 }
+await ensureFunnelDemo();
 await ensureExerciseDemo();
 await ensureRoleDemo();
 await db.$disconnect();

@@ -1,3 +1,4 @@
+import { LANDING_DEFAULTS } from "../lib/landing/defaults";
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -86,6 +87,7 @@ try {
           update: {},
         });
       const landing = {
+        "landing.v1": LANDING_DEFAULTS,
         hero: { title: ru.title, description: ru.description },
         howItWorks: ru.features,
         faq: [{ question: "Это медицинская услуга?", answer: ru.disclaimer }],

@@ -5,6 +5,14 @@ export const envSchema = z
       .enum(["development", "test", "production"])
       .default("development"),
     APP_URL: z.url().default("http://localhost:3000"),
+    YANDEX_METRIKA_ID: z
+      .string()
+      .regex(/^\d{1,12}$/)
+      .optional(),
+    SUPPORT_EMAIL: z.preprocess(
+      (v) => (v === "" ? undefined : v),
+      z.email().optional(),
+    ),
     ADMIN_EMAILS: z.string().default(""),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_BOT_USERNAME: z.string().optional(),

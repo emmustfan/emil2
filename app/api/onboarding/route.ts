@@ -1,3 +1,5 @@
+import { transferGuest } from "@/lib/demo/transfer";
+import { visitFrom } from "@/lib/demo/request";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
@@ -31,19 +33,36 @@ export async function POST(request: NextRequest) {
     )
       throw new AuthError("invalid", 409);
     const { name, university, course, timezone } = input;
-    await getDb().user.update({
-      where: { id: session.userId },
-      data: {
-        name,
-        university: university || null,
-        course,
-        timezone,
-        consentPdVersion: docs.consent.version,
-        offerVersion: docs.offer.version,
-        consentPdAt: new Date(),
+    await getDb().$transaction(
+      async (tx) => {
+        await tx.user.update({
+          where: { id: session.userId },
+          data: {
+            name,
+            university: university || null,
+            course,
+            timezone,
+            consentPdVersion: docs.consent.version,
+            offerVersion: docs.offer.version,
+            consentPdAt: new Date(),
+          },
+        });
+        await transferGuest(
+          session.userId,
+          { ...visitFrom(request), signup: !session.user.consentPdAt },
+          tx,
+        );
       },
-    });
-    return authRedirect("/cabinet");
+      { timeout: 15000 },
+    );
+    const response = authRedirect("/cabinet");
+    if (!session.user.consentPdAt)
+      response.cookies.set("signup_goal", "1", {
+        path: "/",
+        sameSite: "lax",
+        maxAge: 300,
+      });
+    return response;
   } catch (error) {
     return authFailure(error);
   }

@@ -5,32 +5,69 @@ import { getEnv } from "./lib/env";
 import { newToken, isToken } from "./lib/auth/crypto";
 import { GUEST_COOKIE } from "./lib/lessons/actor";
 import { getSetting } from "./lib/settings";
+import {
+  ANON_COOKIE,
+  DEMO_COOKIE,
+  TOUCH_COOKIE,
+  firstTouch,
+} from "./lib/analytics/identity";
 import { authRu } from "./lib/i18n/ru";
 export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SID)?.value;
   const session = await findSession(token, true);
-  if (request.nextUrl.pathname.startsWith("/learn/")) {
-    if (session && !(await hasCurrentConsent(session.user)))
+  const path = request.nextUrl.pathname;
+  if (
+    ["/", "/demo", "/login", "/pricing"].includes(path) ||
+    path.startsWith("/subjects") ||
+    path.startsWith("/learn/")
+  ) {
+    if (
+      session &&
+      path.startsWith("/learn/") &&
+      !(await hasCurrentConsent(session.user))
+    )
       return NextResponse.redirect(new URL("/onboarding", getEnv().APP_URL));
     const headers = new Headers(request.headers);
-    let guest = request.cookies.get(GUEST_COOKIE)?.value;
-    const createGuest = !session && !isToken(guest);
-    if (createGuest) {
-      guest = newToken();
-      request.cookies.set(GUEST_COOKIE, guest);
-      headers.set("cookie", request.cookies.toString());
+    const updates: { name: string; value: string; days: number }[] = [];
+    const legacy = request.cookies.get(GUEST_COOKIE)?.value;
+    let anon = request.cookies.get(ANON_COOKIE)?.value;
+    if (!isToken(anon)) {
+      anon = isToken(legacy) ? legacy : newToken();
+      updates.push({ name: ANON_COOKIE, value: anon!, days: 365 });
     }
+    if (!isToken(request.cookies.get(DEMO_COOKIE)?.value))
+      updates.push({
+        name: DEMO_COOKIE,
+        value: isToken(legacy) ? legacy : anon!,
+        days: await getSetting("lesson.guestDays"),
+      });
+    if (!isToken(legacy))
+      updates.push({
+        name: GUEST_COOKIE,
+        value:
+          request.cookies.get(DEMO_COOKIE)?.value ??
+          updates.find((c) => c.name === DEMO_COOKIE)?.value ??
+          anon!,
+        days: await getSetting("lesson.guestDays"),
+      });
+    if (!request.cookies.has(TOUCH_COOKIE))
+      updates.push({
+        name: TOUCH_COOKIE,
+        value: JSON.stringify(
+          firstTouch(request.nextUrl, request.headers.get("referer")),
+        ),
+        days: 30,
+      });
+    for (const cookie of updates)
+      request.cookies.set(cookie.name, cookie.value);
+    headers.set("cookie", request.cookies.toString());
     const response = NextResponse.next({ request: { headers } });
     response.headers.set("Cache-Control", "private, no-store");
-    if (createGuest && guest)
+    for (const cookie of updates)
       response.cookies.set(
-        GUEST_COOKIE,
-        guest,
-        cookieOptions(
-          new Date(
-            Date.now() + (await getSetting("lesson.guestDays")) * 86400000,
-          ),
-        ),
+        cookie.name,
+        cookie.value,
+        cookieOptions(new Date(Date.now() + cookie.days * 86400000)),
       );
     if (session?.renewed && token)
       response.cookies.set(SID, token, cookieOptions(session.expiresAt));
@@ -38,7 +75,6 @@ export async function proxy(request: NextRequest) {
   }
   if (!session)
     return NextResponse.redirect(new URL("/login", getEnv().APP_URL));
-  const path = request.nextUrl.pathname;
   if (
     path.startsWith("/admin") &&
     !["ADMIN", "EDITOR"].includes(session.user.role)
@@ -74,6 +110,11 @@ export async function proxy(request: NextRequest) {
 }
 export const config = {
   matcher: [
+    "/",
+    "/demo",
+    "/login",
+    "/pricing",
+    "/subjects/:path*",
     "/learn/:path*",
     "/cabinet/:path*",
     "/onboarding",

@@ -6,6 +6,9 @@ import { hashToken, isToken } from "../auth/crypto";
 import { lock } from "../auth/session";
 import { getDb } from "../db";
 import { getSetting } from "../settings";
+import { DEMO_COOKIE } from "../analytics/identity";
+import type { Prisma } from "../generated/prisma/client";
+import { assertActor } from "./identity";
 import type { Actor } from "./types";
 export const GUEST_COOKIE = "lesson_guest";
 export function actorKey(actor: Actor) {
@@ -18,7 +21,20 @@ export async function lessonActor(): Promise<Actor> {
       throw new AuthError("forbidden", 403);
     return { userId: session.userId };
   }
-  const token = (await cookies()).get(GUEST_COOKIE)?.value;
+  const jar = await cookies();
+  const demo = await guestDemo(
+    jar.get(DEMO_COOKIE)?.value ?? jar.get(GUEST_COOKIE)?.value,
+  );
+  return { demoSessionId: demo.id };
+}
+export async function lockLearningActor(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+) {
+  await lock(tx, `learning:${actorKey(actor)}`);
+  await assertActor(actor, tx);
+}
+export async function guestDemo(token?: string) {
   if (!isToken(token)) throw new AuthError("unauthorized", 401);
   const anonId = hashToken(token!);
   const days = await getSetting("lesson.guestDays");
@@ -32,9 +48,9 @@ export async function lessonActor(): Promise<Actor> {
       },
       orderBy: { createdAt: "desc" },
     });
-    const row =
+    return (
       existing ??
-      (await tx.demoSession.create({ data: { anonId, stepsCompleted: [] } }));
-    return { demoSessionId: row.id };
+      tx.demoSession.create({ data: { anonId, stepsCompleted: [] } })
+    );
   });
 }

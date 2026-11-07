@@ -1,3 +1,5 @@
+import { transferGuest } from "@/lib/demo/transfer";
+import { visitFrom } from "@/lib/demo/request";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import {
@@ -26,6 +28,8 @@ export async function POST(request: NextRequest) {
       request.cookies.get(LOGIN_FLOW)?.value,
       current?.userId ?? null,
     );
+    if (await hasCurrentConsent(result.user))
+      await transferGuest(result.user.id, visitFrom(request));
     const response = authRedirect(
       (await hasCurrentConsent(result.user)) ? "/cabinet" : "/onboarding",
     );

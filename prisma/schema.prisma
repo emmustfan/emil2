@@ -75,6 +75,8 @@ enum MessageRole {
 
 // ---------- Пользователи и вход ----------
 model User {
+  diagnostic Json?
+
   roleRevision             Int                 @default(0)
   id                       String              @id @default(cuid())
   email                    String?             @unique
@@ -176,6 +178,8 @@ model LoginToken {
 }
 
 model DemoSession {
+  flow Json?
+
   id                              String              @id @default(cuid())
   anonId                          String
   goal                            String?
@@ -596,13 +600,15 @@ model AccessGrant {
 
 // ---------- Аналитика, настройки, служебное ----------
 model Event {
+  dedupeKey String? @unique
+
   id        BigInt   @id @default(autoincrement())
   name      String
   userId    String?
   anonId    String?
   props     Json?
   createdAt DateTime @default(now())
-  user      User?    @relation("Event_userId", fields: [userId], references: [id], onDelete: Restrict)
+  user      User?    @relation("Event_userId", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([name, createdAt])
   @@index([userId])

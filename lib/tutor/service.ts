@@ -1,3 +1,4 @@
+import { track } from "../analytics/events";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getDb } from "../db";
@@ -45,6 +46,7 @@ export type PreparedTurn = {
   messageId: string;
   runToken: string;
   replay?: TutorReply;
+  context?: "lesson" | "tutor" | "explain";
 };
 export async function prepareTurn(
   input: TutorInput,
@@ -71,138 +73,154 @@ export async function prepareTurn(
       .update(JSON.stringify(payload))
       .digest("hex"),
     requestKey = `${actorKey(actor)}:${requestId}`;
-  return getDb().$transaction(async (tx) => {
-    await lock(tx, `usage:tutor:${actorKey(actor)}`);
-    await recoverExpired(tx, actor, now);
-    const state = await quotaState(tx, actor, settings, now),
-      scope = await resolveScope(input, actor, tx);
-    if (containsPersonalData(scope.question))
-      throw new ContentError(
-        "Уберите персональные данные из ответа перед обращением к тьютору.",
-        422,
-        [],
-        "personal_data",
-      );
-    const previous = await tx.tutorMessage.findUnique({
-      where: { requestKey },
-      include: { conversation: true },
-    });
-    if (previous && previous.inputHash !== inputHash)
-      throw new ContentError(
-        "Идентификатор запроса уже использован для другого вопроса.",
-        409,
-      );
-    if (
-      previous &&
-      (previous.conversation.subjectId !== scope.subjectId ||
-        previous.conversation.topicId !== scope.topicId ||
-        (conversationId && previous.conversationId !== conversationId))
-    )
-      throw new ContentError("Запрос относится к другому диалогу.", 409);
-    if (previous?.status === "RUNNING")
-      throw new ContentError("Ответ ещё готовится. Подождите немного.", 409);
-    if (previous?.status === "COMPLETED") {
-      const answer = await tx.tutorMessage.findUnique({
-          where: { replyToId: previous.id },
-        }),
-        citations = answer ? readCitations(answer.citations) : null;
-      if (
-        !answer ||
-        !citations ||
-        !(await citationsAvailable(citations, actor, tx))
-      )
+  const analyticsContext: NonNullable<PreparedTurn["context"]> =
+    input.kind === "explain" ? "explain" : input.topicId ? "lesson" : "tutor";
+  return getDb()
+    .$transaction(async (tx) => {
+      await lock(tx, `usage:tutor:${actorKey(actor)}`);
+      await recoverExpired(tx, actor, now);
+      const state = await quotaState(tx, actor, settings, now),
+        scope = await resolveScope(input, actor, tx);
+      if (containsPersonalData(scope.question))
         throw new ContentError(
-          "Источники ответа обновились или больше не доступны. Задайте новый вопрос.",
+          "Уберите персональные данные из ответа перед обращением к тьютору.",
+          422,
+          [],
+          "personal_data",
+        );
+      const previous = await tx.tutorMessage.findUnique({
+        where: { requestKey },
+        include: { conversation: true },
+      });
+      if (previous && previous.inputHash !== inputHash)
+        throw new ContentError(
+          "Идентификатор запроса уже использован для другого вопроса.",
           409,
         );
+      if (
+        previous &&
+        (previous.conversation.subjectId !== scope.subjectId ||
+          previous.conversation.topicId !== scope.topicId ||
+          (conversationId && previous.conversationId !== conversationId))
+      )
+        throw new ContentError("Запрос относится к другому диалогу.", 409);
+      if (previous?.status === "RUNNING")
+        throw new ContentError("Ответ ещё готовится. Подождите немного.", 409);
+      if (previous?.status === "COMPLETED") {
+        const answer = await tx.tutorMessage.findUnique({
+            where: { replyToId: previous.id },
+          }),
+          citations = answer ? readCitations(answer.citations) : null;
+        if (
+          !answer ||
+          !citations ||
+          !(await citationsAvailable(citations, actor, tx))
+        )
+          throw new ContentError(
+            "Источники ответа обновились или больше не доступны. Задайте новый вопрос.",
+            409,
+          );
+        return {
+          actor,
+          scope,
+          context: analyticsContext,
+          settings,
+          conversationId: previous.conversationId,
+          quota: state.quota,
+          messageId: previous.id,
+          runToken: "",
+          replay: {
+            id: answer.id,
+            content: answer.content,
+            citations,
+            feedback: answer.feedback,
+          },
+        };
+      }
+      let conversation =
+        previous?.conversation ??
+        (conversationId
+          ? await tx.tutorConversation.findFirst({
+              where: { id: conversationId, ...actor },
+            })
+          : null);
+      if (conversationId && !conversation)
+        throw new ContentError("Диалог не найден.", 404);
+      if (
+        conversation &&
+        (conversation.subjectId !== scope.subjectId ||
+          conversation.topicId !== scope.topicId)
+      )
+        throw new ContentError("Для другой темы начните новый диалог.", 409);
+      if (
+        conversation &&
+        (await tx.tutorMessage.count({
+          where: { conversationId: conversation.id, status: "RUNNING" },
+        }))
+      )
+        throw new ContentError("Дождитесь ответа в этом диалоге.", 409);
+      if (state.quota.remaining < 1) throw new TutorLimitError(state.quota);
+      await consumeLimit(actorKey(actor), {
+        feature: "tutor-rate",
+        max: settings.requestsPerMinute,
+        periodStart: new Date(Math.floor(now.getTime() / 60000) * 60000),
+        db: tx,
+      });
+      const count = await consumeLimit(actorKey(actor), {
+        feature: "tutor",
+        max: state.quota.limit,
+        periodStart: state.periodStart,
+        db: tx,
+      });
+      conversation ??= await tx.tutorConversation.create({
+        data: { ...actor, subjectId: scope.subjectId, topicId: scope.topicId },
+      });
+      const runToken = randomUUID(),
+        data = {
+          status: "RUNNING",
+          runToken,
+          leaseUntil: new Date(
+            now.getTime() + settings.timeoutMs + settings.leaseGraceMs,
+          ),
+          quotaPeriodStart: state.periodStart,
+        };
+      const message = previous
+        ? await tx.tutorMessage.update({ where: { id: previous.id }, data })
+        : await tx.tutorMessage.create({
+            data: {
+              ...data,
+              conversationId: conversation.id,
+              role: "USER",
+              content: scope.question,
+              requestKey,
+              inputHash,
+            },
+          });
       return {
         actor,
         scope,
+        context: analyticsContext,
         settings,
-        conversationId: previous.conversationId,
-        quota: state.quota,
-        messageId: previous.id,
-        runToken: "",
-        replay: {
-          id: answer.id,
-          content: answer.content,
-          citations,
-          feedback: answer.feedback,
+        conversationId: conversation.id,
+        quota: {
+          ...state.quota,
+          remaining: Math.max(0, state.quota.limit - count),
         },
-      };
-    }
-    let conversation =
-      previous?.conversation ??
-      (conversationId
-        ? await tx.tutorConversation.findFirst({
-            where: { id: conversationId, ...actor },
-          })
-        : null);
-    if (conversationId && !conversation)
-      throw new ContentError("Диалог не найден.", 404);
-    if (
-      conversation &&
-      (conversation.subjectId !== scope.subjectId ||
-        conversation.topicId !== scope.topicId)
-    )
-      throw new ContentError("Для другой темы начните новый диалог.", 409);
-    if (
-      conversation &&
-      (await tx.tutorMessage.count({
-        where: { conversationId: conversation.id, status: "RUNNING" },
-      }))
-    )
-      throw new ContentError("Дождитесь ответа в этом диалоге.", 409);
-    if (state.quota.remaining < 1) throw new TutorLimitError(state.quota);
-    await consumeLimit(actorKey(actor), {
-      feature: "tutor-rate",
-      max: settings.requestsPerMinute,
-      periodStart: new Date(Math.floor(now.getTime() / 60000) * 60000),
-      db: tx,
-    });
-    const count = await consumeLimit(actorKey(actor), {
-      feature: "tutor",
-      max: state.quota.limit,
-      periodStart: state.periodStart,
-      db: tx,
-    });
-    conversation ??= await tx.tutorConversation.create({
-      data: { ...actor, subjectId: scope.subjectId, topicId: scope.topicId },
-    });
-    const runToken = randomUUID(),
-      data = {
-        status: "RUNNING",
+        messageId: message.id,
         runToken,
-        leaseUntil: new Date(
-          now.getTime() + settings.timeoutMs + settings.leaseGraceMs,
-        ),
-        quotaPeriodStart: state.periodStart,
       };
-    const message = previous
-      ? await tx.tutorMessage.update({ where: { id: previous.id }, data })
-      : await tx.tutorMessage.create({
-          data: {
-            ...data,
-            conversationId: conversation.id,
-            role: "USER",
-            content: scope.question,
-            requestKey,
-            inputHash,
-          },
+    })
+    .catch(async (error) => {
+      if (error instanceof TutorLimitError)
+        await track(
+          "tutor_limit_reached",
+          { plan: error.quota.tier === "guest" ? "demo" : error.quota.tier },
+          actor,
+        ).catch(() => {
+          console.error("tutor_limit_event_failed");
         });
-    return {
-      actor,
-      scope,
-      settings,
-      conversationId: conversation.id,
-      quota: {
-        ...state.quota,
-        remaining: Math.max(0, state.quota.limit - count),
-      },
-      messageId: message.id,
-      runToken,
-    };
-  });
+      throw error;
+    });
 }
 function aborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted();
@@ -381,6 +399,13 @@ export async function executeTurn(
         where: { id: turn.messageId },
         data: { status: "COMPLETED", runToken: null, leaseUntil: null },
       });
+      await track(
+        "tutor_message_sent",
+        { context: turn.context ?? (turn.scope.topicId ? "lesson" : "tutor") },
+        turn.actor,
+        tx,
+        `tutor:${saved.id}`,
+      );
       return {
         id: saved.id,
         content: text,

@@ -1,5 +1,7 @@
 import { z } from "zod";
 export const DEFAULT_SETTINGS = {
+  "analytics.requestsPerMinute": 30,
+  "demo.exampleRequestsPerMinute": 30,
   "srs.hardMinutes": 10,
   "srs.hardEasePenalty": 0.2,
   "srs.easyEaseGain": 0.15,
@@ -74,7 +76,9 @@ export function decodeSetting<K extends SettingKey>(
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
     !result.success ||
-    ((key.startsWith("admin.") ||
+    ((key.startsWith("analytics.") ||
+      key === "demo.exampleRequestsPerMinute" ||
+      key.startsWith("admin.") ||
       key.startsWith("content.") ||
       key === "srs.newCardsPerDay" ||
       key === "srs.queuePageSize" ||

@@ -34,8 +34,30 @@ export function ReviewSession({ initial }: { initial: ReviewQueue }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const working = useRef(false);
+  const startedAt = useRef(new Date().toISOString());
   const card = queue.cards[0],
     summary = queue.summary;
+  const finish = useCallback(() => {
+    fetch("/api/events", {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "review_session_completed",
+        props: { startedAt: startedAt.current },
+      }),
+    }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    window.addEventListener("pagehide", finish);
+    return () => {
+      window.removeEventListener("pagehide", finish);
+      finish();
+    };
+  }, [finish]);
+  useEffect(() => {
+    if (!queue.cards.length && queue.summary.reviewedToday) finish();
+  }, [queue.cards.length, queue.summary.reviewedToday, finish]);
   const run = useCallback(async (task: () => Promise<void>) => {
     if (working.current) return;
     working.current = true;

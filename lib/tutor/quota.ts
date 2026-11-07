@@ -1,38 +1,16 @@
+import { getSetting } from "../settings";
 import type { Prisma } from "../generated/prisma/client";
 import type { Actor } from "../lessons/types";
 import { actorKey } from "../lessons/actor";
 import { getDb } from "../db";
 import { lock } from "../auth/session";
-import { AuthError } from "../auth/errors";
 import { allowsAccess } from "../access/policy";
-import { getSetting } from "../settings";
 import { dayWindow } from "../srs/day";
 import { tutorSettings, type TutorSettings } from "./settings";
 import type { Quota } from "./types";
 type Db = Prisma.TransactionClient;
-export async function assertActor(actor: Actor, tx: Db) {
-  if (actor.userId) {
-    const user = await tx.user.findUnique({
-      where: { id: actor.userId },
-      select: { timezone: true, blockedAt: true, deletedAt: true },
-    });
-    if (!user || user.blockedAt || user.deletedAt)
-      throw new AuthError("unauthorized", 401);
-    return user.timezone;
-  }
-  const demo = await tx.demoSession.findUnique({
-    where: { id: actor.demoSessionId! },
-    select: { userId: true, createdAt: true },
-  });
-  if (
-    !demo ||
-    demo.userId ||
-    demo.createdAt.getTime() <=
-      Date.now() - (await getSetting("lesson.guestDays")) * 86400000
-  )
-    throw new AuthError("unauthorized", 401);
-  return "Europe/Moscow";
-}
+export { assertActor } from "../lessons/identity";
+import { assertActor } from "../lessons/identity";
 export async function refund(
   tx: Db,
   actor: Actor,

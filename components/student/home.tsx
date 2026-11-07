@@ -1,3 +1,4 @@
+import { SavedDiagnostic } from "@/components/demo/saved-diagnostic";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/server";
 import { AuthShell } from "@/components/auth/shell";
@@ -37,6 +38,7 @@ export async function StudentHome() {
       <Link href="/subjects" className="lesson-primary">
         {t.catalog}
       </Link>
+      <SavedDiagnostic userId={user.id} />
       {review && (
         <section className="mt-7 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <h2 className="text-lg font-semibold">{t.review}</h2>
