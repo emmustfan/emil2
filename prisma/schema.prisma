@@ -281,18 +281,20 @@ model Question {
 }
 
 model ContentChunk {
-  id          String                       @id @default(cuid())
-  topicId     String
-  subjectId   String
-  blockKey    String
-  heading     String?
-  text        String                       @db.Text
-  tokenCount  Int
-  isFreeTopic Boolean
-  embedding   Unsupported("vector(1536)")? // размерность = EMBEDDING_DIM
-  createdAt   DateTime                     @default(now())
-  topic       Topic                        @relation("ContentChunk_topicId", fields: [topicId], references: [id], onDelete: Restrict)
-  subject     Subject                      @relation("ContentChunk_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
+  topicVersion   Int                          @default(0)
+  embeddingModel String                       @default("")
+  id             String                       @id @default(cuid())
+  topicId        String
+  subjectId      String
+  blockKey       String
+  heading        String?
+  text           String                       @db.Text
+  tokenCount     Int
+  isFreeTopic    Boolean
+  embedding      Unsupported("vector(1536)")? // размерность = EMBEDDING_DIM
+  createdAt      DateTime                     @default(now())
+  topic          Topic                        @relation("ContentChunk_topicId", fields: [topicId], references: [id], onDelete: Restrict)
+  subject        Subject                      @relation("ContentChunk_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
 
   @@index([subjectId])
 }
@@ -434,18 +436,27 @@ model TutorConversation {
 }
 
 model TutorMessage {
-  id             String            @id @default(cuid())
-  conversationId String
-  role           MessageRole
-  content        String            @db.Text
-  citations      Json? // [{ n, topicId, blockKey, heading }]
-  model          String?
-  tokensIn       Int?
-  tokensOut      Int?
-  latencyMs      Int?
-  feedback       Int? // 1 = полезно, -1 = неточно
-  createdAt      DateTime          @default(now())
-  conversation   TutorConversation @relation("TutorMessage_conversationId", fields: [conversationId], references: [id], onDelete: Restrict)
+  requestKey       String?           @unique
+  inputHash        String?
+  status           String            @default("COMPLETED")
+  runToken         String?
+  leaseUntil       DateTime?
+  quotaPeriodStart DateTime?
+  replyToId        String?           @unique
+  id               String            @id @default(cuid())
+  conversationId   String
+  role             MessageRole
+  content          String            @db.Text
+  citations        Json? // [{ n, topicId, blockKey, heading }]
+  model            String?
+  tokensIn         Int?
+  tokensOut        Int?
+  latencyMs        Int?
+  feedback         Int? // 1 = полезно, -1 = неточно
+  createdAt        DateTime          @default(now())
+  conversation     TutorConversation @relation("TutorMessage_conversationId", fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([status, leaseUntil])
 }
 
 model UsageCounter {

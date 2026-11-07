@@ -12,6 +12,7 @@ import type {
   LessonReview,
 } from "@/lib/lessons/types";
 import { LessonMarkdown } from "./markdown";
+import { TutorPanel, type TutorHandle } from "@/components/tutor/panel";
 async function post<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, {
     method: "POST",
@@ -28,9 +29,11 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export function Lesson({
   initial,
   nextHref,
+  tutorMock,
 }: {
   initial: LessonData;
   nextHref: string | null;
+  tutorMock: boolean;
 }) {
   const [gaps, setGaps] = useState(initial.gaps);
   const [test, setTest] = useState(initial.test!);
@@ -41,6 +44,7 @@ export function Lesson({
   const [practice, setPractice] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const requestInFlight = useRef(false);
+  const tutor = useRef<TutorHandle>(null);
   async function run(id: string, task: () => Promise<void>) {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
@@ -162,6 +166,17 @@ export function Lesson({
                       feedback={g.feedback}
                       pending={!!pending}
                       onAnswer={(input) => void answer(g.id, input)}
+                      onExplain={
+                        !practice
+                          ? () =>
+                              tutor.current?.explain({
+                                kind: "explain",
+                                source: "GAP",
+                                sourceId: g.id,
+                                topicVersion: initial.version,
+                              })
+                          : undefined
+                      }
                     />
                   ))}
               </div>
@@ -232,6 +247,15 @@ export function Lesson({
                         : null
                     }
                     sourceBlockKey={q.feedback?.sourceBlockKey}
+                    onExplain={() =>
+                      tutor.current?.explain({
+                        kind: "explain",
+                        source: "QUESTION",
+                        sourceId: q.id,
+                        topicVersion: initial.version,
+                        runId: test.runId!,
+                      })
+                    }
                     pending={!!pending}
                     onAnswer={(input) =>
                       void run(q.id, async () => {
@@ -325,12 +349,21 @@ export function Lesson({
             >
               02 · Проверка знаний
             </a>
+            <a
+              className="flex min-h-11 items-center text-emerald-800"
+              href="#lesson-tutor"
+            >
+              03 · ИИ-тьютор
+            </a>
             <p className="mt-5 border-t border-stone-100 pt-5 text-xs leading-6 text-stone-500">
               Выберите вариант в каждом пропуске, затем пройдите тест. Ответы
               сохраняются автоматически.
             </p>
           </nav>
         </aside>
+      </div>
+      <div className="max-w-3xl">
+        <TutorPanel ref={tutor} topicId={initial.topicId} mock={tutorMock} />
       </div>
     </>
   );

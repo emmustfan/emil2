@@ -6,6 +6,8 @@ export type ChatOptions = {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  signal?: AbortSignal;
+  onUsage?: (usage: { tokensIn: number; tokensOut: number }) => void;
 };
 export interface LLMProvider {
   chat(messages: ChatMessage[], opts: ChatOptions): AsyncIterable<string>;
@@ -13,5 +15,5 @@ export interface LLMProvider {
     messages: ChatMessage[],
     opts: ChatOptions,
   ): Promise<{ text: string; tokensIn: number; tokensOut: number }>;
-  embed(texts: string[]): Promise<number[][]>;
+  embed(texts: string[], opts?: { signal?: AbortSignal }): Promise<number[][]>;
 }

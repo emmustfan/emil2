@@ -88,10 +88,14 @@ describe("development adapters", () => {
         "forbidden",
       );
   });
-  it("fails explicitly instead of silently using mocks for unimplemented real adapters", () => {
-    expect(() =>
-      createLLMProvider({ ...env, LLM_PROVIDER: "anthropic" }),
-    ).toThrow("not implemented");
+  it("selects real LLM adapters and fails explicitly for remaining unimplemented adapters", () => {
+    expect(
+      createLLMProvider({ ...env, LLM_PROVIDER: "anthropic" }).constructor.name,
+    ).toBe("HttpLLMProvider");
+    expect(
+      createLLMProvider({ ...env, LLM_PROVIDER: "openai_compatible" })
+        .constructor.name,
+    ).toBe("HttpLLMProvider");
     expect(() =>
       createPaymentsProvider({ ...env, PAYMENTS_PROVIDER: "yookassa" }),
     ).toThrow("not implemented");

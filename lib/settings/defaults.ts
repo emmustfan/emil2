@@ -16,6 +16,18 @@ export const DEFAULT_SETTINGS = {
   "tutor.paidDailyLimit": 150,
   "tutor.topK": 6,
   "tutor.maxQuestionChars": 1000,
+  "tutor.requestsPerMinute": 10,
+  "tutor.timeoutMs": 60000,
+  "tutor.leaseGraceMs": 10000,
+  "tutor.historyMessages": 6,
+  "tutor.maxTokens": 1200,
+  "tutor.maxAnswerChars": 12000,
+  "tutor.minSimilarity": 0.15,
+  "tutor.topicBonus": 0.1,
+  "tutor.candidateMultiplier": 4,
+  "tutor.chunkTargetTokens": 500,
+  "tutor.chunkMaxTokens": 800,
+  "tutor.embeddingBatchSize": 16,
   "lesson.passThreshold": 0.7,
   "lesson.requestsPerMinute": 120,
   "lesson.guestDays": 30,
@@ -51,7 +63,9 @@ export function decodeSetting<K extends SettingKey>(
   const fallback = DEFAULT_SETTINGS[key];
   const schema = Array.isArray(fallback)
     ? z.array(z.number().positive()).min(1).max(10)
-    : key.endsWith("Threshold")
+    : key.endsWith("Threshold") ||
+        key === "tutor.minSimilarity" ||
+        key === "tutor.topicBonus"
       ? z.number().min(0).max(1)
       : z.number().positive().max(100000);
   const result = schema.safeParse(value);
@@ -66,6 +80,27 @@ export function decodeSetting<K extends SettingKey>(
     (key === "srs.queuePageSize" &&
       typeof result.data === "number" &&
       result.data > 100) ||
+    (key.startsWith("tutor.") &&
+      !["tutor.minSimilarity", "tutor.topicBonus"].includes(key) &&
+      (typeof result.data !== "number" || !Number.isInteger(result.data))) ||
+    (key === "tutor.maxQuestionChars" &&
+      typeof result.data === "number" &&
+      result.data > 1000) ||
+    (key === "tutor.timeoutMs" &&
+      typeof result.data === "number" &&
+      result.data > 60000) ||
+    (key === "tutor.topK" &&
+      typeof result.data === "number" &&
+      result.data > 20) ||
+    (["tutor.chunkTargetTokens", "tutor.chunkMaxTokens"].includes(key) &&
+      typeof result.data === "number" &&
+      (result.data < 300 || result.data > 800)) ||
+    (key === "tutor.embeddingBatchSize" &&
+      typeof result.data === "number" &&
+      result.data > 64) ||
+    (key === "tutor.historyMessages" &&
+      typeof result.data === "number" &&
+      result.data > 6) ||
     (key === "lesson.guestDays" &&
       typeof result.data === "number" &&
       result.data > 365) ||

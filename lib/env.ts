@@ -25,7 +25,10 @@ export const envSchema = z
     LLM_API_KEY: z.string().optional(),
     LLM_BASE_URL: z.string().optional(),
     LLM_CHAT_MODEL: z.string().optional(),
+    LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
     LLM_EMBEDDING_MODEL: z.string().optional(),
+    LLM_EMBEDDING_BASE_URL: z.string().optional(),
+    LLM_EMBEDDING_API_KEY: z.string().optional(),
     YOOKASSA_SHOP_ID: z.string().optional(),
     YOOKASSA_SECRET_KEY: z.string().optional(),
     SMTP_HOST: z.string().optional(),
@@ -61,6 +64,8 @@ export const envSchema = z
       requireFields(["LLM_API_KEY", "LLM_CHAT_MODEL", "LLM_EMBEDDING_MODEL"]);
     if (env.LLM_PROVIDER === "openai_compatible")
       requireFields(["LLM_BASE_URL"]);
+    if (env.LLM_PROVIDER === "anthropic")
+      requireFields(["LLM_EMBEDDING_BASE_URL", "LLM_EMBEDDING_API_KEY"]);
     if (env.PAYMENTS_PROVIDER === "yookassa")
       requireFields(["YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY"]);
     if (env.MAIL_TRANSPORT === "smtp") requireFields(["SMTP_HOST"]);

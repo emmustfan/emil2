@@ -28,6 +28,14 @@ export async function LearningShell({
             Предметы
           </Link>
           <ReviewLink />
+          {session && (
+            <Link
+              href="/tutor"
+              className="inline-flex min-h-11 items-center text-emerald-800"
+            >
+              ИИ-тьютор
+            </Link>
+          )}
           <Link
             className="inline-flex min-h-11 items-center text-emerald-800 underline"
             href={session ? "/cabinet" : "/login"}

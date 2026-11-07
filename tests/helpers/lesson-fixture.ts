@@ -83,6 +83,14 @@ export async function cleanupLessonFixture(
 ) {
   const db = getDb(),
     topicIds = [f.free.id, f.paid.id];
+  const conversations = await db.tutorConversation.findMany({
+    where: { subjectId: f.subject.id },
+    select: { id: true },
+  });
+  await db.tutorMessage.deleteMany({
+    where: { conversationId: { in: conversations.map((c) => c.id) } },
+  });
+  await db.tutorConversation.deleteMany({ where: { subjectId: f.subject.id } });
   await db.reviewLog.deleteMany({
     where: { card: { topicId: { in: topicIds } } },
   });

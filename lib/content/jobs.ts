@@ -26,6 +26,9 @@ export async function enqueuePublication(
     CONTENT_INDEX_QUEUE,
     { topicId: topic.id, subjectId: topic.subjectId, version: topic.version },
     {
+      retryLimit: 3,
+      retryDelay: 5,
+      retryBackoff: true,
       db: {
         executeSql: async (text, values) => ({
           rows: await tx.$queryRawUnsafe<unknown[]>(text, ...(values ?? [])),

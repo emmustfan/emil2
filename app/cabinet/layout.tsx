@@ -27,6 +27,12 @@ export default async function CabinetLayout({
           {authRu.profile}
         </Link>
         <ReviewLink />
+        <Link
+          href="/tutor"
+          className="inline-flex min-h-11 items-center underline"
+        >
+          ИИ-тьютор
+        </Link>
         <form method="POST" action="/api/auth/logout">
           <button className="min-h-11 cursor-pointer underline">
             {authRu.logout}

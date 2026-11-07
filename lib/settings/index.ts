@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { unstable_cache } from "next/cache.js";
 import { getDb } from "../db";
 import { decodeSetting, type SettingKey } from "./defaults";
 const readSettings = unstable_cache(

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { LockKeyhole } from "lucide-react";
 import { getDb } from "@/lib/db";
+import { getEnv } from "@/lib/env";
 import { lessonActor } from "@/lib/lessons/actor";
 import { loadLesson } from "@/lib/lessons/service";
 import { ContentError } from "@/lib/content/errors";
@@ -147,6 +148,7 @@ export default async function Learn({
         </div>
       ) : (
         <Lesson
+          tutorMock={getEnv().LLM_PROVIDER === "mock"}
           key={`${topic.id}:${data.version}`}
           initial={data}
           nextHref={next ? lessonHref(p.subject, next.slug) : null}

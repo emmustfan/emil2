@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { AnswerType, Choice, Submission } from "@/lib/exercises";
+import { tutorRu } from "@/lib/i18n/ru";
 import { exerciseRu as t } from "@/lib/exercises/ru";
 export type AnswerFeedback = {
   correct: boolean;
@@ -19,6 +20,7 @@ export function AnswerCard({
   onAnswer,
   sourceBlockKey,
   form = true,
+  onExplain,
 }: {
   id: string;
   title: string;
@@ -30,6 +32,7 @@ export function AnswerCard({
   onAnswer: (input: Submission) => void;
   sourceBlockKey?: string | null;
   form?: boolean;
+  onExplain?: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [text, setText] = useState("");
@@ -137,6 +140,15 @@ export function AnswerCard({
             </p>
           )}
           {feedback.explanation && <p>{feedback.explanation}</p>}
+          {!feedback.correct && onExplain && (
+            <button
+              type="button"
+              onClick={onExplain}
+              className="mt-2 min-h-11 text-emerald-800 underline"
+            >
+              {tutorRu.explain}
+            </button>
+          )}
           {sourceBlockKey && (
             <a
               className="text-emerald-800 underline"

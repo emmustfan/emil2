@@ -29,27 +29,46 @@ export async function hasAccess(
   ]);
   return allowsAccess(topic, { subscriptions, grants }, new Date(), grace);
 }
-// Lesson reads and submissions share a database-backed per-actor minute limit.
-// Tutor limits are added with the tutor stage, using the same UsageCounter table.
-export async function consumeLimit(actorKey: string) {
-  const max = await getSetting("lesson.requestsPerMinute");
-  const periodStart = new Date(Math.floor(Date.now() / 60000) * 60000);
-  await getDb().$transaction(async (tx) => {
-    await lock(tx, `usage:lesson:${actorKey}`);
+// All reservations share atomic database counters; callers may supply a transaction.
+export async function consumeLimit(
+  actorKey: string,
+  options?: {
+    feature: string;
+    max: number;
+    periodStart: Date;
+    db?: Prisma.TransactionClient;
+  },
+) {
+  const max = options?.max ?? (await getSetting("lesson.requestsPerMinute"));
+  const feature = options?.feature ?? "lesson";
+  const periodStart =
+    options?.periodStart ?? new Date(Math.floor(Date.now() / 60000) * 60000);
+  const reserve = async (tx: Prisma.TransactionClient) => {
+    await lock(tx, `usage:${feature}:${actorKey}`);
     const where = {
       actorKey_feature_periodStart: {
         actorKey,
-        feature: "lesson",
+        feature,
         periodStart,
       },
     };
     const row = await tx.usageCounter.findUnique({ where });
     if (row && row.count >= max)
       throw new ContentError("Слишком много запросов. Подождите минуту.", 429);
-    await tx.usageCounter.upsert({
-      where,
-      create: { actorKey, feature: "lesson", periodStart, count: 1 },
-      update: { count: { increment: 1 } },
+    if (row) {
+      const changed = await tx.usageCounter.updateMany({
+        where: { id: row.id, count: { lt: max } },
+        data: { count: { increment: 1 } },
+      });
+      if (!changed.count)
+        throw new ContentError("Лимит запросов исчерпан.", 429);
+      return row.count + 1;
+    }
+    if (max < 1) throw new ContentError("Лимит запросов исчерпан.", 429);
+    await tx.usageCounter.create({
+      data: { actorKey, feature, periodStart, count: 1 },
     });
-  });
+    return 1;
+  };
+  return options?.db ? reserve(options.db) : getDb().$transaction(reserve);
 }
