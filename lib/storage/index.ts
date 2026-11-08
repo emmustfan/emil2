@@ -1,10 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppEnv } from "../env";
 import { assertDevelopment, ProviderNotImplementedError } from "../providers";
 export interface StorageDriver {
   put(key: string, body: Uint8Array): Promise<void>;
   get(key: string): Promise<Buffer>;
+  remove(key: string): Promise<void>;
 }
 export class LocalStorageDriver implements StorageDriver {
   constructor(private readonly directory = "tmp/uploads") {}
@@ -21,6 +22,9 @@ export class LocalStorageDriver implements StorageDriver {
   }
   async get(key: string) {
     return readFile(this.path(key));
+  }
+  async remove(key: string) {
+    await rm(this.path(key), { force: true });
   }
 }
 export function createStorageDriver(env: AppEnv): StorageDriver {

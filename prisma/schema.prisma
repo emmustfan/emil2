@@ -244,6 +244,7 @@ model Section {
 }
 
 model Topic {
+  images TopicImage[]
   gapExercises              Json                @default("{}")
   editRevision              Int                 @default(0)
   id                        String              @id @default(cuid())
@@ -277,6 +278,18 @@ model Topic {
   tutorConversation_topicId TutorConversation[] @relation("TutorConversation_topicId")
 
   @@unique([subjectId, slug])
+}
+
+model TopicImage {
+  id String @id
+  topicId String
+  storageKey String @unique
+  width Int
+  height Int
+  bytes Int
+  createdAt DateTime @default(now())
+  topic Topic @relation(fields:[topicId],references:[id],onDelete:Cascade)
+  @@index([topicId])
 }
 
 model Gap {

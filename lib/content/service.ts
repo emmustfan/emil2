@@ -15,6 +15,8 @@ import {
   type QuestionInput,
 } from "./validation";
 import type { SubjectDTO, TopicDTO, QuestionDTO } from "./types";
+import { createStorageDriver } from "../storage";
+import { getEnv } from "../env";
 type Db = Prisma.TransactionClient;
 const optionsSchema = z.array(z.object({ id: z.string(), text: z.string() }));
 const notFound = () => new ContentError("Материал не найден.", 404);
@@ -121,7 +123,8 @@ export async function getTopic(
   const row = await db.topic.findUnique({
     where: { id },
     include: {
-      subject: { select: { id: true, title: true, slug: true } },
+      subject: { select: { id: true, title: true, slug: true, status: true } },
+      images: { select: { id: true } },
       question_topicId: {
         where: { archivedAt: null },
         orderBy: [{ order: "asc" }, { id: "asc" }],
@@ -144,6 +147,7 @@ export async function getTopic(
     order: q.order,
   }));
   return {
+    imageIds: row.images.map((i) => i.id),
     id: row.id,
     subjectId: row.subjectId,
     sectionId: row.sectionId,
@@ -483,7 +487,7 @@ export async function deleteTopic(
   revision: number,
   actorId?: string,
 ) {
-  return getDb().$transaction(async (tx) => {
+  const result = await getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
     await lock(tx, `topic:${id}`);
     const topic = await tx.topic.findUnique({ where: { id } });
@@ -492,12 +496,26 @@ export async function deleteTopic(
     checkRevision(topic.editRevision, revision);
     if (topic.status === "PUBLISHED")
       throw new ContentError("Сначала переведите тему в черновик.", 409);
+    const images = await tx.topicImage.findMany({
+      where: { topicId: id },
+      select: { storageKey: true },
+    });
     await tx.contentChunk.deleteMany({ where: { topicId: id } });
     await tx.question.deleteMany({ where: { topicId: id } });
     await tx.gap.deleteMany({ where: { topicId: id } });
     await tx.topic.delete({ where: { id } });
-    return { id };
+    return { id, storageKeys: images.map((i) => i.storageKey) };
   });
+  if (result.storageKeys.length) {
+    const storage = createStorageDriver(getEnv());
+    for (const key of result.storageKeys)
+      try {
+        await storage.remove(key);
+      } catch {
+        console.error("content_image_cleanup_failed");
+      }
+  }
+  return { id: result.id };
 }
 export async function publishTopic(
   id: string,
@@ -517,9 +535,19 @@ export async function publishTopic(
       await authorizeSubject(topic.subjectId, actorId, tx);
       checkRevision(topic.editRevision, revision);
       const parsed = parseTopic(topic.contentMd);
+      const imageIds = [...new Set(parsed.images.map((i) => i.id))];
+      if (
+        imageIds.length !==
+        (await tx.topicImage.count({
+          where: { id: { in: imageIds }, topicId: id },
+        }))
+      )
+        throw new ContentError(
+          "Изображение не найдено или относится к другой теме. Загрузите его в эту тему.",
+        );
       if (parsed.errors.length)
         throw new ContentError(
-          "Исправьте ошибки в пропусках перед публикацией.",
+          "Исправьте ошибки в тексте методички перед публикацией.",
           422,
           parsed.errors,
         );

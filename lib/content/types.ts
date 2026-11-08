@@ -34,6 +34,7 @@ export type QuestionDTO = {
   order: number;
 };
 export type TopicDTO = {
+  imageIds?: string[];
   gapExercises: GapExercises;
   id: string;
   subjectId: string;
@@ -53,6 +54,6 @@ export type TopicDTO = {
   version: number;
   editRevision: number;
   publishedAt: string | null;
-  subject: { id: string; title: string; slug: string };
+  subject: { id: string; title: string; slug: string; status?: ContentStatus };
   questions: QuestionDTO[];
 };

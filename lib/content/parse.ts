@@ -5,6 +5,7 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import type { Root, RootContent } from "mdast";
+import { imageId } from "./image-reference";
 export type ParseError = {
   code: string;
   message: string;
@@ -37,11 +38,14 @@ export type ParsedGap = {
   end: number;
 };
 export type ParsedTopic = {
+  images: { id: string; line: number }[];
   blocks: ParsedBlock[];
   gaps: ParsedGap[];
   errors: ParseError[];
 };
 type Node = {
+  url?: string;
+  alt?: string;
   type: string;
   value?: string;
   children?: Node[];
@@ -74,6 +78,7 @@ function tree(md: string) {
   return parser.parse(maskPipes(md)) as Root;
 }
 function textOf(node: Node): string {
+  if (node.type === "image") return node.alt ?? "";
   if (node.type === "html" || node.type === "definition") return "";
   if (node.value !== undefined) return node.value;
   const separator = [
@@ -89,7 +94,7 @@ function textOf(node: Node): string {
   return (node.children ?? []).map(textOf).join(separator);
 }
 export function parseTopic(md: string): ParsedTopic {
-  const result: ParsedTopic = { blocks: [], gaps: [], errors: [] };
+  const result: ParsedTopic = { blocks: [], gaps: [], errors: [], images: [] };
   const error = (code: string, message: string, index: number) => {
     if (result.errors.length >= 100) return;
     const before = md.slice(0, index);
@@ -160,8 +165,19 @@ export function parseTopic(md: string): ParsedTopic {
         ignored.push([from, to]);
         return;
       }
-      if (current.type === "image" || current.type === "imageReference")
-        error("image", "Изображения пока не поддерживаются в уроках.", from);
+      if (current.type === "image" || current.type === "imageReference") {
+        const id = imageId(current.url);
+        if (!id || !current.alt?.trim() || current.alt.length > 300)
+          error(
+            "image",
+            "Загрузите изображение кнопкой редактора и добавьте описание до 300 символов.",
+            from,
+          );
+        else
+          result.images.push({ id, line: current.position?.start.line ?? 1 });
+        ignored.push([from, to]);
+        return;
+      }
       if (current.type !== "text") {
         current.children?.forEach(walk);
         return;

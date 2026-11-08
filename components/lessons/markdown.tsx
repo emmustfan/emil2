@@ -5,6 +5,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { Root } from "mdast";
 import type { ReactNode } from "react";
 import type { LessonBlock } from "@/lib/lessons/types";
+import { LessonImage } from "@/components/content/lesson-image";
 function callouts() {
   return (tree: Root) => {
     for (const node of tree.children) {
@@ -49,11 +50,17 @@ export function SafeMarkdown({
             rehypeSanitize,
             {
               ...defaultSchema,
-              tagNames: defaultSchema.tagNames?.filter((t) => t !== "img"),
             },
           ],
         ]}
         components={{
+          img: ({ src, alt, title }) => (
+            <LessonImage
+              src={typeof src === "string" ? src : undefined}
+              alt={alt}
+              title={title}
+            />
+          ),
           a: ({ href, children }) => {
             const id = href?.match(/^#lesson-gap-([a-zA-Z0-9_-]+)$/)?.[1];
             if (id && gap) return gap(id);

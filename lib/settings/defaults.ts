@@ -61,6 +61,11 @@ export const DEFAULT_SETTINGS = {
   "content.minQuestions": 5,
   "content.maxQuestions": 15,
   "content.autosaveMs": 1000,
+  "content.imageMaxBytes": 5242880,
+  "content.imageMaxPixels": 20000000,
+  "content.imageMaxSide": 2400,
+  "content.imagesPerTopic": 30,
+  "content.imageRequestsPerMinute": 10,
   "admin.usersPageSize": 20,
   "admin.maxTeacherSubjects": 200,
   "admin.maxGrantDays": 3650,
@@ -78,11 +83,26 @@ export function decodeSetting<K extends SettingKey>(
         key === "tutor.minSimilarity" ||
         key === "tutor.topicBonus"
       ? z.number().min(0).max(1)
-      : z.number().positive().max(100000);
+      : z
+          .number()
+          .positive()
+          .max(
+            key === "content.imageMaxBytes"
+              ? 10485760
+              : key === "content.imageMaxPixels"
+                ? 40000000
+                : 100000,
+          );
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
     !result.success ||
+    (key === "content.imageMaxSide" &&
+      typeof result.data === "number" &&
+      (result.data < 64 || result.data > 4096)) ||
+    (key === "content.imagesPerTopic" &&
+      typeof result.data === "number" &&
+      result.data > 100) ||
     (key === "billing.renewalLeadHours" &&
       typeof result.data === "number" &&
       result.data > 24) ||

@@ -13,6 +13,10 @@ import { GapInsertForm } from "./gap-insert-form";
 import type { GapExercise } from "@/lib/exercises";
 import { GapExercisesEditor } from "./gap-exercises";
 import { QuestionForm } from "./question-form";
+import { ImageUpload } from "./image-upload";
+import { LessonReview } from "./lesson-review";
+import { lessonReadiness } from "@/lib/content/readiness";
+import { lessonReviewPrompt } from "@/lib/content/review-prompt";
 function fields(row: TopicDTO): TopicInput {
   return {
     title: row.title,
@@ -34,13 +38,20 @@ export function TopicEditor({
   initialParsed,
   sections,
   autosaveMs,
+  minQuestions,
+  maxQuestions,
+  imageMaxBytes,
 }: {
   initial: TopicDTO;
   initialParsed: ParsedTopic;
   sections: SectionDTO[];
   autosaveMs: number;
+  minQuestions: number;
+  maxQuestions: number;
+  imageMaxBytes: number;
 }) {
   const router = useRouter();
+  const [imageIds, setImageIds] = useState(initial.imageIds ?? []);
   const [row, setRow] = useState(initial);
   const rowRef = useRef(initial);
   const [form, setForm] = useState(() => fields(initial));
@@ -172,6 +183,9 @@ export function TopicEditor({
       return next;
     } catch (e) {
       setError(e instanceof Error ? e.message : t.error);
+      document
+        .getElementById("lesson-editor-status")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
       if (e instanceof EditorRequestError) {
         setPublishIssues(e.issues);
         if (e.status === 409 && e.code === "stale") setConflict(true);
@@ -261,6 +275,39 @@ export function TopicEditor({
     setParsed(result);
     setPreviewSource(contentMd);
   }
+  function insertText(markdown: string) {
+    const current = formRef.current.contentMd,
+      input = textarea.current;
+    const start = input?.selectionStart ?? current.length,
+      end = input?.selectionEnd ?? start;
+    change(
+      "contentMd",
+      current.slice(0, start) + "\n\n" + markdown + "\n\n" + current.slice(end),
+    );
+    requestAnimationFrame(() => {
+      const field = textarea.current;
+      if (field) {
+        const after = start + markdown.length + 4;
+        field.focus();
+        field.setSelectionRange(after, after);
+      }
+    });
+  }
+  const checks = lessonReadiness(form, parsed, row.questions, {
+    minQuestions,
+    maxQuestions,
+    subjectPublished: row.subject.status === "PUBLISHED",
+    status: row.status,
+    imageIds: [...new Set([...imageIds, ...(row.imageIds ?? [])])],
+    previewCurrent: previewSource === form.contentMd,
+  });
+  const reviewPrompt = lessonReviewPrompt(
+    form.contentMd,
+    row.questions,
+    form.referencesMd,
+    parsed,
+    form.gapExercises,
+  );
   const issues = publishIssues.length ? publishIssues : parsed.errors;
   return (
     <div className="space-y-7">
@@ -275,6 +322,31 @@ export function TopicEditor({
           {t.statuses[row.status]} · {t.version} {row.version}
         </span>
       </div>
+      <nav
+        aria-label="Этапы создания урока"
+        className="flex flex-wrap gap-3 rounded-2xl border bg-white p-4 text-sm"
+      >
+        {[
+          ["lesson-basics", "1. Основное"],
+          ["lesson-text", "2. Методичка"],
+          ["lesson-exercises", "3. Задания"],
+          ["lesson-questions", "4. Тест"],
+          ["lesson-review", "5. Проверка и публикация"],
+        ].map(([id, title]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-emerald-900 underline"
+          >
+            {title}
+          </a>
+        ))}
+      </nav>
+      <p className="text-sm leading-7 text-stone-600">
+        Создайте черновик, добавьте текст и задания, проверьте ответы в
+        предпросмотре. Затем укажите источники и рецензента внизу страницы.
+        Черновик сохраняется автоматически.
+      </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
@@ -285,39 +357,18 @@ export function TopicEditor({
         >
           {t.saveDraft}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy || conflict}
-          onClick={() => void status("REVIEW")}
+        <a
+          href="#lesson-review"
+          className="inline-flex min-h-11 items-center px-3 text-sm text-emerald-800 underline"
         >
-          {t.sendReview}
-        </Button>
-        <Button
-          type="button"
-          disabled={busy || conflict}
-          onClick={() => void publish()}
-        >
-          {t.publish}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy || conflict}
-          onClick={() => void status("DRAFT")}
-        >
-          {t.draft}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy || conflict}
-          onClick={() => void removeTopic()}
-        >
-          {t.remove}
-        </Button>
+          Проверить урок перед публикацией
+        </a>
       </div>
-      <p role="status" className="text-sm text-emerald-800">
+      <p
+        id="lesson-editor-status"
+        role="status"
+        className="text-sm text-emerald-800"
+      >
         {message}
       </p>
       {error && (
@@ -340,6 +391,9 @@ export function TopicEditor({
       )}
       <div className="grid gap-7 xl:grid-cols-2">
         <section className="space-y-5">
+          <h2 id="lesson-basics" className="scroll-mt-5 text-xl font-semibold">
+            1. Основные параметры
+          </h2>
           <fieldset
             disabled={busy || conflict}
             className="grid gap-4 rounded-2xl border border-stone-200 bg-white p-5 sm:grid-cols-2"
@@ -355,8 +409,16 @@ export function TopicEditor({
             </label>
             <label className="text-sm font-medium">
               {t.slug}
+              <span
+                className="mt-1 block text-xs font-normal leading-6 text-stone-500"
+                aria-hidden="true"
+              >
+                Адрес темы латиницей. Обычно его можно оставить автоматически
+                созданным.
+              </span>
               <input
                 className={fieldClass}
+                aria-label={t.slug}
                 value={form.slug}
                 maxLength={100}
                 onChange={(e) => change("slug", e.target.value)}
@@ -413,47 +475,45 @@ export function TopicEditor({
                 }
               />
             </label>
-            <label className="text-sm font-medium">
-              {t.author}
-              <input
-                className={fieldClass}
-                maxLength={200}
-                value={form.authorName ?? ""}
-                onChange={(e) => change("authorName", e.target.value || null)}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              {t.reviewer}
-              <input
-                className={fieldClass}
-                maxLength={200}
-                value={form.reviewerName ?? ""}
-                onChange={(e) => change("reviewerName", e.target.value || null)}
-              />
-            </label>
-            <label className="text-sm font-medium sm:col-span-2">
-              {t.references}
-              <textarea
-                className={fieldClass}
-                rows={3}
-                maxLength={20000}
-                value={form.referencesMd ?? ""}
-                onChange={(e) => change("referencesMd", e.target.value || null)}
-              />
-            </label>
-            <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={form.reviewed}
-                onChange={(e) => change("reviewed", e.target.checked)}
-                className="size-5 accent-emerald-800"
-              />
-              {t.reviewed}
-            </label>
-            <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
-              {t.reviewNote} {t.publicationNote}
-            </p>
           </fieldset>
+          <h2 id="lesson-text" className="scroll-mt-5 text-xl font-semibold">
+            2. Текст методички
+          </h2>
+          <div className="rounded-xl bg-emerald-50 p-4 text-sm leading-7">
+            Заголовки, списки и таблицы можно оформить кнопками ниже. Задания
+            добавляются отдельным конструктором после текста. Картинку
+            вставляйте кнопкой «Добавить изображение».
+          </div>
+          <div className="flex flex-wrap gap-2" aria-label="Оформление текста">
+            {[
+              ["Заголовок", "## Новый раздел"],
+              ["Список", "- Первый пункт\n- Второй пункт"],
+              [
+                "Таблица",
+                "| Термин | Значение |\n| --- | --- |\n| Пример | Описание |",
+              ],
+              ["Важно", "> [!important] Важная мысль"],
+            ].map(([title, md]) => (
+              <button
+                key={title}
+                type="button"
+                className="min-h-11 rounded-lg border bg-white px-3 text-sm"
+                disabled={busy || conflict}
+                onClick={() => insertText(md)}
+              >
+                {title}
+              </button>
+            ))}
+          </div>
+          <ImageUpload
+            topicId={initial.id}
+            maxBytes={imageMaxBytes}
+            busy={busy || conflict}
+            onInsert={(md, id) => {
+              setImageIds((ids) => [...new Set([...ids, id])]);
+              insertText(md);
+            }}
+          />
           <label className="block text-sm font-medium">
             {t.markdown}
             <span className="mt-2 block text-xs font-normal leading-6 text-stone-500">
@@ -554,6 +614,13 @@ export function TopicEditor({
           />
         </section>
       </div>
+      <h2 id="lesson-exercises" className="scroll-mt-5 text-2xl font-semibold">
+        3. Задания в методичке
+      </h2>
+      <p className="text-sm leading-7 text-stone-600">
+        Это короткие задания внутри текста. Для проверки ответа укажите эталон и
+        допустимые варианты: ИИ здесь не нужен.
+      </p>
       <GapInsertForm busy={busy || conflict} onInsert={insertExercise} />
       <GapExercisesEditor
         gaps={parsed.gaps}
@@ -561,10 +628,18 @@ export function TopicEditor({
         busy={busy || conflict}
         onChange={(configs) => change("gapExercises", configs)}
       />
-      <section className="space-y-5 border-t border-stone-200 pt-7">
+      <section
+        id="lesson-questions"
+        className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
+      >
         <h2 className="text-2xl font-semibold">
-          {t.questions} · {row.questions.length}
+          4. {t.questions} · {row.questions.length}
         </h2>
+        <p className="text-sm leading-7 text-stone-600">
+          Итоговый тест: от {minQuestions} до {maxQuestions} вопросов. У каждого
+          вопроса нужны правильный ответ и объяснение. Нажмите «Редактировать»,
+          чтобы проверить вопрос в его предпросмотре.
+        </p>
         <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
           <table className="w-full min-w-xl text-left text-sm">
             <thead>
@@ -618,6 +693,101 @@ export function TopicEditor({
             setQuestionNonce((n) => n + 1);
           }}
         />
+      </section>
+      <section
+        id="lesson-review"
+        className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
+      >
+        <h2 className="text-2xl font-semibold">5. Проверка и публикация</h2>
+        <p className="text-sm leading-7 text-stone-600">
+          Проверьте содержание, эталоны и объяснения. После этого заполните
+          автора, рецензента и источники, отметьте экспертную проверку.
+          Изменение текста или вопроса снимает отметку и возвращает
+          опубликованный урок в черновик.
+        </p>
+        <fieldset
+          disabled={busy || conflict}
+          className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"
+        >
+          <label className="text-sm font-medium">
+            {t.author}
+            <input
+              className={fieldClass}
+              maxLength={200}
+              value={form.authorName ?? ""}
+              onChange={(e) => change("authorName", e.target.value || null)}
+            />
+          </label>
+          <label className="text-sm font-medium">
+            {t.reviewer}
+            <input
+              className={fieldClass}
+              maxLength={200}
+              value={form.reviewerName ?? ""}
+              onChange={(e) => change("reviewerName", e.target.value || null)}
+            />
+          </label>
+          <label className="text-sm font-medium sm:col-span-2">
+            {t.references}
+            <textarea
+              className={fieldClass}
+              rows={3}
+              maxLength={20000}
+              value={form.referencesMd ?? ""}
+              onChange={(e) => change("referencesMd", e.target.value || null)}
+            />
+          </label>
+          <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={form.reviewed}
+              onChange={(e) => change("reviewed", e.target.checked)}
+              className="size-5 accent-emerald-800"
+            />
+            {t.reviewed}
+          </label>
+          <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
+            {t.reviewNote} {t.publicationNote}
+          </p>
+        </fieldset>
+        <LessonReview checks={checks} prompt={reviewPrompt} />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || conflict}
+            onClick={() => void status("REVIEW")}
+          >
+            {t.sendReview}
+          </Button>
+          <Button
+            type="button"
+            disabled={busy || conflict}
+            onClick={() => void publish()}
+          >
+            {t.publish}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || conflict}
+            onClick={() => void status("DRAFT")}
+          >
+            {t.draft}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || conflict}
+            onClick={() => void removeTopic()}
+          >
+            {t.remove}
+          </Button>
+        </div>
+        <p className="text-sm leading-7 text-emerald-800">
+          Состояние урока: {t.statuses[row.status]} · версия {row.version}.{" "}
+          {message}
+        </p>
       </section>
     </div>
   );

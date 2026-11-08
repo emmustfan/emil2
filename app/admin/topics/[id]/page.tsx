@@ -23,6 +23,9 @@ export default async function TopicPage({
         initialParsed={parseTopic(topic.contentMd)}
         sections={sections}
         autosaveMs={await getSetting("content.autosaveMs")}
+        minQuestions={await getSetting("content.minQuestions")}
+        maxQuestions={await getSetting("content.maxQuestions")}
+        imageMaxBytes={await getSetting("content.imageMaxBytes")}
       />
     </main>
   );

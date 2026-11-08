@@ -21,6 +21,11 @@ export default async function Login({
   return (
     <AuthShell title={authRu.loginTitle} description={authRu.loginDescription}>
       <EmailForm resendSeconds={await getSetting("auth.resendSeconds")} />
+      <p className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm leading-7">
+        Одна форма для первого и повторного входа. Если аккаунт уже есть, ссылка
+        откроет его; если нет — после подтверждения почты вы заполните профиль.
+        Пароль в этой версии не используется.
+      </p>
       <div className="my-6 text-center text-xs text-stone-400">{authRu.or}</div>
       <TelegramWidget
         username={

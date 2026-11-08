@@ -13,6 +13,7 @@ import type { Root } from "mdast";
 import type { ParsedTopic, ParsedGap } from "@/lib/content/parse";
 import { previewMarkdown } from "@/lib/content/preview";
 import { contentRu } from "@/lib/i18n/ru";
+import { LessonImage } from "./lesson-image";
 function PreviewGap({ gap, config }: { gap: ParsedGap; config?: GapExercise }) {
   let definition;
   try {
@@ -134,12 +135,18 @@ export function MarkdownPreview({
             {
               ...defaultSchema,
               clobberPrefix: "",
-              tagNames: defaultSchema.tagNames?.filter((tag) => tag !== "img"),
             },
           ],
         ]}
         components={{
           ...blockComponents,
+          img: ({ src, alt, title }) => (
+            <LessonImage
+              src={typeof src === "string" ? src : undefined}
+              alt={alt}
+              title={title}
+            />
+          ),
           a: ({ href, children, ...props }) => {
             const order = href?.match(/^#preview-gap-(\d+)$/)?.[1];
             const gap =

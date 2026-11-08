@@ -105,6 +105,7 @@ export async function proxy(request: NextRequest) {
       "/admin/payments",
       "/admin/subscriptions",
       "/admin/settings",
+      "/admin/integrations",
       "/admin/dashboard",
     ].some((p) => path === p || path.startsWith(p + "/")) &&
       session.user.role !== "ADMIN") ||

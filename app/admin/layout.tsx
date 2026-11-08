@@ -45,6 +45,7 @@ export default async function AdminLayout({
               ["/admin/dashboard", "Статистика"],
               ["/admin/subscriptions", "Подписки"],
               ["/admin/settings", "Настройки"],
+              ["/admin/integrations", "Интеграции"],
             ].map(([href, title]) => (
               <Link
                 key={href}
