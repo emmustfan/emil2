@@ -40,6 +40,26 @@ export default async function AdminLayout({
               Платежи
             </Link>
           )}
+          {user.role === "ADMIN" &&
+            [
+              ["/admin/dashboard", "Статистика"],
+              ["/admin/subscriptions", "Подписки"],
+              ["/admin/settings", "Настройки"],
+            ].map(([href, title]) => (
+              <Link
+                key={href}
+                href={href}
+                className="inline-flex min-h-11 items-center text-emerald-800 underline"
+              >
+                {title}
+              </Link>
+            ))}
+          <Link
+            href="/admin/tutor-logs"
+            className="inline-flex min-h-11 items-center text-emerald-800 underline"
+          >
+            Логи тьютора
+          </Link>
           <Link
             className="inline-flex min-h-11 items-center text-emerald-800 underline"
             href="/student"

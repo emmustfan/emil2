@@ -75,6 +75,7 @@ enum MessageRole {
 
 // ---------- Пользователи и вход ----------
 model User {
+  anonymizedAt DateTime?
   diagnostic Json?
 
   roleRevision             Int                 @default(0)
@@ -119,6 +120,7 @@ model User {
   assignedTeachingSubjects TeacherSubject[]    @relation("TeacherSubject_assigner")
   securityChangesMade      SecurityAudit[]     @relation("SecurityAudit_actor")
   securityChangesReceived  SecurityAudit[]     @relation("SecurityAudit_target")
+  @@index([deletedAt, anonymizedAt])
 }
 
 model TeacherSubject {
@@ -493,6 +495,7 @@ model TutorMessage {
   conversation     TutorConversation @relation("TutorMessage_conversationId", fields: [conversationId], references: [id], onDelete: Restrict)
 
   @@index([status, leaseUntil])
+  @@index([createdAt, feedback])
 }
 
 model UsageCounter {
@@ -507,6 +510,7 @@ model UsageCounter {
 
 // ---------- Оплата ----------
 model Plan {
+  editRevision Int @default(0)
   id                  String         @id @default(cuid())
   code                String         @unique // free | subject_month | all_month
   kind                PlanKind
@@ -557,6 +561,7 @@ model Subscription {
 }
 
 model Payment {
+  manualRenewal Boolean @default(false)
   refund PaymentRefund?
 
   provider String @default("mock")
@@ -594,6 +599,7 @@ model Payment {
   plan               Plan          @relation("Payment_planId", fields: [planId], references: [id], onDelete: Restrict)
   subject            Subject?      @relation("Payment_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   promoCode          PromoCode?    @relation("Payment_promoCodeId", fields: [promoCodeId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
 }
 
 model PromoCode {
@@ -622,6 +628,7 @@ model AccessGrant {
   user        User     @relation("AccessGrant_userId", fields: [userId], references: [id], onDelete: Restrict)
   subject     Subject? @relation("AccessGrant_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   grantedBy   User     @relation("AccessGrant_grantedById", fields: [grantedById], references: [id], onDelete: Restrict)
+  @@index([userId, expiresAt])
 }
 
 // ---------- Аналитика, настройки, служебное ----------

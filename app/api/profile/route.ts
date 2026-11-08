@@ -15,10 +15,11 @@ export async function POST(request: NextRequest) {
     const { name, university, course, timezone } = profileSchema
       .strict()
       .parse(await readInput(request));
-    await getDb().user.update({
-      where: { id: session.userId },
+    const updated = await getDb().user.updateMany({
+      where: { id: session.userId, deletedAt: null, blockedAt: null },
       data: { name, university: university || null, course, timezone },
     });
+    if (!updated.count) throw new AuthError("unauthorized", 401);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return authFailure(error);

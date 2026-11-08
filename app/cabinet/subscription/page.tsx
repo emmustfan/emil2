@@ -7,10 +7,12 @@ import { chargeAt } from "@/lib/billing/policy";
 import { formatPrice } from "@/lib/lessons/catalog";
 import { CancelRenewal } from "@/components/billing/cancel";
 import { AuthShell } from "@/components/auth/shell";
+import { currentLegal } from "@/lib/auth/legal";
+import { ManageSubscription } from "@/components/billing/manage";
 export const dynamic = "force-dynamic";
 export default async function Subscription() {
   const user = await requireUser(),
-    [subs, pending, cfg, text] = await Promise.all([
+    [subs, pending, cfg, text, legal] = await Promise.all([
       getDb().subscription.findMany({
         where: { userId: user.id },
         include: { plan: true, subject: { select: { title: true } } },
@@ -23,6 +25,7 @@ export default async function Subscription() {
       }),
       billingConfig(),
       billingContent(),
+      currentLegal(),
     ]);
   const date = (value: Date) =>
     new Intl.DateTimeFormat("ru-RU", {
@@ -78,13 +81,32 @@ export default async function Subscription() {
               <p className="mt-3 text-sm">{s.paymentMethodTitle}</p>
             )}
             {s.status === "PAST_DUE" && (
-              <p className="mt-3 text-sm">
-                Платёж не прошёл.
-                {s.nextRetryAt
-                  ? ` Следующая попытка: ${date(s.nextRetryAt)}.`
-                  : ""}{" "}
-                Доступ зависит от оплаченного срока и льготного периода.
-              </p>
+              <div>
+                <p className="mt-3 text-sm">
+                  Платёж не прошёл.
+                  {s.nextRetryAt
+                    ? ` Следующая попытка: ${date(s.nextRetryAt)}.`
+                    : ""}{" "}
+                  Доступ зависит от оплаченного срока и льготного периода.
+                </p>
+                <ManageSubscription id={s.id} action="pay" />
+              </div>
+            )}
+            {!s.autoRenew &&
+              s.status === "ACTIVE" &&
+              s.currentPeriodEnd > new Date() &&
+              !s.revokedAt &&
+              s.paymentMethodId && (
+                <ManageSubscription
+                  id={s.id}
+                  action="resume"
+                  renewal={text.renewal}
+                  version={text.version}
+                  offerVersion={legal.offer.version}
+                />
+              )}
+            {s.paymentMethodId && (
+              <ManageSubscription id={s.id} action="unlink" />
             )}
             {s.autoRenew && s.status !== "EXPIRED" ? (
               <>

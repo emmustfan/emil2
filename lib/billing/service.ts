@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getDb } from "../db";
-import type { Prisma, Payment } from "../generated/prisma/client";
+import { Prisma, type Payment } from "../generated/prisma/client";
 import { getEnv } from "../env";
 import { lock } from "../auth/session";
 import { lockRoleAccess } from "../auth/role-lock";
@@ -368,11 +368,11 @@ function confirmation(payment: Payment, remote: YkPayment) {
 export async function dispatchPayment(id: string, now = new Date()) {
   const cfg = await billingConfig();
   const initial = await getDb().payment.findUnique({ where: { id } });
-  if (!initial || initial.status !== "PENDING" || !initial.providerRequest)
-    return;
+  if (!initial || initial.status !== "PENDING") return;
   if (initial.provider !== getEnv().PAYMENTS_PROVIDER)
     throw new Error("Payment provider configuration changed");
   if (initial.providerPaymentId) return reconcilePayment(id, now);
+  if (!initial.providerRequest) return;
   await getDb().$transaction(async (tx) => {
     await billingLock(tx, initial.userId);
     const p = await tx.payment.findUniqueOrThrow({ where: { id } });
@@ -401,7 +401,7 @@ export async function dispatchPayment(id: string, now = new Date()) {
         });
         if (
           !sub ||
-          !sub.autoRenew ||
+          (!payment.manualRenewal && !sub.autoRenew) ||
           sub.revokedAt ||
           !sub.renewalConsentedAt ||
           sub.currentPeriodEnd.getTime() !== payment.cycleEnd?.getTime() ||
@@ -462,11 +462,14 @@ export async function reconcilePayment(id: string, now = new Date()) {
             status: "CANCELED",
             cancellationReason:
               remote.cancellation_details?.reason ?? "canceled",
-            raw: remote as unknown as Prisma.InputJsonObject,
+            raw: user.deletedAt
+              ? Prisma.DbNull
+              : (remote as unknown as Prisma.InputJsonObject),
           },
         });
         if (
           p.isRecurring &&
+          !p.manualRenewal &&
           sub &&
           sub.currentPeriodEnd.getTime() === p.cycleEnd?.getTime() &&
           sub.autoRenew &&
@@ -535,7 +538,9 @@ export async function reconcilePayment(id: string, now = new Date()) {
           data: {
             status: "SUCCEEDED",
             paidAt: now,
-            raw: remote as unknown as Prisma.InputJsonObject,
+            raw: user.deletedAt
+              ? Prisma.DbNull
+              : (remote as unknown as Prisma.InputJsonObject),
           },
         });
         const refund = await tx.paymentRefund.upsert({
@@ -571,9 +576,12 @@ export async function reconcilePayment(id: string, now = new Date()) {
         new Date(Math.max(now.getTime(), sub?.currentPeriodEnd.getTime() ?? 0)),
         p.periodMonths,
       );
-      const method = remote.payment_method?.saved
-        ? remote.payment_method
-        : null;
+      const method =
+        !user.deletedAt &&
+        remote.payment_method?.saved &&
+        (!p.isRecurring || !!sub?.paymentMethodId)
+          ? remote.payment_method
+          : null;
       const methodTitle = method?.card
         ? `${method.card.card_type} •• ${method.card.last4}`
         : method
@@ -616,7 +624,9 @@ export async function reconcilePayment(id: string, now = new Date()) {
           status: "SUCCEEDED",
           paidAt: now,
           subscriptionId: activated.id,
-          raw: remote as unknown as Prisma.InputJsonObject,
+          raw: user.deletedAt
+            ? Prisma.DbNull
+            : (remote as unknown as Prisma.InputJsonObject),
         },
       });
       await track(

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { AuthShell } from "@/components/auth/shell";
 import { authRu } from "@/lib/i18n/ru";
+import { LegalEntity } from "@/components/legal/entity";
 export const dynamic = "force-dynamic";
 export default async function Legal({
   params,
@@ -23,6 +24,7 @@ export default async function Legal({
       <div className="whitespace-pre-wrap text-sm leading-7">
         {document.contentMd}
       </div>
+      <LegalEntity />
     </AuthShell>
   );
 }

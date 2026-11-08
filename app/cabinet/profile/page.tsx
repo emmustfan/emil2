@@ -7,6 +7,7 @@ import { EmailForm } from "@/components/auth/email-form";
 import { TelegramWidget } from "@/components/auth/telegram-widget";
 import { authRu } from "@/lib/i18n/ru";
 import universities from "@/content-seed/universities.json";
+import { DeleteAccount } from "@/components/auth/delete-account";
 export default async function Profile() {
   const user = await requireUser();
   const env = getEnv();
@@ -57,6 +58,11 @@ export default async function Profile() {
           {authRu.logoutAll}
         </button>
       </form>
+      <p className="mt-8 text-sm leading-7">
+        Письма о подписке отправляются всегда: об оплате, продлении и отмене.
+        Напоминания о повторении в Telegram пока не подключены.
+      </p>
+      <DeleteAccount />
     </AuthShell>
   );
 }

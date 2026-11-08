@@ -18,6 +18,24 @@ export const envSchema = z
         .optional(),
     ),
     SUPPORT_EMAIL: z.preprocess(optionalValue, z.email().optional()),
+    LEGAL_ENTITY_NAME: z.preprocess(
+      optionalValue,
+      z.string().trim().min(1).max(300).optional(),
+    ),
+    LEGAL_ENTITY_INN: z.preprocess(
+      optionalValue,
+      z
+        .string()
+        .regex(/^(\d{10}|\d{12})$/)
+        .optional(),
+    ),
+    LEGAL_ENTITY_OGRN: z.preprocess(
+      optionalValue,
+      z
+        .string()
+        .regex(/^(\d{13}|\d{15})$/)
+        .optional(),
+    ),
     ADMIN_EMAILS: z.string().default(""),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_BOT_USERNAME: z.string().optional(),

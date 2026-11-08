@@ -44,6 +44,11 @@ export async function requestRefund(adminId: string, paymentId: string) {
         where: { paymentId },
       });
       if (existing) return existing;
+      if (!p.buyerEmail)
+        throw new ContentError(
+          "Платёж обезличен. Возврат и фискальные документы нужно проверить в кабинете платёжного сервиса.",
+          409,
+        );
       const row = await tx.paymentRefund.create({
         data: {
           paymentId,
@@ -89,6 +94,11 @@ export async function dispatchRefund(id: string, now = new Date()) {
       await billingLock(tx, p.userId, true);
       const row = await tx.paymentRefund.findUniqueOrThrow({ where: { id } });
       if (row.status !== "PENDING" || row.providerRefundId) return;
+      if (!row.providerRequest)
+        throw new ContentError(
+          "Обезличенный возврат требует проверки в платёжном сервисе.",
+          409,
+        );
       if (
         now.getTime() - row.creationStartedAt!.getTime() >=
         cfg.creationTtlHours * 3600000

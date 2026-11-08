@@ -6,9 +6,13 @@ import { currentReviewSummary } from "@/components/review/link";
 import { getDb } from "@/lib/db";
 import { lessonHref } from "@/lib/lessons/catalog";
 import { rolesRu as t } from "@/lib/i18n/ru";
+import { studentOverview } from "@/lib/admin/cabinet";
 export async function StudentHome() {
   const user = await requireUser(),
-    review = await currentReviewSummary();
+    [review, overview] = await Promise.all([
+      currentReviewSummary(),
+      studentOverview(user.id),
+    ]);
   const recent = await getDb().topicProgress.findMany({
     where: {
       userId: user.id,
@@ -39,6 +43,67 @@ export async function StudentHome() {
         {t.catalog}
       </Link>
       <SavedDiagnostic userId={user.id} />
+      <section className="mt-7 rounded-xl border bg-white p-5">
+        <h2 className="text-lg font-semibold">Сегодня</h2>
+        <p className="mt-3 text-sm leading-7">
+          К повторению: {review?.dueCount ?? 0}. Осталось вопросов ИИ сегодня:{" "}
+          {overview.quota.remaining} из {overview.quota.limit}.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-4">
+          <Link href="/review" className="lesson-primary">
+            Повторить
+          </Link>
+          {overview.recent && (
+            <Link
+              href={lessonHref(
+                overview.recent.topic.subject.slug,
+                overview.recent.topic.slug,
+              )}
+              className="lesson-primary"
+            >
+              Продолжить: {overview.recent.topic.title}
+            </Link>
+          )}
+        </div>
+      </section>
+      <section className="mt-8">
+        <h2 className="text-xl font-semibold">Мои предметы</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {overview.subjects.map((s) => (
+            <article key={s.id} className="rounded-xl border bg-white p-5">
+              <Link
+                href={`/subjects/${s.slug}`}
+                className="font-semibold text-emerald-800 underline"
+              >
+                {s.title}
+              </Link>
+              <p className="mt-3 text-sm">
+                Пройдено тем: {s.completed} из {s.total}. Средний лучший балл:{" "}
+                {s.average === null ? "—" : `${Math.round(s.average * 100)}%`}.
+              </p>
+              <p className="mt-3 text-sm">
+                {s.permitted && s.until
+                  ? `Открыт до ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: user.timezone }).format(s.until)}`
+                  : "Бесплатные темы"}
+              </p>
+            </article>
+          ))}
+        </div>
+        {!overview.subjects.length && (
+          <p className="mt-4 text-sm">
+            Откройте первый урок в каталоге — здесь появятся ваши предметы.
+          </p>
+        )}
+      </section>
+      {overview.quota.tier === "free" && (
+        <p className="mt-6 rounded-xl bg-emerald-50 p-5 text-sm leading-7">
+          Бесплатные темы доступны всегда.{" "}
+          <Link className="underline" href="/pricing">
+            Посмотреть доступ ко всем темам
+          </Link>
+          .
+        </p>
+      )}
       {review && (
         <section className="mt-7 rounded-xl border border-emerald-200 bg-emerald-50 p-5">
           <h2 className="text-lg font-semibold">{t.review}</h2>

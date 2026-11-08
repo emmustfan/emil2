@@ -104,6 +104,16 @@ export async function billingTick(now = new Date()) {
             : !sub.nextRetryAt || now < sub.nextRetryAt
         )
           return;
+        if (
+          await tx.payment.count({
+            where: {
+              subscriptionId: sub.id,
+              status: "PENDING",
+              cycleEnd: sub.currentPeriodEnd,
+            },
+          })
+        )
+          return;
         const key = `renew:${sub.id}:${sub.currentPeriodEnd.toISOString()}:${sub.failedAttempts}`;
         let payment = await tx.payment.findUnique({
           where: { requestKey: key },

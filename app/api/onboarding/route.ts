@@ -15,6 +15,7 @@ import {
   readInput,
 } from "@/lib/auth/http";
 import { AuthError } from "@/lib/auth/errors";
+import { lockRoleAccess } from "@/lib/auth/role-lock";
 export async function POST(request: NextRequest) {
   try {
     assertOrigin(request);
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     const { name, university, course, timezone } = input;
     await getDb().$transaction(
       async (tx) => {
+        await lockRoleAccess(tx);
         await tx.user.update({
           where: { id: session.userId },
           data: {

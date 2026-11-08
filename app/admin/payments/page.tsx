@@ -4,11 +4,18 @@ import { getEnv } from "@/lib/env";
 import { RefundButton } from "@/components/billing/refund";
 import { formatPrice } from "@/lib/lessons/catalog";
 import Link from "next/link";
+import { reportRange, reportInput } from "@/lib/admin/policy";
+import { getSetting } from "@/lib/settings";
 export const dynamic = "force-dynamic";
 export default async function AdminPayments({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    page?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   await requireAdmin();
   const p = await searchParams,
@@ -18,14 +25,32 @@ export default async function AdminPayments({
       ? (p.status as "PENDING" | "SUCCEEDED" | "CANCELED" | "REFUNDED")
       : undefined,
     page = Math.max(1, Math.min(10000, Number.parseInt(p.page ?? "1") || 1));
+  let range: ReturnType<typeof reportRange>;
+  try {
+    range = reportRange(
+      reportInput.parse({ from: p.from || undefined, to: p.to || undefined }),
+    );
+  } catch {
+    return (
+      <main>
+        <h1>Платежи и возвраты</h1>
+        <p role="alert">Проверьте даты.</p>
+        <Link href="/admin/payments">Сбросить фильтры</Link>
+      </main>
+    );
+  }
+  const size = await getSetting("admin.usersPageSize");
   const payments = await getDb().payment.findMany({
-    where: { ...(status ? { status } : {}) },
+    where: {
+      createdAt: { gte: range.start, lt: range.end },
+      ...(status ? { status } : {}),
+    },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    skip: (page - 1) * 20,
-    take: 21,
+    skip: (page - 1) * size,
+    take: size + 1,
     include: {
       refund: { select: { status: true } },
-      user: { select: { email: true, name: true } },
+      user: { select: { email: true, name: true, deletedAt: true } },
     },
   });
   return (
@@ -41,6 +66,24 @@ export default async function AdminPayments({
         </p>
       )}
       <form className="my-6 flex flex-wrap items-center gap-3">
+        <label className="text-sm">
+          С даты оформления (UTC)
+          <input
+            className="ml-3 min-h-11 rounded-lg border bg-white p-2"
+            type="date"
+            name="from"
+            defaultValue={range.from}
+          />
+        </label>
+        <label className="text-sm">
+          По дату (UTC)
+          <input
+            className="ml-3 min-h-11 rounded-lg border bg-white p-2"
+            type="date"
+            name="to"
+            defaultValue={range.to}
+          />
+        </label>
         <label>
           Статус
           <select
@@ -64,7 +107,7 @@ export default async function AdminPayments({
         <button className="lesson-primary">Показать</button>
       </form>
       <div className="space-y-5">
-        {payments.slice(0, 20).map((p) => (
+        {payments.slice(0, size).map((p) => (
           <article
             key={p.id}
             className="rounded-2xl border border-stone-200 bg-white p-5"
@@ -73,8 +116,9 @@ export default async function AdminPayments({
               {p.planTitle || "Платёж"} · {formatPrice(p.amountKopecks)}
             </h2>
             <p className="mt-2 text-sm">
-              {p.user.name ?? "Пользователь"} ·{" "}
-              {p.user.email ?? "Вход через Telegram"}
+              {p.user.deletedAt
+                ? "Удалённый аккаунт"
+                : `${p.user.name ?? "Пользователь"} · ${p.user.email ?? "Вход через Telegram"}`}
             </p>
             <p className="mt-2 text-sm">
               {
@@ -88,6 +132,10 @@ export default async function AdminPayments({
               · {p.isRecurring ? "Продление" : "Первый платёж"}
             </p>
             <p className="mt-2 text-xs text-stone-500">{p.id}</p>
+            <p className="mt-2 text-xs text-stone-500">
+              Оформлен{" "}
+              {p.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
+            </p>
             {p.refund && (
               <p className="mt-2 text-sm">
                 Возврат:{" "}
@@ -108,15 +156,15 @@ export default async function AdminPayments({
         {page > 1 && (
           <Link
             className="min-h-11 underline"
-            href={`/admin/payments?page=${page - 1}${status ? `&status=${status}` : ""}`}
+            href={`/admin/payments?${new URLSearchParams({ page: String(page - 1), status: status ?? "", from: range.from, to: range.to })}`}
           >
             Назад
           </Link>
         )}
-        {payments.length > 20 && (
+        {payments.length > size && (
           <Link
             className="min-h-11 underline"
-            href={`/admin/payments?page=${page + 1}${status ? `&status=${status}` : ""}`}
+            href={`/admin/payments?${new URLSearchParams({ page: String(page + 1), status: status ?? "", from: range.from, to: range.to })}`}
           >
             Дальше
           </Link>

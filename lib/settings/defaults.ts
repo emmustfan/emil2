@@ -63,6 +63,8 @@ export const DEFAULT_SETTINGS = {
   "content.autosaveMs": 1000,
   "admin.usersPageSize": 20,
   "admin.maxTeacherSubjects": 200,
+  "admin.maxGrantDays": 3650,
+  "admin.defaultGrantDays": 30,
 };
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;
 export function decodeSetting<K extends SettingKey>(
@@ -105,6 +107,9 @@ export function decodeSetting<K extends SettingKey>(
     (key === "admin.maxTeacherSubjects" &&
       typeof result.data === "number" &&
       result.data > 1000) ||
+    (["admin.maxGrantDays", "admin.defaultGrantDays"].includes(key) &&
+      typeof result.data === "number" &&
+      result.data > 3650) ||
     (key.startsWith("tutor.") &&
       !["tutor.minSimilarity", "tutor.topicBonus"].includes(key) &&
       (typeof result.data !== "number" || !Number.isInteger(result.data))) ||

@@ -44,7 +44,7 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
 }, testInfo) => {
   const f = fixture!;
   await page.goto("/subjects?course=1");
-  await page.getByRole("link", { name: /Учебный стенд/ }).click();
+  await page.locator(`a[href="/subjects/${f.subject.slug}"]`).click();
   await expect(
     page.getByRole("heading", { name: "Учебный стенд", exact: true }),
   ).toBeVisible();

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { formatPrice } from "@/lib/format";
+import { useClientReady } from "@/lib/use-client-ready";
 export function MockPayment({
   id,
   title,
@@ -10,6 +11,7 @@ export function MockPayment({
   title: string;
   amount: number;
 }) {
+  const ready = useClientReady();
   const [pending, setPending] = useState(false),
     [error, setError] = useState("");
   async function settle(status: "succeeded" | "canceled") {
@@ -44,14 +46,14 @@ export function MockPayment({
       <div className="flex flex-wrap gap-4">
         <button
           className="lesson-primary"
-          disabled={pending}
+          disabled={pending || !ready}
           onClick={() => settle("succeeded")}
         >
           Оплатить в тестовом режиме
         </button>
         <button
           className="min-h-11 underline"
-          disabled={pending}
+          disabled={pending || !ready}
           onClick={() => settle("canceled")}
         >
           Отклонить тестовый платёж

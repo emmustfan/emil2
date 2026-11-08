@@ -100,7 +100,13 @@ export async function proxy(request: NextRequest) {
       },
     });
   if (
-    ((path.startsWith("/admin/users") || path.startsWith("/admin/payments")) &&
+    ([
+      "/admin/users",
+      "/admin/payments",
+      "/admin/subscriptions",
+      "/admin/settings",
+      "/admin/dashboard",
+    ].some((p) => path === p || path.startsWith(p + "/")) &&
       session.user.role !== "ADMIN") ||
     (path.startsWith("/teacher") &&
       !["ADMIN", "EDITOR"].includes(session.user.role))

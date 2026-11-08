@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalEntity } from "@/components/legal/entity";
 import type { Metadata } from "next";
 import { BookOpen, ArrowUpRight } from "lucide-react";
 import { landingContent, publicExamples } from "@/lib/landing/content";
@@ -274,6 +275,7 @@ export default async function Home() {
         </section>
       </main>
       <footer className="border-t border-stone-200 py-8 text-xs leading-6 text-stone-600">
+        <LegalEntity />
         <p className="max-w-3xl">{c.disclaimer}</p>
         <nav
           aria-label="Документы"

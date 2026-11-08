@@ -16,6 +16,7 @@ import {
   type IndexJob,
 } from "../lib/tutor/indexing";
 import { getDb } from "../lib/db";
+import { PRIVACY_TICK, privacyTick } from "../lib/auth/deletion";
 const boss = createQueueClient();
 let stopping = false;
 async function shutdown() {
@@ -35,6 +36,25 @@ process.once("SIGINT", () => {
 try {
   await boss.start();
   await boss.createQueue(SMOKE_QUEUE);
+  await boss.createQueue(PRIVACY_TICK);
+  await boss.work(PRIVACY_TICK, async () => {
+    try {
+      await privacyTick();
+    } catch {
+      throw new Error("privacy_tick_failed");
+    }
+  });
+  await boss.schedule(
+    PRIVACY_TICK,
+    "15 * * * *",
+    {},
+    { retryLimit: 3, retryDelay: 30 },
+  );
+  await boss.send(
+    PRIVACY_TICK,
+    {},
+    { singletonKey: "startup", retryLimit: 3, retryDelay: 30 },
+  );
   for (const q of [BILLING_SYNC, BILLING_MAIL, BILLING_TICK])
     await boss.createQueue(q);
   await boss.work<SyncJob>(

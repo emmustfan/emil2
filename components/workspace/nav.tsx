@@ -50,6 +50,14 @@ export async function WorkspaceNav() {
           Платежи
         </Link>
       )}
+      {user.role !== "USER" && (
+        <Link
+          href="/admin/tutor-logs"
+          className="inline-flex min-h-11 items-center underline"
+        >
+          Логи тьютора
+        </Link>
+      )}
       <ReviewLink />
       <Link
         href="/tutor"
