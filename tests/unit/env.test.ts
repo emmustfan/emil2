@@ -1,7 +1,35 @@
+import { readFileSync } from "node:fs";
+import { parse } from "dotenv";
 import { describe, expect, it } from "vitest";
 import { parseEnv } from "../../lib/env";
 const base = { DATABASE_URL: "postgresql://app:app@localhost:5432/app" };
 describe("environment", () => {
+  it("accepts the complete standard .env.example used by the Mac launcher", () => {
+    const template = parse(readFileSync(".env.example"));
+    expect(parseEnv(template)).toMatchObject({
+      YANDEX_METRIKA_ID: undefined,
+      SUPPORT_EMAIL: undefined,
+      LLM_PROVIDER: "mock",
+    });
+  });
+  it.each([undefined, ""])(
+    "disables Metrika when its optional ID is %s",
+    (id) => {
+      expect(
+        parseEnv({ ...base, YANDEX_METRIKA_ID: id }).YANDEX_METRIKA_ID,
+      ).toBeUndefined();
+    },
+  );
+  it("accepts a configured numeric Metrika ID and still rejects invalid nonempty IDs", () => {
+    expect(
+      parseEnv({ ...base, YANDEX_METRIKA_ID: "12345678" }).YANDEX_METRIKA_ID,
+    ).toBe("12345678");
+    for (const id of ["abc", "123abc", "-1", "1.5", "1234567890123"])
+      expect(() => parseEnv({ ...base, YANDEX_METRIKA_ID: id })).toThrow(
+        "YANDEX_METRIKA_ID",
+      );
+  });
+
   it("accepts development defaults with only a database URL", () => {
     expect(parseEnv(base)).toMatchObject({
       LLM_PROVIDER: "mock",

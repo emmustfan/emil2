@@ -8,7 +8,11 @@ finish() {
   result=$?
   if [[ "$result" != 0 ]]; then
     echo ""
-    echo "Запуск не завершён. Сохраните текст ошибки из этого окна."
+    echo "Запуск не завершён. Показываем журнал подготовки базы:"
+    if declare -p compose >/dev/null 2>&1; then
+      "${compose[@]}" logs --no-color --tail 80 migrate || true
+    fi
+    echo "Сохраните текст ошибки из этого окна."
     if [[ -t 0 ]]; then read -r -p "Нажмите Enter, чтобы выйти… " || true; fi
   fi
 }

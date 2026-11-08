@@ -118,3 +118,23 @@ docker compose -f docker-compose.yml -f docker-compose.preview.yml logs --tail 5
 После запуска обновите страницу браузера. Если вы вручную меняли `.env`,
 сохраните нужные локальные настройки и для новой папки; рабочий `.env`
 в архив не входит.
+
+## Ошибка `YANDEX_METRIKA_ID` при запуске
+
+В ранней версии этапа демо пустая настройка Метрики ошибочно останавливала
+подготовку базы. Если журнал содержит `Invalid environment: YANDEX_METRIKA_ID`,
+в Терминале из папки проекта выполните:
+
+```sh
+sed -i '' '/^YANDEX_METRIKA_ID=$/d' .env
+bash start-mac.command
+```
+
+Это удаляет только пустую строку настройки Метрики; база и прогресс сохраняются.
+В обновлённой версии пустое поле уже поддерживается — можно скачать свежий ZIP
+той же ветки. Если ошибка другая, скрипт автоматически выводит журнал migrate;
+его также можно получить отдельно:
+
+```sh
+docker compose -p emil2-local-preview -f docker-compose.yml -f docker-compose.preview.yml logs --no-color --tail=100 migrate
+```
