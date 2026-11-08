@@ -6,6 +6,7 @@ export type ChatOptions = {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  maxResponseChars?: number;
   signal?: AbortSignal;
   onUsage?: (usage: { tokensIn: number; tokensOut: number }) => void;
 };

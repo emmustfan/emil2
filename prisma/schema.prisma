@@ -711,6 +711,15 @@ model ImportJob {
   subjectId   String
   sectionId   String?
   fileKey     String
+  format      String    @default("text")
+  stage       String    @default("queued")
+  partsDone   Int       @default(0)
+  partsTotal  Int       @default(0)
+  attempts    Int       @default(0)
+  runToken    String?
+  leaseUntil  DateTime?
+  rightsConfirmedAt DateTime?
+  sourceDeletedAt DateTime?
   status      String // queued | processing | done | failed
   error       String?
   topicIds    String[]
@@ -719,6 +728,9 @@ model ImportJob {
   createdBy   User      @relation("ImportJob_createdById", fields: [createdById], references: [id], onDelete: Restrict)
   subject     Subject   @relation("ImportJob_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   section     Section?  @relation("ImportJob_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
+
+  @@index([status, leaseUntil])
+  @@index([subjectId, createdAt])
 }
 
 model AppSetting {

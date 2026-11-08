@@ -56,6 +56,12 @@ export default async function AdminLayout({
               </Link>
             ))}
           <Link
+            href="/admin/imports"
+            className="inline-flex min-h-11 items-center text-emerald-800 underline"
+          >
+            Импорт материалов
+          </Link>
+          <Link
             href="/admin/tutor-logs"
             className="inline-flex min-h-11 items-center text-emerald-800 underline"
           >

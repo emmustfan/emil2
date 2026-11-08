@@ -3,6 +3,7 @@ import type { AppEnv } from "../env";
 import { assertDevelopment } from "../providers";
 import type { ChatMessage, ChatOptions, LLMProvider } from "./provider";
 import { HttpLLMProvider } from "./http";
+import { mockImport } from "../imports/mock";
 import { terms } from "./tokens";
 export class MockLLMProvider implements LLMProvider {
   constructor(private readonly dimension: number) {
@@ -19,6 +20,22 @@ export class MockLLMProvider implements LLMProvider {
   }
   async complete(messages: ChatMessage[], opts: ChatOptions) {
     opts.signal?.throwIfAborted();
+    if (
+      messages.some(
+        (m) =>
+          m.role === "system" &&
+          m.content.includes('"task":"lesson-import/v1"'),
+      )
+    ) {
+      const input = JSON.parse(
+        messages.find((m) => m.role === "user")?.content ?? "{}",
+      );
+      return {
+        text: JSON.stringify(mockImport(input.source)),
+        tokensIn: 0,
+        tokensOut: 0,
+      };
+    }
     const question =
       messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
     let sources: { n: number; text: string }[] = [];

@@ -9,6 +9,12 @@ import { billingTick, syncBillingJob } from "../lib/billing/worker";
 import { deliverBillingMail } from "../lib/billing/mail";
 import { createQueueClient, SMOKE_QUEUE } from "./queue";
 import { logger } from "../lib/logger";
+import { processImport, importTick } from "../lib/imports/worker";
+import {
+  CONTENT_IMPORT_QUEUE,
+  IMPORT_TICK,
+  closeContentQueue,
+} from "../lib/content/jobs";
 import { CONTENT_INDEX_QUEUE } from "../lib/content/jobs";
 import {
   indexTopic,
@@ -23,6 +29,7 @@ async function shutdown() {
   if (stopping) return;
   stopping = true;
   await closeBillingQueue();
+  await closeContentQueue();
   await boss.stop({ graceful: true, timeout: 10000 });
   await getDb().$disconnect();
   logger.info("worker_stopped");
@@ -100,6 +107,29 @@ try {
     BILLING_TICK,
     {},
     { singletonKey: "startup", retryLimit: 3, retryDelay: 30 },
+  );
+  await boss.createQueue(CONTENT_IMPORT_QUEUE);
+  await boss.createQueue(IMPORT_TICK);
+  await boss.work<{ id: string }>(
+    CONTENT_IMPORT_QUEUE,
+    { pollingIntervalSeconds: 1 },
+    async (jobs) => {
+      for (const job of jobs) await processImport(job.data.id);
+    },
+  );
+  await boss.work(IMPORT_TICK, async () => {
+    await importTick();
+  });
+  await boss.schedule(
+    IMPORT_TICK,
+    "* * * * *",
+    {},
+    { retryLimit: 2, retryDelay: 30 },
+  );
+  await boss.send(
+    IMPORT_TICK,
+    {},
+    { singletonKey: "startup", retryLimit: 2, retryDelay: 30 },
   );
   await boss.createQueue(CONTENT_INDEX_QUEUE);
   await boss.work<IndexJob>(

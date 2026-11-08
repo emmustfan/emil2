@@ -57,6 +57,12 @@ export default async function SubjectPage({
         </div>
       </section>
       <section className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-7">
+        <Link
+          href={`/admin/imports?subjectId=${id}`}
+          className="mb-5 inline-flex min-h-11 items-center text-emerald-800 underline"
+        >
+          Импортировать PDF, Word или текст
+        </Link>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-2xl font-semibold">{t.topics}</h2>
           <Button asChild>

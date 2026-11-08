@@ -66,6 +66,12 @@ export const DEFAULT_SETTINGS = {
   "content.imageMaxSide": 2400,
   "content.imagesPerTopic": 30,
   "content.imageRequestsPerMinute": 10,
+  "import.maxBytes": 20971520,
+  "import.maxTextChars": 60000,
+  "import.partChars": 12000,
+  "import.maxParts": 5,
+  "import.requestsPerHour": 5,
+  "import.maxConcurrent": 2,
   "admin.usersPageSize": 20,
   "admin.maxTeacherSubjects": 200,
   "admin.maxGrantDays": 3650,
@@ -87,16 +93,33 @@ export function decodeSetting<K extends SettingKey>(
           .number()
           .positive()
           .max(
-            key === "content.imageMaxBytes"
-              ? 10485760
-              : key === "content.imageMaxPixels"
-                ? 40000000
-                : 100000,
+            key === "import.maxBytes"
+              ? 20971520
+              : key === "content.imageMaxBytes"
+                ? 10485760
+                : key === "content.imageMaxPixels"
+                  ? 40000000
+                  : 100000,
           );
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
     !result.success ||
+    (key === "import.maxTextChars" &&
+      typeof result.data === "number" &&
+      result.data > 60000) ||
+    (key === "import.partChars" &&
+      typeof result.data === "number" &&
+      (result.data < 2000 || result.data > 12000)) ||
+    (key === "import.maxConcurrent" &&
+      typeof result.data === "number" &&
+      result.data > 2) ||
+    (key === "import.maxParts" &&
+      typeof result.data === "number" &&
+      result.data > 5) ||
+    (key === "import.requestsPerHour" &&
+      typeof result.data === "number" &&
+      result.data > 20) ||
     (key === "content.imageMaxSide" &&
       typeof result.data === "number" &&
       (result.data < 64 || result.data > 4096)) ||
@@ -113,6 +136,7 @@ export function decodeSetting<K extends SettingKey>(
       key.startsWith("analytics.") ||
       key === "demo.exampleRequestsPerMinute" ||
       key.startsWith("admin.") ||
+      key.startsWith("import.") ||
       key.startsWith("content.") ||
       key === "srs.newCardsPerDay" ||
       key === "srs.queuePageSize" ||

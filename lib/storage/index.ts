@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { AppEnv } from "../env";
-import { assertDevelopment, ProviderNotImplementedError } from "../providers";
+import { assertDevelopment } from "../providers";
+import { S3StorageDriver } from "./s3";
 export interface StorageDriver {
   put(key: string, body: Uint8Array): Promise<void>;
   get(key: string): Promise<Buffer>;
@@ -28,8 +29,7 @@ export class LocalStorageDriver implements StorageDriver {
   }
 }
 export function createStorageDriver(env: AppEnv): StorageDriver {
-  if (env.STORAGE_DRIVER !== "local")
-    throw new ProviderNotImplementedError(env.STORAGE_DRIVER);
+  if (env.STORAGE_DRIVER === "s3") return new S3StorageDriver(env);
   assertDevelopment(env);
   return new LocalStorageDriver();
 }

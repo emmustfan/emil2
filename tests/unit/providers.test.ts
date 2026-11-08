@@ -94,7 +94,7 @@ describe("development adapters", () => {
         "forbidden",
       );
   });
-  it("selects real LLM adapters and fails explicitly for remaining unimplemented adapters", () => {
+  it("selects real adapters and rejects incomplete configuration", () => {
     expect(
       createLLMProvider({ ...env, LLM_PROVIDER: "anthropic" }).constructor.name,
     ).toBe("HttpLLMProvider");
@@ -106,7 +106,7 @@ describe("development adapters", () => {
       createPaymentsProvider({ ...env, PAYMENTS_PROVIDER: "yookassa" }),
     ).toThrow("configuration");
     expect(() => createStorageDriver({ ...env, STORAGE_DRIVER: "s3" })).toThrow(
-      "not implemented",
+      "Invalid URL",
     );
   });
 });

@@ -25,7 +25,7 @@ export async function normalizeImage(
   limits: Awaited<ReturnType<typeof imageLimits>>,
 ) {
   if (!body.length || body.length > limits.maxBytes)
-    throw new ContentError("Размер изображения превышает лимит.", 413);
+    throw new ContentError("Размер файла превышает лимит.", 413);
   if (!["image/png", "image/jpeg", "image/webp"].includes(mime))
     throw new ContentError("Выберите PNG, JPEG или WebP.");
   const png = body
@@ -183,9 +183,9 @@ export async function readTopicImage(id: string, userId: string | null) {
 export async function readImageForm(request: Request, maxBytes: number) {
   const limit = maxBytes + 65536;
   if (Number(request.headers.get("content-length") ?? 0) > limit)
-    throw new ContentError("Размер изображения превышает лимит.", 413);
+    throw new ContentError("Размер файла превышает лимит.", 413);
   const reader = request.body?.getReader();
-  if (!reader) throw new ContentError("Выберите файл изображения.");
+  if (!reader) throw new ContentError("Выберите файл.");
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   try {
@@ -195,7 +195,7 @@ export async function readImageForm(request: Request, maxBytes: number) {
       bytes += chunk.value.byteLength;
       if (bytes > limit) {
         await reader.cancel();
-        throw new ContentError("Размер изображения превышает лимит.", 413);
+        throw new ContentError("Размер файла превышает лимит.", 413);
       }
       chunks.push(chunk.value);
     }

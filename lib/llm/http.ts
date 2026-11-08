@@ -157,8 +157,11 @@ export class HttpLLMProvider implements LLMProvider {
         tokensOut = usage.tokensOut;
         opts.onUsage?.(usage);
       },
-    }))
+    })) {
+      if (text.length + part.length > (opts.maxResponseChars ?? 2000000))
+        throw new Error("LLM response too large");
       text += part;
+    }
     return { text, tokensIn, tokensOut };
   }
   async embed(texts: string[], opts?: { signal?: AbortSignal }) {

@@ -1,5 +1,7 @@
 import type { Prisma } from "../generated/prisma/client";
 import { createQueueClient } from "../../worker/queue";
+export const CONTENT_IMPORT_QUEUE = "content-import";
+export const IMPORT_TICK = "content-import-tick";
 export const CONTENT_INDEX_QUEUE = "content-index";
 let queuePromise: Promise<ReturnType<typeof createQueueClient>> | null = null;
 export function getContentQueue() {
@@ -8,6 +10,7 @@ export function getContentQueue() {
     try {
       await queue.start();
       await queue.createQueue(CONTENT_INDEX_QUEUE);
+      await queue.createQueue(CONTENT_IMPORT_QUEUE);
       return queue;
     } catch (error) {
       await queue.stop();

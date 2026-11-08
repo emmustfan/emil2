@@ -13,7 +13,7 @@
 Оплата: [как проверить и настроить](docs/billing.md), [результаты проверок](docs/validation-stage-7.md).
 Администрирование: [инструкция](docs/administration.md), [проверки этапа 8](docs/validation-stage-8.md).
 Цены, лимиты, тексты и документы редактируются через `/admin/settings`;
-статистика — `/admin/dashboard`. Следующий этап — импорт учебных материалов.
+статистика — `/admin/dashboard`. Импорт PDF/DOCX/текста — `/admin/imports`, [пошаговая инструкция](docs/imports.md), [проверки](docs/validation-stage-9.md). Следующий этап — общая стабилизация MVP.
 Добавлены три типа заданий: один вариант, несколько вариантов и короткий текст; [инструкция для автора](docs/exercises.md), [проверки](docs/validation-exercises.md).
 Повторение: [как проверить](docs/review.md), [результаты проверок](docs/validation-stage-4.md).
 Тьютор: [просмотр и настройка](docs/tutor.md), [проверки](docs/validation-stage-5.md).
@@ -92,7 +92,7 @@ Typecheck/build требуют сгенерированного Prisma Client; �
 В `.env.example` включены `mock`, `log`, `local`. SMTP реализован через nodemailer;
 LLM поддерживает OpenAI-совместимый HTTP и Anthropic, включая потоковый ответ.
 Для оплаты реализованы mock и типизированный HTTP-клиент ЮKassa;
-S3-адаптер пока явно выдаёт `ProviderNotImplementedError`.
+Для рабочего хранилища реализован S3-адаптер (закрытый бакет, HTTPS, `S3_*` в окружении). Реальное подключение проверяется отдельно.
 Моки запрещены в `NODE_ENV=production`. `pnpm build` собирает артефакт без ключей,
 но запуск production требует настроенных реальных провайдеров.
 
