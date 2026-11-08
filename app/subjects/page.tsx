@@ -1,14 +1,17 @@
 import Link from "next/link";
-import type { Metadata } from "next";
+import { publicMetadata } from "@/lib/ops/seo";
 import { ArrowUpRight, BookOpen, Unlock } from "lucide-react";
 import { LearningShell } from "@/components/lessons/shell";
 import { getCurrentSession } from "@/lib/auth/server";
 import { catalog, plans, formatPrice } from "@/lib/lessons/catalog";
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Предметы · Учебная платформа",
-  description: "Методички с пропусками и тесты для студентов-стоматологов.",
-};
+export function generateMetadata() {
+  return publicMetadata(
+    "/subjects",
+    "Предметы · Учебная платформа",
+    "Методички с пропусками и тесты для студентов-стоматологов.",
+  );
+}
 export default async function Subjects({
   searchParams,
 }: {

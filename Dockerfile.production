@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+FROM node:24-bookworm-slim AS dependencies
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --global pnpm@10.34.9
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    pnpm install --frozen-lockfile
+FROM dependencies AS build
+COPY . .
+# Build needs no real keys or database connection. Routes read configuration at runtime.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+RUN pnpm build
+FROM build AS migrate
+RUN chown -R node:node /app
+ENV NODE_ENV=production
+USER node
+ENTRYPOINT ["sh", "scripts/ops/entrypoint.sh"]
+CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed"]
+FROM dependencies AS production-dependencies
+RUN CI=true pnpm prune --prod
+FROM node:24-bookworm-slim AS production
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+# One assembly step also keeps vfs-based cloud build storage bounded.
+RUN --mount=type=bind,from=production-dependencies,source=/app,target=/deps,ro \
+    --mount=type=bind,from=build,source=/app,target=/build,ro \
+    --mount=type=bind,from=dependencies,source=/usr/local/lib/node_modules,target=/pnpm,ro \
+    mkdir -p /usr/local/lib/node_modules /app/scripts /app/tmp/uploads && \
+    cp -a /pnpm/pnpm /usr/local/lib/node_modules/pnpm && \
+    ln -s ../lib/node_modules/pnpm/bin/pnpm.cjs /usr/local/bin/pnpm && \
+    cp -a /deps/node_modules /build/.next /build/lib /build/worker /build/package.json /build/next.config.ts /app/ && \
+    cp -a /build/scripts/ops /app/scripts/ && \
+    rm -rf /app/.next/cache && mkdir -p /app/.next/cache && \
+    chown -R node:node /app
+USER node
+EXPOSE 3000
+ENTRYPOINT ["sh", "scripts/ops/entrypoint.sh"]
+CMD ["pnpm", "start"]

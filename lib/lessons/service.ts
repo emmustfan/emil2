@@ -182,7 +182,8 @@ export async function loadLesson(
   const threshold = await getSetting("lesson.passThreshold");
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
-    await lock(tx, `content:topic:${topicId}`);
+    // Readers may share a topic; publication/deletion still require the exclusive lock.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtextextended(${`content:topic:${topicId}`},0))`;
     const topic = await publishedTopic(topicId, tx);
     const allowed = await hasAccess(actor.userId ?? null, topic, tx);
     const base = {

@@ -1,3 +1,4 @@
+import { spendSummary } from "@/lib/monitoring/usage";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
 import { tutorLogs } from "@/lib/admin/tutor-logs";
@@ -42,6 +43,10 @@ export default async function TutorLogs({
       );
     throw e;
   }
+  const spend =
+    actor.role === "ADMIN"
+      ? await spendSummary(data.range.start, data.range.end)
+      : null;
   const link = (page: number) =>
     `/admin/tutor-logs?${new URLSearchParams({ from: data.range.from, to: data.range.to, subjectId: raw.subjectId ?? "", inaccurate: raw.inaccurate ?? "", page: String(page) })}`;
   return (
@@ -92,6 +97,25 @@ export default async function TutorLogs({
           <p className="mt-3 text-sm">Записей пока нет.</p>
         )}
       </section>
+      {spend && (
+        <section className="my-6 rounded-xl border p-5">
+          <h2 className="font-semibold">Оценка расходов ИИ за период</h2>
+          <p className="mt-3 text-sm">
+            {spend.estimatedRub.toLocaleString("ru-RU", {
+              maximumFractionDigits: 2,
+            })}{" "}
+            ₽ · запросов: {spend.requests} · без оценки: {spend.unknown}
+          </p>
+          <p className="mt-3 text-xs leading-6">
+            Все предметы, тьютор, импорт и поиск; сутки UTC. Это оценка по
+            тарифам в «Настройках», не счёт провайдера. Заполните стоимость
+            миллиона токенов перед подключением реального ИИ. Для моделей без
+            данных usage стоимость остаётся неизвестной. Проверка дневного
+            бюджета выполняется каждые 15 минут, без автоматической остановки
+            запросов.
+          </p>
+        </section>
+      )}
       <p className="my-4 text-sm">Ответов: {data.total}</p>
       <div className="space-y-5">
         {data.items.map((r) => (

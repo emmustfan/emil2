@@ -1,3 +1,4 @@
+import { reportFault } from "@/lib/monitoring";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest) {
     );
     return contentJSON({ ok: true });
   } catch (e) {
+    if (!(e instanceof AuthError) && !(e instanceof z.ZodError))
+      await reportFault("webhook_failed", e);
     return contentFailure(e);
   }
 }

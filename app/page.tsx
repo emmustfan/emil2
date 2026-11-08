@@ -1,3 +1,4 @@
+import { publicMetadata } from "@/lib/ops/seo";
 import Link from "next/link";
 import { LegalEntity } from "@/components/legal/entity";
 import type { Metadata } from "next";
@@ -13,9 +14,12 @@ export async function generateMetadata(): Promise<Metadata> {
   const c = await landingContent(),
     url = getEnv().APP_URL;
   return {
-    title: `${c.brand} — обучение для стоматологов`,
+    ...publicMetadata(
+      "/",
+      `${c.brand} — обучение для стоматологов`,
+      c.description,
+    ),
     description: c.description,
-    robots: { index: true, follow: true },
     alternates: { canonical: url },
     openGraph: {
       title: c.title,
@@ -24,6 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
       type: "website",
       locale: "ru_RU",
       siteName: c.brand,
+      images: [new URL("/opengraph-image", url).href],
     },
   };
 }

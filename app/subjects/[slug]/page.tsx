@@ -1,3 +1,4 @@
+import { publicMetadata } from "@/lib/ops/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -25,8 +26,11 @@ export async function generateMetadata({
   });
   return s
     ? {
-        title: s.seoTitle ?? `${s.title} · Учебная платформа`,
-        description: s.seoDescription ?? s.shortDescription,
+        ...publicMetadata(
+          `/subjects/${(await params).slug}`,
+          s.seoTitle ?? `${s.title} · Учебная платформа`,
+          s.seoDescription ?? s.shortDescription,
+        ),
       }
     : {};
 }

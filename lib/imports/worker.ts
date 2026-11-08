@@ -1,3 +1,4 @@
+import { reportFault } from "../monitoring";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db";
 import { getEnv } from "../env";
@@ -171,6 +172,8 @@ export async function processImport(id: string, provider?: LLMProvider) {
       { timeout: 30000 },
     );
   } catch (error) {
+    if (!(error instanceof ContentError))
+      await reportFault("import_failed", error);
     // Provider/decoder error bodies may contain source text or secrets; expose only known messages.
     const message =
       error instanceof ContentError

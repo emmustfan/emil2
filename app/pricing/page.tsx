@@ -1,3 +1,4 @@
+import { publicMetadata } from "@/lib/ops/seo";
 import { LearningShell } from "@/components/lessons/shell";
 import { Checkout } from "@/components/billing/checkout";
 import { getDb } from "@/lib/db";
@@ -6,10 +7,9 @@ import { getCurrentSession } from "@/lib/auth/server";
 import { currentLegal } from "@/lib/auth/legal";
 import { billingContent } from "@/lib/billing/config";
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "Тарифы",
-  robots: { index: true, follow: true },
-};
+export function generateMetadata() {
+  return publicMetadata("/pricing", "Тарифы");
+}
 export default async function Pricing({
   searchParams,
 }: {

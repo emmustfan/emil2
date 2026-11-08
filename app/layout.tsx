@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ru } from "@/lib/i18n/ru";
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
   title: ru.brand,
   description: ru.description,
   robots: { index: false, follow: false },

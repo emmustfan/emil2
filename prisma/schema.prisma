@@ -786,3 +786,15 @@ model BillingMail {
   sentAt DateTime?
   createdAt DateTime @default(now())
 }
+
+// Anonymous operational ledger: never stores account IDs, prompts or source text.
+model LlmUsage {
+  id String @id @default(cuid())
+  kind String
+  model String
+  tokensIn Int?
+  tokensOut Int?
+  estimatedCostRub Decimal? @db.Decimal(18,8)
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}

@@ -1,3 +1,4 @@
+import { meterUsage } from "../monitoring/usage";
 import { z } from "zod";
 import type { AppEnv } from "../env";
 import type { LLMProvider, ChatMessage, ChatOptions } from "./provider";
@@ -144,6 +145,12 @@ export class HttpLLMProvider implements LLMProvider {
       }
     }
     if (!finished) throw new Error("LLM stream interrupted");
+    await meterUsage(
+      opts.feature ?? "tutor",
+      opts.model,
+      seenUsage ? tokensIn : null,
+      seenUsage ? tokensOut : null,
+    );
     if (seenUsage) opts.onUsage?.({ tokensIn, tokensOut });
   }
   async complete(messages: ChatMessage[], opts: ChatOptions) {
@@ -181,6 +188,9 @@ export class HttpLLMProvider implements LLMProvider {
       throw new Error("Embedding response too large");
     const result = z
       .object({
+        usage: z
+          .object({ total_tokens: z.number().int().nonnegative() })
+          .optional(),
         data: z.array(
           z.object({
             index: z.number().int().nonnegative(),
@@ -192,6 +202,12 @@ export class HttpLLMProvider implements LLMProvider {
     const data = result.data.sort((a, b) => a.index - b.index);
     if (data.some((d, i) => d.index !== i))
       throw new Error("Invalid embedding indexes");
+    await meterUsage(
+      "embedding",
+      this.env.LLM_EMBEDDING_MODEL ?? "embedding",
+      result.usage?.total_tokens ?? null,
+      result.usage ? 0 : null,
+    );
     return validateEmbeddings(
       data.map((d) => d.embedding),
       texts.length,

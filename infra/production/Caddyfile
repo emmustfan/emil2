@@ -1,0 +1,32 @@
+{
+    log default {
+        output stdout
+        format filter {
+            wrap json
+            fields {
+                request delete
+            }
+        }
+    }
+}
+
+{$SITE_DOMAIN} {
+    encode zstd gzip
+    request_body {
+        max_size 21MB
+    }
+    header Strict-Transport-Security "max-age=31536000"
+    @private path /admin* /teacher* /student* /cabinet* /api* /checkout* /review* /tutor* /login* /auth* /onboarding* /dev* /demo*
+    header @private X-Robots-Tag "noindex, nofollow"
+    # A caller's X-Real-IP must never reach the application unchanged.
+    reverse_proxy {
+        dynamic a {
+            name web
+            port 3000
+            refresh 10s
+        }
+        lb_policy round_robin
+        header_up X-Real-IP {remote_host}
+    }
+    # Access logging deliberately disabled: auth URLs can contain one-time tokens.
+}

@@ -72,6 +72,9 @@ export const DEFAULT_SETTINGS = {
   "import.maxParts": 5,
   "import.requestsPerHour": 5,
   "import.maxConcurrent": 2,
+  "llm.inputRubPerMillion": 0,
+  "llm.outputRubPerMillion": 0,
+  "llm.embeddingRubPerMillion": 0,
   "admin.usersPageSize": 20,
   "admin.maxTeacherSubjects": 200,
   "admin.maxGrantDays": 3650,
@@ -83,24 +86,26 @@ export function decodeSetting<K extends SettingKey>(
   value: unknown,
 ): (typeof DEFAULT_SETTINGS)[K] {
   const fallback = DEFAULT_SETTINGS[key];
-  const schema = Array.isArray(fallback)
-    ? z.array(z.number().positive()).min(1).max(10)
-    : key.endsWith("Threshold") ||
-        key === "tutor.minSimilarity" ||
-        key === "tutor.topicBonus"
-      ? z.number().min(0).max(1)
-      : z
-          .number()
-          .positive()
-          .max(
-            key === "import.maxBytes"
-              ? 20971520
-              : key === "content.imageMaxBytes"
-                ? 10485760
-                : key === "content.imageMaxPixels"
-                  ? 40000000
-                  : 100000,
-          );
+  const schema = key.startsWith("llm.")
+    ? z.number().nonnegative().max(1000000)
+    : Array.isArray(fallback)
+      ? z.array(z.number().positive()).min(1).max(10)
+      : key.endsWith("Threshold") ||
+          key === "tutor.minSimilarity" ||
+          key === "tutor.topicBonus"
+        ? z.number().min(0).max(1)
+        : z
+            .number()
+            .positive()
+            .max(
+              key === "import.maxBytes"
+                ? 20971520
+                : key === "content.imageMaxBytes"
+                  ? 10485760
+                  : key === "content.imageMaxPixels"
+                    ? 40000000
+                    : 100000,
+            );
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (

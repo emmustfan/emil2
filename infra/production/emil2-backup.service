@@ -1,0 +1,12 @@
+[Unit]
+Description=Emil2 daily database and media backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/emil2
+Environment=EMIL2_BACKUP_DIR=/var/backups/emil2
+Environment=EMIL2_PRUNE_EXPIRED=true
+ExecStart=/bin/bash /opt/emil2/scripts/ops/backup.sh production
+UMask=0077

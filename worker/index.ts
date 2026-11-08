@@ -1,3 +1,6 @@
+import { heartbeat } from "../lib/monitoring/health";
+import { budgetTick } from "../lib/monitoring/usage";
+import { reportFault } from "../lib/monitoring";
 import {
   closeBillingQueue,
   BILLING_SYNC,
@@ -47,7 +50,8 @@ try {
   await boss.work(PRIVACY_TICK, async () => {
     try {
       await privacyTick();
-    } catch {
+    } catch (error) {
+      await reportFault("privacy_failed", error);
       throw new Error("privacy_tick_failed");
     }
   });
@@ -71,7 +75,8 @@ try {
       for (const job of jobs) {
         try {
           await syncBillingJob(job.data);
-        } catch {
+        } catch (error) {
+          await reportFault("billing_sync_failed", error);
           throw new Error("billing_sync_failed");
         }
       }
@@ -84,7 +89,8 @@ try {
       for (const job of jobs) {
         try {
           await deliverBillingMail(job.data.key);
-        } catch {
+        } catch (error) {
+          await reportFault("billing_mail_failed", error);
           throw new Error("billing_mail_failed");
         }
       }
@@ -93,7 +99,8 @@ try {
   await boss.work(BILLING_TICK, async () => {
     try {
       await billingTick();
-    } catch {
+    } catch (error) {
+      await reportFault("billing_tick_failed", error);
       throw new Error("billing_tick_failed");
     }
   });
@@ -107,6 +114,16 @@ try {
     BILLING_TICK,
     {},
     { singletonKey: "startup", retryLimit: 3, retryDelay: 30 },
+  );
+  await boss.createQueue("monitoring-budget");
+  await boss.work("monitoring-budget", async () => {
+    await budgetTick();
+  });
+  await boss.schedule(
+    "monitoring-budget",
+    "*/15 * * * *",
+    {},
+    { retryLimit: 2, retryDelay: 30 },
   );
   await boss.createQueue(CONTENT_IMPORT_QUEUE);
   await boss.createQueue(IMPORT_TICK);
@@ -177,12 +194,21 @@ try {
       return { handled: true };
     },
   );
+  await boss.createQueue("monitoring-heartbeat");
+  await boss.work("monitoring-heartbeat", async () => {
+    await heartbeat();
+  });
+  await boss.schedule(
+    "monitoring-heartbeat",
+    "* * * * *",
+    {},
+    { retryLimit: 2, retryDelay: 10 },
+  );
+  await heartbeat();
   logger.info("worker_ready");
 } catch (error) {
-  logger.error(
-    { error: error instanceof Error ? error.message : "unknown" },
-    "worker_start_failed",
-  );
+  await reportFault("worker_failed", error);
+  logger.error({ code: "worker_failed" }, "worker_start_failed");
   await boss.stop();
   process.exitCode = 1;
 }

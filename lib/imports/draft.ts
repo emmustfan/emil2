@@ -88,6 +88,7 @@ export async function generateDraft(
       temperature: 0.2,
       maxTokens: 12000,
       maxResponseChars: 160000,
+      feature: "import",
       signal: AbortSignal.timeout(60000),
     });
     try {

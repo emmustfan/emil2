@@ -1,0 +1,12 @@
+{
+  "Rules": [
+    {
+      "ID": "emil2-backups-14-days",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "emil2/" },
+      "Expiration": { "Days": 14 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 14 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}

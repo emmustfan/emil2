@@ -1,3 +1,4 @@
+import { publicMetadata } from "@/lib/ops/seo";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -22,6 +23,8 @@ async function findTopic(subject: string, topic: string) {
     },
     select: {
       id: true,
+      isFree: true,
+      needsExpertReview: true,
       title: true,
       order: true,
       readingMinutes: true,
@@ -42,7 +45,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const p = await params,
     t = await findTopic(p.subject, p.topic);
-  return { title: t ? `${t.title} · ${t.subject.title}` : "Тема не найдена" };
+  return t && t.isFree && !t.needsExpertReview && t.reviewedAt
+    ? publicMetadata(
+        `/learn/${p.subject}/${p.topic}`,
+        `${t.title} · ${t.subject.title}`,
+      )
+    : {
+        title: t ? `${t.title} · ${t.subject.title}` : "Тема не найдена",
+        robots: { index: false, follow: false },
+      };
 }
 export default async function Learn({
   params,

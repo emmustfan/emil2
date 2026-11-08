@@ -17,6 +17,24 @@ export const envSchema = z
         .regex(/^\d{1,12}$/)
         .optional(),
     ),
+    SITE_INDEXING: z.enum(["true", "false"]).default("false"),
+    SENTRY_DSN: z.preprocess(
+      optionalValue,
+      z
+        .url()
+        .refine((value) => {
+          const url = new URL(value);
+          return (
+            url.protocol === "https:" &&
+            !!url.username &&
+            !url.password &&
+            /\/\d+$/.test(url.pathname) &&
+            !url.search &&
+            !url.hash
+          );
+        }, "Expected HTTPS Sentry/GlitchTip DSN")
+        .optional(),
+    ),
     SUPPORT_EMAIL: z.preprocess(optionalValue, z.email().optional()),
     LEGAL_ENTITY_NAME: z.preprocess(
       optionalValue,
@@ -53,6 +71,11 @@ export const envSchema = z
     MAIL_TRANSPORT: z.enum(["log", "smtp"]).default("log"),
     STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     EMBEDDING_DIM: z.coerce.number().int().min(1).max(8192).default(1536),
+    LLM_DAILY_BUDGET_RUB: z.coerce
+      .number()
+      .positive()
+      .max(1000000)
+      .default(1000),
     LLM_API_KEY: z.string().optional(),
     LLM_BASE_URL: z.string().optional(),
     LLM_CHAT_MODEL: z.string().optional(),
