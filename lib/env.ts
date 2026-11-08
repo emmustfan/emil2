@@ -1,4 +1,9 @@
 import { z } from "zod";
+// Compose may retain a comment after an empty assignment from an older .env.
+const optionalValue = (value: unknown) =>
+  typeof value === "string" && (!value.trim() || value.trim().startsWith("#"))
+    ? undefined
+    : value;
 export const envSchema = z
   .object({
     NODE_ENV: z
@@ -6,16 +11,13 @@ export const envSchema = z
       .default("development"),
     APP_URL: z.url().default("http://localhost:3000"),
     YANDEX_METRIKA_ID: z.preprocess(
-      (v) => (v === "" ? undefined : v),
+      optionalValue,
       z
         .string()
         .regex(/^\d{1,12}$/)
         .optional(),
     ),
-    SUPPORT_EMAIL: z.preprocess(
-      (v) => (v === "" ? undefined : v),
-      z.email().optional(),
-    ),
+    SUPPORT_EMAIL: z.preprocess(optionalValue, z.email().optional()),
     ADMIN_EMAILS: z.string().default(""),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_BOT_USERNAME: z.string().optional(),
@@ -40,6 +42,22 @@ export const envSchema = z
     LLM_EMBEDDING_MODEL: z.string().optional(),
     LLM_EMBEDDING_BASE_URL: z.string().optional(),
     LLM_EMBEDDING_API_KEY: z.string().optional(),
+    YOOKASSA_WEBHOOK_IPS: z.preprocess(optionalValue, z.string().default("")),
+    YOOKASSA_TEST_MODE: z.preprocess(
+      (v) => (typeof v === "boolean" ? String(v) : optionalValue(v)),
+      z
+        .enum(["true", "false"])
+        .default("true")
+        .transform((v) => v === "true"),
+    ),
+    RECEIPT_VAT_CODE: z.preprocess(
+      optionalValue,
+      z.coerce.number().int().min(1).max(12).optional(),
+    ),
+    RECEIPT_TAX_SYSTEM_CODE: z.preprocess(
+      optionalValue,
+      z.coerce.number().int().min(1).max(6).optional(),
+    ),
     YOOKASSA_SHOP_ID: z.string().optional(),
     YOOKASSA_SECRET_KEY: z.string().optional(),
     SMTP_HOST: z.string().optional(),
@@ -78,7 +96,12 @@ export const envSchema = z
     if (env.LLM_PROVIDER === "anthropic")
       requireFields(["LLM_EMBEDDING_BASE_URL", "LLM_EMBEDDING_API_KEY"]);
     if (env.PAYMENTS_PROVIDER === "yookassa")
-      requireFields(["YOOKASSA_SHOP_ID", "YOOKASSA_SECRET_KEY"]);
+      requireFields([
+        "YOOKASSA_SHOP_ID",
+        "YOOKASSA_SECRET_KEY",
+        "YOOKASSA_WEBHOOK_IPS",
+        "RECEIPT_VAT_CODE",
+      ]);
     if (env.MAIL_TRANSPORT === "smtp") requireFields(["SMTP_HOST"]);
     if (env.STORAGE_DRIVER === "s3")
       requireFields([

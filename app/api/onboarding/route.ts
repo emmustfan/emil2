@@ -1,3 +1,5 @@
+import { BILLING_RETURN_COOKIE } from "@/lib/billing/http";
+import { safePricingReturn } from "@/lib/billing/policy";
 import { transferGuest } from "@/lib/demo/transfer";
 import { visitFrom } from "@/lib/demo/request";
 import { NextRequest } from "next/server";
@@ -55,7 +57,10 @@ export async function POST(request: NextRequest) {
       },
       { timeout: 15000 },
     );
-    const response = authRedirect("/cabinet");
+    const response = authRedirect(
+      safePricingReturn(request.cookies.get(BILLING_RETURN_COOKIE)?.value),
+    );
+    response.cookies.delete(BILLING_RETURN_COOKIE);
     if (!session.user.consentPdAt)
       response.cookies.set("signup_goal", "1", {
         path: "/",

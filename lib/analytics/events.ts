@@ -4,6 +4,24 @@ import { getDb } from "../db";
 import type { Actor } from "../lessons/types";
 import { z } from "zod";
 export const eventSchemas = {
+  checkout_started: z
+    .object({ planCode: z.string(), amount: z.number().int().positive() })
+    .strict(),
+  payment_succeeded: z
+    .object({
+      planCode: z.string(),
+      amount: z.number().int().positive(),
+      isRecurring: z.boolean(),
+    })
+    .strict(),
+  payment_failed: z
+    .object({
+      planCode: z.string(),
+      amount: z.number().int().positive(),
+      isRecurring: z.boolean(),
+    })
+    .strict(),
+  subscription_canceled: z.object({ planCode: z.string() }).strict(),
   landing_viewed: z.object({ utm: touchSchema.optional() }).strict(),
   demo_started: z.object({ source: z.enum(["landing", "direct"]) }).strict(),
   demo_goal_selected: z

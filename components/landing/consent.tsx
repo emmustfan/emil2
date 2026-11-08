@@ -18,7 +18,12 @@ function subscribeConsent(callback: () => void) {
     window.removeEventListener("analytics-preference", callback);
   };
 }
-type Goal = "demo_started" | "demo_completed" | "signup_completed";
+type Goal =
+  | "demo_started"
+  | "demo_completed"
+  | "signup_completed"
+  | "checkout_started"
+  | "payment_succeeded";
 declare global {
   interface Window {
     ym?: (id: number, method: string, ...args: unknown[]) => void;
@@ -26,8 +31,22 @@ declare global {
   }
 }
 export function metrikaGoal(goal: Goal) {
+  if (consentSnapshot() !== "yes") return;
   if (window.dentalMetrikaId)
     window.ym?.(window.dentalMetrikaId, "reachGoal", goal);
+  else {
+    try {
+      const stored = JSON.parse(
+        sessionStorage.getItem("pending-analytics-goals") ?? "[]",
+      ) as string[];
+      sessionStorage.setItem(
+        "pending-analytics-goals",
+        JSON.stringify([...new Set([...stored, goal])].slice(-5)),
+      );
+    } catch {
+      /* Optional analytics. */
+    }
+  }
 }
 export function AnalyticsConsent({ metrikaId }: { metrikaId?: string }) {
   const path = usePathname(),
@@ -39,13 +58,14 @@ export function AnalyticsConsent({ metrikaId }: { metrikaId?: string }) {
     [editing, setEditing] = useState(false);
   const landingViewId = useRef<string | null>(null);
   const privatePage =
-    /^\/(cabinet|student|teacher|admin|tutor|onboarding|auth|login|learn|review)(\/|$)/.test(
+    /^\/(cabinet|student|teacher|admin|tutor|onboarding|auth|login|learn|review|pricing|checkout|dev)(\/|$)/.test(
       path,
     );
   useEffect(() => {
     if (document.cookie.split("; ").some((c) => c === "signup_goal=1")) {
       try {
-        localStorage.setItem("signup-goal-pending", "1");
+        if (consentSnapshot() === "yes")
+          localStorage.setItem("signup-goal-pending", "1");
       } catch {
         /* Storage may be disabled. */
       }
@@ -89,6 +109,24 @@ export function AnalyticsConsent({ metrikaId }: { metrikaId?: string }) {
       });
       if (path === "/demo") metrikaGoal("demo_started");
       try {
+        for (const goal of JSON.parse(
+          sessionStorage.getItem("pending-analytics-goals") ?? "[]",
+        ) as string[])
+          if (
+            [
+              "demo_started",
+              "demo_completed",
+              "signup_completed",
+              "checkout_started",
+              "payment_succeeded",
+            ].includes(goal)
+          )
+            metrikaGoal(goal as Goal);
+        sessionStorage.removeItem("pending-analytics-goals");
+      } catch {
+        /* Optional analytics. */
+      }
+      try {
         if (localStorage.getItem("signup-goal-pending") === "1") {
           metrikaGoal("signup_completed");
           localStorage.removeItem("signup-goal-pending");
@@ -121,6 +159,10 @@ export function AnalyticsConsent({ metrikaId }: { metrikaId?: string }) {
   function choose(value: string) {
     try {
       localStorage.setItem("analytics-consent", value);
+      if (value === "no") {
+        localStorage.removeItem("signup-goal-pending");
+        sessionStorage.removeItem("pending-analytics-goals");
+      }
     } catch {
       /* Storage may be disabled. */
     }

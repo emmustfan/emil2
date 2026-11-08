@@ -1,3 +1,5 @@
+import { BILLING_RETURN_COOKIE } from "./lib/billing/http";
+import { safePricingReturn } from "./lib/billing/policy";
 import { NextRequest, NextResponse } from "next/server";
 import { findSession, SID, cookieOptions } from "./lib/auth/session";
 import { hasCurrentConsent } from "./lib/auth/legal";
@@ -69,6 +71,17 @@ export async function proxy(request: NextRequest) {
         cookie.value,
         cookieOptions(new Date(Date.now() + cookie.days * 86400000)),
       );
+    if (path === "/login" && request.nextUrl.searchParams.has("next")) {
+      const target = safePricingReturn(
+        request.nextUrl.searchParams.get("next"),
+      );
+      if (target !== "/cabinet")
+        response.cookies.set(
+          BILLING_RETURN_COOKIE,
+          target,
+          cookieOptions(new Date(Date.now() + 900000)),
+        );
+    }
     if (session?.renewed && token)
       response.cookies.set(SID, token, cookieOptions(session.expiresAt));
     return response;
@@ -87,7 +100,8 @@ export async function proxy(request: NextRequest) {
       },
     });
   if (
-    (path.startsWith("/admin/users") && session.user.role !== "ADMIN") ||
+    ((path.startsWith("/admin/users") || path.startsWith("/admin/payments")) &&
+      session.user.role !== "ADMIN") ||
     (path.startsWith("/teacher") &&
       !["ADMIN", "EDITOR"].includes(session.user.role))
   )
@@ -117,6 +131,8 @@ export const config = {
     "/subjects/:path*",
     "/learn/:path*",
     "/cabinet/:path*",
+    "/checkout/:path*",
+    "/dev/mock-pay/:path*",
     "/onboarding",
     "/admin/:path*",
     "/review/:path*",

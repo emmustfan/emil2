@@ -6,15 +6,26 @@ import { z } from "zod";
 import type { AppEnv } from "../env";
 import { assertDevelopment } from "../providers";
 export interface MailTransport {
-  send(message: { to: string; subject: string; text: string }): Promise<string>;
+  send(message: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }): Promise<string>;
 }
 export class LogMailTransport implements MailTransport {
   constructor(private readonly directory = "tmp/mails") {}
-  async send(message: { to: string; subject: string; text: string }) {
+  async send(message: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }) {
     z.object({
       to: z.email(),
       subject: z.string().min(1),
       text: z.string().min(1),
+      html: z.string().min(1).optional(),
     })
       .strict()
       .parse(message);
@@ -32,11 +43,17 @@ export class LogMailTransport implements MailTransport {
 }
 export class SmtpMailTransport implements MailTransport {
   constructor(private readonly env: AppEnv) {}
-  async send(message: { to: string; subject: string; text: string }) {
+  async send(message: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }) {
     z.object({
       to: z.email(),
       subject: z.string().min(1),
       text: z.string().min(1),
+      html: z.string().min(1).optional(),
     })
       .strict()
       .parse(message);

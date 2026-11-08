@@ -32,6 +32,14 @@ export default async function AdminLayout({
               {rolesRu.users}
             </Link>
           )}
+          {user.role === "ADMIN" && (
+            <Link
+              href="/admin/payments"
+              className="inline-flex min-h-11 items-center text-emerald-800 underline"
+            >
+              Платежи
+            </Link>
+          )}
           <Link
             className="inline-flex min-h-11 items-center text-emerald-800 underline"
             href="/student"

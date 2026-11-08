@@ -522,6 +522,15 @@ model Plan {
 }
 
 model Subscription {
+  scopeKey String? @unique
+  periodMonths Int @default(1)
+  buyerEmail String?
+  renewalConsentedAt DateTime?
+  renewalConsentVersion String?
+  offerVersion String?
+  firstFailedAt DateTime?
+  revokedAt DateTime?
+
   id                     String             @id @default(cuid())
   userId                 String
   planId                 String
@@ -548,6 +557,23 @@ model Subscription {
 }
 
 model Payment {
+  refund PaymentRefund?
+
+  provider String @default("mock")
+  requestKey String? @unique
+  scopeKey String?
+  periodMonths Int @default(1)
+  planTitle String @default("")
+  buyerEmail String?
+  renewalConsentedAt DateTime?
+  renewalConsentVersion String?
+  offerVersion String?
+  cycleEnd DateTime?
+  attempt Int @default(0)
+  creationStartedAt DateTime?
+  providerRequest Json?
+  confirmationUrl String?
+
   id                 String        @id @default(cuid())
   userId             String
   subscriptionId     String?
@@ -696,4 +722,35 @@ model AuthAttempt {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+// Durable mock provider: web and worker observe the same state across restarts.
+model MockProviderRecord {
+  id String @id
+  data Json
+}
+model PaymentRefund {
+  revokeAccess Boolean @default(true)
+  id String @id @default(cuid())
+  paymentId String @unique
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  providerRefundId String? @unique
+  status String @default("PENDING")
+  amountKopecks Int
+  requestedById String?
+  providerRequest Json?
+  creationStartedAt DateTime?
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+}
+model BillingMail {
+  key String @id
+  userId String
+  kind String
+  referenceId String
+  to String
+  subject String
+  text String @db.Text
+  sentAt DateTime?
+  createdAt DateTime @default(now())
 }

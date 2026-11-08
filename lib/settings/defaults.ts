@@ -34,6 +34,11 @@ export const DEFAULT_SETTINGS = {
   "lesson.requestsPerMinute": 120,
   "lesson.guestDays": 30,
   "lesson.paywallPreviewBlocks": 2,
+  "billing.renewalLeadHours": 24,
+  "billing.creationTtlHours": 23,
+  "billing.returnPollSeconds": 30,
+  "billing.requestsPerMinute": 10,
+  "billing.webhookRequestsPerMinute": 120,
   "billing.graceDays": 3,
   "billing.retryHours": [24, 72],
   "billing.reminderDaysBefore": 3,
@@ -76,7 +81,14 @@ export function decodeSetting<K extends SettingKey>(
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
     !result.success ||
-    ((key.startsWith("analytics.") ||
+    (key === "billing.renewalLeadHours" &&
+      typeof result.data === "number" &&
+      result.data > 24) ||
+    (key === "billing.creationTtlHours" &&
+      typeof result.data === "number" &&
+      result.data > 23) ||
+    (((key.startsWith("billing.") && key !== "billing.retryHours") ||
+      key.startsWith("analytics.") ||
       key === "demo.exampleRequestsPerMinute" ||
       key.startsWith("admin.") ||
       key.startsWith("content.") ||

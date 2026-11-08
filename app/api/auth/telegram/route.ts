@@ -1,3 +1,5 @@
+import { BILLING_RETURN_COOKIE } from "@/lib/billing/http";
+import { safePricingReturn } from "@/lib/billing/policy";
 import { transferGuest } from "@/lib/demo/transfer";
 import { visitFrom } from "@/lib/demo/request";
 import { NextRequest, NextResponse } from "next/server";
@@ -39,11 +41,13 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json(
       {
         redirect: (await hasCurrentConsent(result.user))
-          ? "/cabinet"
+          ? safePricingReturn(request.cookies.get(BILLING_RETURN_COOKIE)?.value)
           : "/onboarding",
       },
       { headers: { "Cache-Control": "no-store" } },
     );
+    if (await hasCurrentConsent(result.user))
+      response.cookies.delete(BILLING_RETURN_COOKIE);
     response.cookies.set(SID, result.token, cookieOptions(result.expiresAt));
     return response;
   } catch (error) {

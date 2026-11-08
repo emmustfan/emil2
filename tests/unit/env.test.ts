@@ -30,6 +30,19 @@ describe("environment", () => {
       );
   });
 
+  it("accepts empty commented legacy fiscal settings from Docker but rejects an invalid configured VAT code", () => {
+    const parsed = parseEnv({
+      ...base,
+      RECEIPT_VAT_CODE: "# уточнить у бухгалтера",
+      YOOKASSA_WEBHOOK_IPS: "# список IP",
+      RECEIPT_TAX_SYSTEM_CODE: "   ",
+    });
+    expect(parsed.RECEIPT_VAT_CODE).toBeUndefined();
+    expect(parsed.YOOKASSA_WEBHOOK_IPS).toBe("");
+    expect(() => parseEnv({ ...base, RECEIPT_VAT_CODE: "invalid" })).toThrow(
+      "RECEIPT_VAT_CODE",
+    );
+  });
   it("accepts development defaults with only a database URL", () => {
     expect(parseEnv(base)).toMatchObject({
       LLM_PROVIDER: "mock",

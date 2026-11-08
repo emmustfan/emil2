@@ -1,3 +1,5 @@
+import { MockPayments } from "../../lib/payments/mock";
+import { MemoryMockStore, providerInput } from "../helpers/payments";
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -43,15 +45,19 @@ describe("development adapters", () => {
     expect(result.text.length).toBeGreaterThan(0);
   });
   it("keeps mock payment requests idempotent and does not expose mutable internal state", async () => {
-    const provider = createPaymentsProvider(env);
-    const first = await provider.createPayment(100, "request-1");
-    expect(await provider.createPayment(100, "request-1")).toEqual(first);
-    await expect(provider.createPayment(200, "request-1")).rejects.toThrow(
-      "mismatch",
+    const provider = new MockPayments(new MemoryMockStore());
+    const first = await provider.createPayment(providerInput(), "request-1");
+    expect(await provider.createPayment(providerInput(), "request-1")).toEqual(
+      first,
     );
-    first.status = "SUCCEEDED";
-    expect((await provider.getPayment(first.id)).status).toBe("PENDING");
-    await expect(provider.createPayment(-1, "invalid")).rejects.toThrow();
+    await expect(
+      provider.createPayment(providerInput("2.00"), "request-1"),
+    ).rejects.toThrow("mismatch");
+    first.status = "succeeded";
+    expect((await provider.getPayment(first.id)).status).toBe("pending");
+    await expect(
+      provider.createPayment(providerInput("-1.00"), "invalid"),
+    ).rejects.toThrow();
     await expect(provider.getPayment("absent")).rejects.toThrow("not found");
   });
   it("writes development mail for later e2e use with restrictive permissions", async () => {
@@ -98,7 +104,7 @@ describe("development adapters", () => {
     ).toBe("HttpLLMProvider");
     expect(() =>
       createPaymentsProvider({ ...env, PAYMENTS_PROVIDER: "yookassa" }),
-    ).toThrow("not implemented");
+    ).toThrow("configuration");
     expect(() => createStorageDriver({ ...env, STORAGE_DRIVER: "s3" })).toThrow(
       "not implemented",
     );

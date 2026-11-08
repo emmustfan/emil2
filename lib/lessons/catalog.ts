@@ -3,13 +3,7 @@ import { hasAccess } from "../access";
 export function lessonHref(subject: string, topic: string) {
   return `/learn/${encodeURIComponent(subject)}/${encodeURIComponent(topic)}`;
 }
-export function formatPrice(kopecks: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: kopecks % 100 ? 2 : 0,
-  }).format(kopecks / 100);
-}
+export { formatPrice } from "../format";
 export async function plans() {
   return getDb().plan.findMany({
     where: { isActive: true, kind: { in: ["SUBJECT", "ALL_SUBJECTS"] } },

@@ -36,6 +36,20 @@ export async function WorkspaceNav() {
       >
         {t.profile}
       </Link>
+      <Link
+        href="/cabinet/subscription"
+        className="inline-flex min-h-11 items-center underline"
+      >
+        Подписка
+      </Link>
+      {user.role === "ADMIN" && (
+        <Link
+          href="/admin/payments"
+          className="inline-flex min-h-11 items-center underline"
+        >
+          Платежи
+        </Link>
+      )}
       <ReviewLink />
       <Link
         href="/tutor"

@@ -1,3 +1,6 @@
+import { landingSchema } from "../lib/landing/defaults";
+import { upgradeBillingCopy } from "../lib/landing/upgrade-billing";
+import { BILLING_CONTENT } from "../lib/billing/config";
 import { LANDING_DEFAULTS } from "../lib/landing/defaults";
 import "dotenv/config";
 import { createHash } from "node:crypto";
@@ -88,6 +91,7 @@ try {
         });
       const landing = {
         "landing.v1": LANDING_DEFAULTS,
+        "billing.v1": BILLING_CONTENT,
         hero: { title: ru.title, description: ru.description },
         howItWorks: ru.features,
         faq: [{ question: "Это медицинская услуга?", answer: ru.disclaimer }],
@@ -98,6 +102,21 @@ try {
           create: { key, value },
           update: {},
         });
+      const currentLanding = await tx.landingContent.findUnique({
+        where: { key: "landing.v1" },
+      });
+      const parsedLanding = landingSchema.safeParse(currentLanding?.value);
+      if (currentLanding && parsedLanding.success) {
+        const updated = upgradeBillingCopy(parsedLanding.data);
+        if (JSON.stringify(updated) !== JSON.stringify(parsedLanding.data))
+          await tx.landingContent.updateMany({
+            where: {
+              key: "landing.v1",
+              value: { equals: currentLanding.value! },
+            },
+            data: { value: updated },
+          });
+      }
       for (const [order, [code, title]] of [
         ["video", "Видеоразборы"],
         ["voice-tutor", "Голосовой тьютор"],

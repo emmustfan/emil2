@@ -1,3 +1,4 @@
+import { safePricingReturn } from "@/lib/billing/policy";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/server";
 import { hasCurrentConsent } from "@/lib/auth/legal";
@@ -7,12 +8,15 @@ import { AuthShell } from "@/components/auth/shell";
 import { EmailForm } from "@/components/auth/email-form";
 import { TelegramWidget } from "@/components/auth/telegram-widget";
 import { authRu } from "@/lib/i18n/ru";
-export default async function Login() {
+export default async function Login({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const target = safePricingReturn((await searchParams).next);
   const session = await getCurrentSession();
   if (session)
-    redirect(
-      (await hasCurrentConsent(session.user)) ? "/cabinet" : "/onboarding",
-    );
+    redirect((await hasCurrentConsent(session.user)) ? target : "/onboarding");
   const env = getEnv();
   return (
     <AuthShell title={authRu.loginTitle} description={authRu.loginDescription}>
