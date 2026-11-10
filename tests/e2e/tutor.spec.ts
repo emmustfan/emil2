@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -48,6 +49,11 @@ test("guest receives cited answers, follows a block, blocks personal data and re
   page,
 }, info) => {
   await page.goto(`/learn/${f.subject.slug}/free`);
+  const launcher = page.getByRole("button", {
+    name: "Спросить тьютора",
+    exact: true,
+  });
+  if (await launcher.isVisible()) await launcher.click();
   const panel = page.getByRole("region", { name: "ИИ-тьютор", exact: true });
   await expect(
     panel.getByText("Осталось вопросов: 5", { exact: true }),
@@ -138,6 +144,7 @@ test("guest receives cited answers, follows a block, blocks personal data and re
     path: `tmp/screenshots/tutor-guest-${info.project.name}.png`,
   });
   await page.reload();
+  if (await launcher.isVisible()) await launcher.click();
   await expect(
     panel.getByText("Осталось вопросов: 0", { exact: true }),
   ).toBeVisible();
@@ -146,13 +153,11 @@ test("explain buttons use the saved wrong gap and quiz answer", async ({
   page,
 }, info) => {
   await page.goto(`/learn/${f.subject.slug}/free`);
-  const gap = page.locator("form").filter({
-    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
-  });
+  const gap = lessonGap(page, 1);
   await expect(
     gap.getByRole("button", { name: "Объяснить · ИИ", exact: true }),
   ).toHaveCount(0);
-  await gap.getByRole("radio", { name: "неверный-один", exact: true }).check();
+  await gap.getByRole("combobox").selectOption({ label: "неверный-один" });
   await gap.getByRole("button", { name: "Проверить", exact: true }).click();
   await gap
     .getByRole("button", { name: "Объяснить · ИИ", exact: true })

@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
@@ -74,13 +75,10 @@ test("full demo resumes and transfers diagnostic, lesson, cards and attribution 
   await expect(
     page.getByRole("heading", { name: "Попробуйте бесплатный урок" }),
   ).toBeVisible();
-  for (const label of ["верный-один", "верный-два"]) {
-    const card = page
-      .locator('form[id^="exercise-"]')
-      .filter({ has: page.getByRole("radio", { name: label, exact: true }) });
-    await card.getByRole("radio", { name: label, exact: true }).check();
+  for (const [index, label] of ["верный-один", "верный-два"].entries()) {
+    const card = lessonGap(page, index + 1);
+    await card.getByRole("combobox").selectOption({ label });
     await card.getByRole("button", { name: "Проверить", exact: true }).click();
-    await expect(card.getByRole("status")).toContainText("Верно");
   }
   await page
     .getByRole("button", { name: "Дальше — попробовать повторение" })
@@ -142,9 +140,7 @@ test("full demo resumes and transfers diagnostic, lesson, cards and attribution 
   });
   expect(await db.card.count({ where: { userId: user.id, reps: 1 } })).toBe(2);
   await page.goto(`/learn/${f.subject.slug}/${f.free.slug}`);
-  await expect(
-    page.locator('form[id^="exercise-"]').first().getByRole("status"),
-  ).toContainText("Верно");
+  await expect(lessonGap(page, 1).getByRole("status")).toContainText("Верно");
 });
 test("skip branch creates no diagnostic and client event endpoint rejects forged conversions", async ({
   page,
@@ -205,8 +201,8 @@ test("an existing consenting account receives guest progress immediately at emai
     },
   });
   await page.goto(`/learn/${f.subject.slug}/${f.free.slug}`);
-  const first = page.locator('form[id^="exercise-"]').first();
-  await first.getByRole("radio", { name: "верный-один", exact: true }).check();
+  const first = lessonGap(page, 1);
+  await first.getByRole("combobox").selectOption({ label: "верный-один" });
   await first.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(first.getByRole("status")).toContainText("Верно");
   await page.goto("/login");

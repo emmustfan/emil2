@@ -1,8 +1,10 @@
 "use client";
+import { InlineGap } from "@/components/exercises/inline-gap";
+import type { ExplainInput } from "@/lib/tutor/types";
 import { AnswerCard } from "@/components/exercises/answer-card";
 import type { Submission } from "@/lib/exercises";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import type {
   GapFeedback,
@@ -35,6 +37,7 @@ export function Lesson({
   nextHref: string | null;
   tutorMock: boolean;
 }) {
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [gaps, setGaps] = useState(initial.gaps);
   const [test, setTest] = useState(initial.test!);
   const [progress, setProgress] = useState(initial.progress!);
@@ -45,6 +48,21 @@ export function Lesson({
   const [attempt, setAttempt] = useState(0);
   const requestInFlight = useRef(false);
   const tutor = useRef<TutorHandle>(null);
+  useEffect(() => {
+    if (!tutorOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTutorOpen(false);
+        document.getElementById("study-tutor-launch")?.focus();
+      }
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [tutorOpen]);
+  function explain(input: ExplainInput) {
+    setTutorOpen(true);
+    tutor.current?.explain(input);
+  }
   async function run(id: string, task: () => Promise<void>) {
     if (requestInFlight.current) return;
     requestInFlight.current = true;
@@ -116,7 +134,7 @@ export function Lesson({
           {error}
         </p>
       )}
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="lesson-study-layout">
         <div className="min-w-0">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-semibold tracking-widest text-emerald-800 uppercase">
@@ -140,21 +158,48 @@ export function Lesson({
           <LessonMarkdown
             blocks={initial.blocks}
             gap={(id) => {
-              const index = gaps.findIndex((g) => g.id === id);
+              const index = gaps.findIndex((g) => g.id === id),
+                g = gaps[index];
+              if (!g) return null;
+              if (g.answerType !== "MULTIPLE_CHOICE")
+                return (
+                  <InlineGap
+                    key={`${g.id}-${attempt}`}
+                    gap={g}
+                    number={index + 1}
+                    pending={!!pending}
+                    onAnswer={(input) => void answer(g.id, input)}
+                    onExplain={
+                      !practice
+                        ? () =>
+                            explain({
+                              kind: "explain",
+                              source: "GAP",
+                              sourceId: g.id,
+                              topicVersion: initial.version,
+                            })
+                        : undefined
+                    }
+                  />
+                );
               return (
                 <a
                   href={`#exercise-${id}`}
                   aria-label={`Перейти к пропуску ${index + 1}`}
                   className="rounded bg-emerald-50 px-2 text-emerald-800"
                 >
-                  ____ {index + 1}
+                  Выберите несколько ответов {index + 1}
                 </a>
               );
             }}
             afterBlock={(block) => (
               <div className="my-5 space-y-4">
                 {gaps
-                  .filter((g) => g.blockKey === block.blockKey)
+                  .filter(
+                    (g) =>
+                      g.blockKey === block.blockKey &&
+                      g.answerType === "MULTIPLE_CHOICE",
+                  )
                   .map((g) => (
                     <AnswerCard
                       key={`${g.id}-${attempt}`}
@@ -169,7 +214,7 @@ export function Lesson({
                       onExplain={
                         !practice
                           ? () =>
-                              tutor.current?.explain({
+                              explain({
                                 kind: "explain",
                                 source: "GAP",
                                 sourceId: g.id,
@@ -248,7 +293,7 @@ export function Lesson({
                     }
                     sourceBlockKey={q.feedback?.sourceBlockKey}
                     onExplain={() =>
-                      tutor.current?.explain({
+                      explain({
                         kind: "explain",
                         source: "QUESTION",
                         sourceId: q.id,
@@ -331,9 +376,19 @@ export function Lesson({
             </section>
           )}
         </div>
-        <aside className="hidden lg:block">
+        <aside
+          className={`lesson-tutor-rail ${tutorOpen ? "is-open" : ""}`}
+          id="study-tutor-rail"
+        >
+          <button
+            className="lesson-tutor-close"
+            aria-label="Закрыть тьютора"
+            onClick={() => setTutorOpen(false)}
+          >
+            ✕
+          </button>
           <nav
-            className="sticky top-28 rounded-2xl border border-stone-200 bg-white p-5 text-sm"
+            className="lesson-contents rounded-2xl border border-stone-200 bg-white p-4 text-sm"
             aria-label="Содержание урока"
           >
             <p className="mb-3 font-semibold">В этом уроке</p>
@@ -360,11 +415,23 @@ export function Lesson({
               сохраняются автоматически.
             </p>
           </nav>
+          <TutorPanel
+            ref={tutor}
+            topicId={initial.topicId}
+            mock={tutorMock}
+            docked
+          />
         </aside>
       </div>
-      <div className="max-w-3xl">
-        <TutorPanel ref={tutor} topicId={initial.topicId} mock={tutorMock} />
-      </div>
+      <button
+        id="study-tutor-launch"
+        className="lesson-tutor-launch"
+        aria-expanded={tutorOpen}
+        aria-controls="study-tutor-rail"
+        onClick={() => setTutorOpen((v) => !v)}
+      >
+        Спросить тьютора
+      </button>
     </>
   );
 }

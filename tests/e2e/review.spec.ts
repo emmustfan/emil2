@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { expect, test } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -59,15 +60,10 @@ test("two lesson mistakes become review cards; keyboard ratings persist and upda
 }, info) => {
   await page.goto(`/learn/${f.subject.slug}/free`);
   for (let i = 1; i <= 2; i++) {
-    const form = page.locator("form").filter({
-      has: page.getByRole("group", { name: `Пропуск ${i}`, exact: true }),
-    });
+    const form = lessonGap(page, i);
     await form
-      .getByRole("radio", {
-        name: i === 1 ? "неверный-один" : "верный-два",
-        exact: true,
-      })
-      .check();
+      .getByRole("combobox")
+      .selectOption({ label: i === 1 ? "неверный-один" : "верный-два" });
     await form.getByRole("button", { name: "Проверить", exact: true }).click();
     await expect(form.getByRole("status")).toContainText(
       i === 1 ? "Неверно" : "Верно",
@@ -188,10 +184,8 @@ test("review API requires login, origin, ownership, reveal and a current revisio
   browser,
 }) => {
   await page.goto(`/learn/${f.subject.slug}/free`);
-  const form = page.locator("form").filter({
-    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
-  });
-  await form.getByRole("radio", { name: "неверный-один", exact: true }).check();
+  const form = lessonGap(page, 1);
+  await form.getByRole("combobox").selectOption({ label: "неверный-один" });
   await form.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(form.getByRole("status")).toContainText("Неверно");
   const queueResponse = await page.request.get("/api/review/queue");

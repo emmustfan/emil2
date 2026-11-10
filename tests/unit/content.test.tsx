@@ -148,7 +148,8 @@ describe("question validation and safe preview", () => {
     expect(html).toContain('id="b-razdel-1"');
     expect(html).toContain("Важно");
     expect(html).toContain('href="https://example.test"');
-    expect(html).toContain("Выберите один вариант");
+    expect(html).toContain("Выберите слово…");
+    expect(html).toContain("<select");
   });
   it("removes active HTML, images and unsafe link protocols", () => {
     const md =
@@ -157,6 +158,6 @@ describe("question validation and safe preview", () => {
       <MarkdownPreview markdown={md} parsed={parseTopic(md)} />,
     );
     expect(html).not.toMatch(/<script|<iframe|<img|onerror|javascript:/i);
-    expect(html).toContain("____");
+    expect(html).toContain("<select");
   });
 });

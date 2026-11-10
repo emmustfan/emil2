@@ -241,6 +241,9 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
   await page.getByRole("button", { name: "Создать", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/topics\/[^/]+$/);
   const topicId = page.url().split("/").at(-1)!;
+  await page
+    .getByText("Исходный текст — для переноса материалов", { exact: true })
+    .click();
   const textarea = page.getByRole("textbox", {
     name: "Текст методички (Markdown)",
     exact: true,
@@ -258,10 +261,10 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
     exact: true,
   });
   await expect(preview.getByText(/Пропусков: 10/)).toBeVisible();
-  const firstPreview = preview.locator("div[id^='exercise-markdown-']").first();
-  await firstPreview
-    .getByRole("radio", { name: "ответ-0", exact: true })
-    .check();
+  const firstPreview = preview
+    .locator("span[id^='exercise-markdown-']")
+    .first();
+  await firstPreview.getByRole("combobox").selectOption({ label: "ответ-0" });
   await firstPreview
     .getByRole("button", { name: "Проверить", exact: true })
     .click();
@@ -349,6 +352,9 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
     { revision: topic.editRevision, status: "REVIEW" },
   );
   await page.goto(`/admin/topics/${topic.id}`);
+  await page
+    .getByText("Исходный текст — для переноса материалов", { exact: true })
+    .click();
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
   await expect(page.getByRole("button", { name: /Строка 3:/ })).toBeVisible();
   expect(
@@ -366,6 +372,9 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
     )
     .toBe(md());
   await page.reload();
+  await page
+    .getByText("Исходный текст — для переноса материалов", { exact: true })
+    .click();
   await expect(
     page.getByRole("textbox", {
       name: "Текст методички (Markdown)",
@@ -394,19 +403,20 @@ test("parallel editor changes produce a conflict without overwriting the local d
         (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).title,
     )
     .toBe("Сохранено другим редактором");
+  await page.bringToFront();
   const unsafe = `<script>window.__previewAttack=true</script>\n\n[x](javascript:alert%281%29)\n\n${md()}`;
   await page
-    .getByRole("textbox", { name: "Текст методички (Markdown)", exact: true })
+    .getByRole("textbox", { name: "Текст методички", exact: true })
     .fill(unsafe);
   await expect(
     page.getByRole("alert").filter({ hasText: "другим редактором" }),
   ).toContainText("другим редактором");
   await expect(
     page.getByRole("textbox", {
-      name: "Текст методички (Markdown)",
+      name: "Текст методички",
       exact: true,
     }),
-  ).toHaveValue(unsafe);
+  ).toHaveText(unsafe, { useInnerText: true });
   expect(
     (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).contentMd,
   ).toBe(md());
@@ -550,6 +560,9 @@ test("editor configures multi and text questions, inserts a typed gap and publis
   const f = await fixture(page.request);
   const topic = await fiveQuestions(page.request, f.topic);
   await page.goto(`/admin/topics/${topic.id}`);
+  await page
+    .getByText("Исходный текст — для переноса материалов", { exact: true })
+    .click();
   const edit = (name: string) =>
     page
       .getByRole("row")
@@ -661,6 +674,9 @@ test("editor configures multi and text questions, inserts a typed gap and publis
     )
     .toContain("[[=ёлка]]");
   await page.reload();
+  await page
+    .getByText("Исходный текст — для переноса материалов", { exact: true })
+    .click();
   await expect(
     page.getByRole("textbox", {
       name: "Текст методички (Markdown)",

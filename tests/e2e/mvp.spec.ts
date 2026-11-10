@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
@@ -151,8 +152,8 @@ test("one browser follows demo → email login → payment → paid lesson → r
   await expect(
     page.getByText("ПЛАТНЫЙ_СЕКРЕТ_ТОЛЬКО_ПО_ДОСТУПУ.", { exact: true }),
   ).toBeVisible();
-  const form = page.locator('form[id^="exercise-"]').first();
-  await form.getByRole("radio", { name: "неверный-один", exact: true }).check();
+  const form = lessonGap(page, 1);
+  await form.getByRole("combobox").selectOption({ label: "неверный-один" });
   await form.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(form.getByRole("status")).toContainText("Неверно");
   const user = await db.user.findUniqueOrThrow({ where: { email } });

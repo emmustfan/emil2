@@ -228,3 +228,95 @@ test("integration instructions hide secrets and remain admin-only; image upload 
     ).status(),
   ).toBe(403);
 });
+
+test("visual author formats a selection and creates a dropdown gap without Markdown", async ({
+  page,
+}) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
+  });
+  await editor.fill("Выделяем слово для задания.");
+  const heading = page.getByRole("button", { name: "Заголовок", exact: true });
+  if ((await heading.getAttribute("aria-pressed")) === "true")
+    await heading.click();
+  async function select(word: string) {
+    await editor.evaluate((element, word) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const at = node.textContent?.indexOf(word) ?? -1;
+        if (at >= 0) {
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + word.length);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          break;
+        }
+      }
+    }, word);
+  }
+  await select("Выделяем");
+  await page.getByRole("button", { name: "Жирный", exact: true }).click();
+  await expect(editor.locator("strong")).toHaveText("Выделяем");
+  await select("Выделяем");
+  await page.getByRole("button", { name: "Курсив", exact: true }).click();
+  await select("Выделяем");
+  await page.getByRole("button", { name: "Подчёркнутый", exact: true }).click();
+  await expect(editor.locator("u")).toHaveText("Выделяем");
+  await page.getByRole("button", { name: "Заголовок", exact: true }).click();
+  await expect(editor.locator("h2")).toBeVisible();
+  await select("слово");
+  await page.getByRole("button", { name: "Пропуск", exact: true }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Настройка пропуска",
+    exact: true,
+  });
+  await dialog
+    .getByRole("textbox", { name: "Вариант 2", exact: true })
+    .fill("другое");
+  await dialog
+    .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
+    .fill("Проверка выбранного слова.");
+  await dialog
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(editor.locator(".rich-gap-token")).toContainText("слово");
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .contentMd,
+    )
+    .toContain("[[слово|другое]]");
+  await page.screenshot({
+    path: `tmp/screenshots/visual-editor-${page.viewportSize()!.width}.png`,
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(editor.locator("u")).toHaveText("Выделяем");
+  await expect(editor.locator(".rich-gap-token")).toContainText("слово");
+  await editor.locator(".rich-gap-token").click();
+  await page.getByRole("button", { name: "Пропуск", exact: true }).click();
+  await dialog
+    .getByRole("textbox", { name: "Вариант 2", exact: true })
+    .fill("иной");
+  await dialog
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .contentMd,
+    )
+    .toContain("[[слово|иной]]");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width);
+});

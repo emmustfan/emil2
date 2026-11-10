@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -277,10 +278,8 @@ test("student has a personal workspace; blocking removes sessions and preserves 
   expect((await c.request.get("/admin")).status()).toBe(403);
   expect((await c.request.get("/api/admin/users")).status()).toBe(403);
   await p.goto(`/learn/${f.subject.slug}/free`);
-  const form = p
-    .locator("form")
-    .filter({ has: p.getByRole("group", { name: "Пропуск 1", exact: true }) });
-  await form.getByRole("radio", { name: "верный-один", exact: true }).check();
+  const form = lessonGap(p, 1);
+  await form.getByRole("combobox").selectOption({ label: "верный-один" });
   await form.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(form.getByRole("status")).toContainText("Верно");
   await p.goto("/cabinet");

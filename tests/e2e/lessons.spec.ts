@@ -1,3 +1,4 @@
+import { lessonGap } from "../helpers/inline-gap";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { getDb } from "../../lib/db";
@@ -75,36 +76,23 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
     path: `tmp/screenshots/lesson-stage-3-start-${testInfo.project.name}.png`,
     fullPage: true,
   });
-  const gap1 = page.locator("form").filter({
-    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
-  });
-  const gap2 = page.locator("form").filter({
-    has: page.getByRole("group", { name: "Пропуск 2", exact: true }),
-  });
-  await expect(gap1.getByRole("radio")).toHaveCount(2);
+  const gap1 = lessonGap(page, 1);
+  const gap2 = lessonGap(page, 2);
+  await expect(gap1.getByRole("combobox").getByRole("option")).toHaveCount(3);
   await expect(page.getByRole("menu")).toHaveCount(0);
-  const radios = gap1.getByRole("radio");
-  const right =
-    (await radios.all()).length === 2
-      ? (await gap1.locator("label").allTextContents()).findIndex(
-          (t) => t.trim() === "верный-один",
-        )
-      : 0;
-  await radios.first().focus();
-  await page.keyboard.press("Space");
-  if (right === 1) await page.keyboard.press("ArrowDown");
+  await gap1.getByRole("combobox").selectOption({ label: "верный-один" });
   await gap1
     .getByRole("button", { name: "Проверить", exact: true })
     .press("Enter");
   await expect(gap1.getByRole("status")).toContainText("Верно");
   await page.reload();
-  await expect(
-    gap1.getByRole("radio", { name: "верный-один", exact: true }),
-  ).toBeChecked();
+  await expect(gap1.getByRole("combobox").locator("option:checked")).toHaveText(
+    "верный-один",
+  );
   await expect(
     page.getByText("Пропуски: 1 / 2", { exact: true }),
   ).toBeVisible();
-  await gap2.getByRole("radio", { name: "неверный-два", exact: true }).check();
+  await gap2.getByRole("combobox").selectOption({ label: "неверный-два" });
   await gap2.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(gap2.getByRole("status")).toContainText("Неверно");
   await page.getByRole("button", { name: "Начать тест", exact: true }).click();
@@ -154,16 +142,14 @@ test("guest completes a free lesson from the catalog and resumes after reload", 
   await expect(
     gap1.getByRole("button", { name: "Проверить", exact: true }),
   ).toBeVisible();
-  await gap1.getByRole("radio", { name: "неверный-один", exact: true }).check();
+  await gap1.getByRole("combobox").selectOption({ label: "неверный-один" });
   await page
     .getByRole("button", { name: "Пройти заново", exact: true })
     .click();
-  await expect(gap1.locator("input:checked")).toHaveCount(0);
+  await expect(gap1.getByRole("combobox")).toHaveValue("");
 
   await page.reload();
-  await expect(
-    gap1.getByRole("radio", { name: "верный-один", exact: true }),
-  ).toBeDisabled();
+  await expect(gap1.getByRole("combobox")).toBeDisabled();
 });
 test("paid lesson sends only a safe preview and protects all answer endpoints", async ({
   page,
@@ -223,10 +209,8 @@ test("guest sessions are isolated and unpublished topics cannot be opened", asyn
 }) => {
   const f = fixture!;
   await page.goto(`/learn/${f.subject.slug}/free`);
-  const first = page.locator("form").filter({
-    has: page.getByRole("group", { name: "Пропуск 1", exact: true }),
-  });
-  await first.getByRole("radio", { name: "верный-один", exact: true }).check();
+  const first = lessonGap(page, 1);
+  await first.getByRole("combobox").selectOption({ label: "верный-один" });
   await first.getByRole("button", { name: "Проверить", exact: true }).click();
   await expect(
     page.getByText("Пропуски: 1 / 2", { exact: true }),
@@ -259,10 +243,7 @@ test("mixed choices and typed answers are checked on submit and persist", async 
   const f = fixture!;
   await addMixedExercises(f);
   await page.goto(`/learn/${f.subject.slug}/free`);
-  const card = (n: number) =>
-    page.locator("form").filter({
-      has: page.getByRole("group", { name: `Пропуск ${n}`, exact: true }),
-    });
+  const card = (n: number) => lessonGap(page, n);
   const html = await (
     await page.request.get(`/learn/${f.subject.slug}/free`)
   ).text();
@@ -276,9 +257,7 @@ test("mixed choices and typed answers are checked on submit and persist", async 
   await expect(
     card(3).getByRole("textbox", { name: "Ваш ответ", exact: true }),
   ).toBeVisible();
-  await card(1)
-    .getByRole("radio", { name: "верный-один", exact: true })
-    .check();
+  await card(1).getByRole("combobox").selectOption({ label: "верный-один" });
   await expect(
     page.getByText("Пропуски: 0 / 3", { exact: true }),
   ).toBeVisible();

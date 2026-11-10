@@ -19,6 +19,7 @@ import { GapInsertForm } from "./gap-insert-form";
 import type { GapExercise } from "@/lib/exercises";
 import { GapExercisesEditor } from "./gap-exercises";
 import { QuestionForm } from "./question-form";
+import { RichEditor, type RichEditorHandle } from "./rich-editor";
 import { ImageUpload } from "./image-upload";
 import { LessonReview } from "./lesson-review";
 import { lessonReadiness } from "@/lib/content/readiness";
@@ -75,6 +76,8 @@ export function TopicEditor({
   const [parsed, setParsed] = useState(initialParsed);
   const [previewSource, setPreviewSource] = useState(initial.contentMd);
   const [publishIssues, setPublishIssues] = useState<ParsedTopic["errors"]>([]);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const richEditor = useRef<RichEditorHandle>(null);
   const pre = useRef<HTMLPreElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const [selected, setSelected] = useState<QuestionDTO | undefined>();
@@ -284,22 +287,29 @@ export function TopicEditor({
     setPreviewSource(contentMd);
   }
   function insertText(markdown: string) {
-    const current = formRef.current.contentMd,
-      input = textarea.current;
-    const start = input?.selectionStart ?? current.length,
-      end = input?.selectionEnd ?? start;
-    change(
-      "contentMd",
-      current.slice(0, start) + "\n\n" + markdown + "\n\n" + current.slice(end),
-    );
-    requestAnimationFrame(() => {
-      const field = textarea.current;
-      if (field) {
-        const after = start + markdown.length + 4;
-        field.focus();
-        field.setSelectionRange(after, after);
-      }
+    richEditor.current?.insertMarkdown(markdown);
+  }
+  async function configureGap(
+    contentMd: string,
+    order: number,
+    config: GapExercise,
+  ) {
+    const before = formRef.current.contentMd;
+    const result = await requestContent<ParsedTopic>("preview", "POST", {
+      contentMd,
     });
+    if (result.errors.length) throw new Error(result.errors[0].message);
+    if (formRef.current.contentMd !== before)
+      throw new Error("Текст изменился. Повторите настройку пропуска.");
+    const gap = result.gaps[order];
+    if (!gap) throw new Error("Пропуск не найден.");
+    change("contentMd", contentMd);
+    change("gapExercises", {
+      ...formRef.current.gapExercises,
+      [gap.gapKey]: config,
+    });
+    setParsed(result);
+    setPreviewSource(contentMd);
   }
   const checks = lessonReadiness(form, parsed, row.questions, {
     minQuestions,
@@ -483,35 +493,17 @@ export function TopicEditor({
             <h2 id="lesson-text" className="scroll-mt-5 text-xl font-semibold">
               2. Текст методички
             </h2>
-            <div className="rounded-xl bg-emerald-50 p-4 text-sm leading-7">
-              Заголовки, списки и таблицы можно оформить кнопками ниже. Задания
-              добавляются отдельным конструктором после текста. Картинку
-              вставляйте кнопкой «Добавить изображение».
-            </div>
-            <div
-              className="flex flex-wrap gap-2"
-              aria-label="Оформление текста"
-            >
-              {[
-                ["Заголовок", "## Новый раздел"],
-                ["Список", "- Первый пункт\n- Второй пункт"],
-                [
-                  "Таблица",
-                  "| Термин | Значение |\n| --- | --- |\n| Пример | Описание |",
-                ],
-                ["Важно", "> [!important] Важная мысль"],
-              ].map(([title, md]) => (
-                <button
-                  key={title}
-                  type="button"
-                  className="min-h-11 rounded-lg border bg-white px-3 text-sm"
-                  disabled={busy || conflict}
-                  onClick={() => insertText(md)}
-                >
-                  {title}
-                </button>
-              ))}
-            </div>
+            <RichEditor
+              ref={richEditor}
+              value={form.contentMd}
+              disabled={busy || conflict || sourceOpen}
+              onChange={(value) => {
+                if (!sourceOpen) change("contentMd", value);
+              }}
+              parsed={parsed}
+              exercises={form.gapExercises ?? {}}
+              onGapChange={configureGap}
+            />
             <ImageUpload
               topicId={initial.id}
               maxBytes={imageMaxBytes}
@@ -521,55 +513,67 @@ export function TopicEditor({
                 insertText(md);
               }}
             />
-            <label className="block text-sm font-medium">
-              {t.markdown}
-              <span className="mt-2 block text-xs font-normal leading-6 text-stone-500">
-                {t.syntax}
-              </span>
-              <span className="relative mt-3 block rounded-xl border border-stone-300 bg-white">
-                <pre
-                  ref={pre}
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-transparent"
-                >
-                  {form.contentMd
-                    .split(/(\[\[[\s\S]*?(?:\]\]|$))/g)
-                    .map((part, i) =>
-                      part.startsWith("[[") ? (
-                        <span
-                          key={i}
-                          className={
-                            part.endsWith("]]")
-                              ? "rounded bg-emerald-100"
-                              : "rounded bg-red-100"
-                          }
-                        >
-                          {part}
-                        </span>
-                      ) : (
-                        part
-                      ),
-                    )}
-                  {"\n"}
-                </pre>
-                <textarea
-                  ref={textarea}
-                  aria-label={t.markdown}
-                  value={form.contentMd}
-                  onChange={(e) => change("contentMd", e.target.value)}
-                  onScroll={(e) => {
-                    if (pre.current) {
-                      pre.current.scrollTop = e.currentTarget.scrollTop;
-                      pre.current.scrollLeft = e.currentTarget.scrollLeft;
-                    }
-                  }}
-                  disabled={busy || conflict}
-                  maxLength={100000}
-                  spellCheck={false}
-                  className="editor-source relative block h-[30rem] w-full resize-y bg-transparent p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-stone-900 outline-offset-4 focus:outline-emerald-700"
-                />
-              </span>
-            </label>
+            <div className="rich-source-details">
+              <button
+                type="button"
+                aria-expanded={sourceOpen}
+                aria-controls="lesson-source-input"
+                onClick={() => setSourceOpen((open) => !open)}
+              >
+                Исходный текст — для переноса материалов
+              </button>
+              <div id="lesson-source-input" hidden={!sourceOpen}>
+                <label className="block text-sm font-medium">
+                  {t.markdown}
+                  <span className="mt-2 block text-xs font-normal leading-6 text-stone-500">
+                    {t.syntax}
+                  </span>
+                  <span className="relative mt-3 block rounded-xl border border-stone-300 bg-white">
+                    <pre
+                      ref={pre}
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-transparent"
+                    >
+                      {form.contentMd
+                        .split(/(\[\[[\s\S]*?(?:\]\]|$))/g)
+                        .map((part, i) =>
+                          part.startsWith("[[") ? (
+                            <span
+                              key={i}
+                              className={
+                                part.endsWith("]]")
+                                  ? "rounded bg-emerald-100"
+                                  : "rounded bg-red-100"
+                              }
+                            >
+                              {part}
+                            </span>
+                          ) : (
+                            part
+                          ),
+                        )}
+                      {"\n"}
+                    </pre>
+                    <textarea
+                      ref={textarea}
+                      aria-label={t.markdown}
+                      value={form.contentMd}
+                      onChange={(e) => change("contentMd", e.target.value)}
+                      onScroll={(e) => {
+                        if (pre.current) {
+                          pre.current.scrollTop = e.currentTarget.scrollTop;
+                          pre.current.scrollLeft = e.currentTarget.scrollLeft;
+                        }
+                      }}
+                      disabled={busy || conflict}
+                      maxLength={100000}
+                      spellCheck={false}
+                      className="editor-source relative block h-[30rem] w-full resize-y bg-transparent p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-stone-900 outline-offset-4 focus:outline-emerald-700"
+                    />
+                  </span>
+                </label>
+              </div>
+            </div>
             {issues.length > 0 && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4">
                 <h3 className="text-sm font-semibold text-red-900">
@@ -582,16 +586,19 @@ export function TopicEditor({
                         type="button"
                         className="min-h-11 text-left underline"
                         onClick={() => {
-                          const input = textarea.current;
-                          if (input) {
-                            const at =
-                              form.contentMd
-                                .split("\n")
-                                .slice(0, issue.line - 1)
-                                .join("\n").length + (issue.line > 1 ? 1 : 0);
-                            input.focus();
-                            input.setSelectionRange(at, at);
-                          }
+                          setSourceOpen(true);
+                          requestAnimationFrame(() => {
+                            const input = textarea.current;
+                            if (input) {
+                              const at =
+                                form.contentMd
+                                  .split("\n")
+                                  .slice(0, issue.line - 1)
+                                  .join("\n").length + (issue.line > 1 ? 1 : 0);
+                              input.focus();
+                              input.setSelectionRange(at, at);
+                            }
+                          });
                         }}
                       >
                         {t.line} {issue.line}: {issue.message}

@@ -54,11 +54,13 @@ export function TutorPanel({
   subjectId,
   mock,
   ref,
+  docked = false,
 }: {
   topicId?: string;
   subjectId?: string;
   mock: boolean;
   ref?: Ref<TutorHandle>;
+  docked?: boolean;
 }) {
   const [text, setText] = useState(""),
     [messages, setMessages] = useState<Entry[]>([]),
@@ -169,11 +171,12 @@ export function TutorPanel({
     ref,
     () => ({
       explain: (input) => {
-        root.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (!docked)
+          root.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         void send({ ...input, requestId: crypto.randomUUID() });
       },
     }),
-    [send],
+    [send, docked],
   );
   async function feedback(reply: TutorReply, value: 1 | -1) {
     try {
@@ -198,7 +201,7 @@ export function TutorPanel({
     <section
       ref={root}
       id="lesson-tutor"
-      className="mt-10 min-w-0 scroll-mt-24 rounded-2xl border border-emerald-900/15 bg-white p-5 sm:p-7"
+      className={`tutor-panel ${docked ? "is-docked" : "mt-10"} min-w-0 scroll-mt-24 rounded-2xl border border-emerald-900/15 bg-white p-5 sm:p-7`}
       aria-label={t.title}
     >
       <h2 className="text-2xl font-semibold">{t.title}</h2>
@@ -211,7 +214,10 @@ export function TutorPanel({
       {!messages.length && (
         <p className="mt-5 text-sm leading-7 text-stone-500">{t.empty}</p>
       )}
-      <div className="mt-5 space-y-5" aria-label={t.currentDialog}>
+      <div
+        className="tutor-conversation mt-5 space-y-5"
+        aria-label={t.currentDialog}
+      >
         {messages.map((m) => (
           <article
             key={m.key}
