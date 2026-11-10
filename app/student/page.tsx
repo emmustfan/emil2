@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { WorkspaceNav } from "@/components/workspace/nav";
+import { WorkspaceShell } from "@/components/workspace/shell";
 import { StudentHome } from "@/components/student/home";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -8,9 +8,8 @@ export const metadata: Metadata = {
 };
 export default function Student() {
   return (
-    <>
-      <WorkspaceNav />
+    <WorkspaceShell>
       <StudentHome />
-    </>
+    </WorkspaceShell>
   );
 }

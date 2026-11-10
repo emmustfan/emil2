@@ -170,6 +170,14 @@ test("learner pays with explicit consent, opens a locked lesson and cancels futu
     page.getByText("ПЛАТНЫЙ_СЕКРЕТ_ТОЛЬКО_ПО_ДОСТУПУ.", { exact: true }),
   ).toBeVisible();
   await page.goto("/cabinet/subscription");
+  const history = page.getByRole("table", {
+    name: "История платежей",
+    exact: true,
+  });
+  await expect(
+    history.getByRole("cell", { name: "Оплачен", exact: true }),
+  ).toBeVisible();
+  await expect(history.locator("tbody tr")).toHaveCount(1);
   await page
     .getByRole("button", { name: "Отключить автопродление", exact: true })
     .click();

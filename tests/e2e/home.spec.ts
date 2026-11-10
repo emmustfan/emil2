@@ -8,6 +8,9 @@ test("landing, examples, metadata and mobile navigation", async ({
     "Разобраться. Проверить себя. Запомнить.",
   );
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(page.viewportSize()!.width);
   if (isMobile) await page.getByText("☰ Меню", { exact: true }).click();
   await page
     .getByRole("link", { name: "Как это работает", exact: true })

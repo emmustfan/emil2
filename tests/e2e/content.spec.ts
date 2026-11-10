@@ -527,10 +527,18 @@ test("subject search and pagination show the matching records", async ({
   }));
   await db.subject.createMany({ data: records });
   await page.goto(`/admin?q=${prefix}`);
-  await expect(page.locator("tbody tr")).toHaveCount(20);
+  await expect(
+    page
+      .getByRole("table", { name: "Предметы", exact: true })
+      .locator("tbody tr"),
+  ).toHaveCount(20);
   await page.getByRole("link", { name: "Далее", exact: true }).click();
   await expect(page).toHaveURL(/page=2/);
-  await expect(page.locator("tbody tr")).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("table", { name: "Предметы", exact: true })
+      .locator("tbody tr"),
+  ).toHaveCount(1);
   await expect(
     page.getByRole("link", { name: "Назад", exact: true }),
   ).toBeVisible();

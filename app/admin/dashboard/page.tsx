@@ -73,68 +73,70 @@ export default async function Dashboard({
         MRR показаны на текущий момент; MRR — месячная сумма активных оплаченных
         подписок с включённым автопродлением.
       </p>
-      <section className="mt-8">
-        <h2 className="text-xl font-semibold">Воронка за период</h2>
-        <p className="mt-3 text-sm leading-7">
-          Уникальные участники каждого шага в выбранном периоде. Это не одна
-          когорта: оплата могла начаться до него, поэтому отношение соседних
-          шагов может превышать 100%.
-        </p>
-        <ol className="mt-5 space-y-3">
-          {data.funnel.map((row) => (
-            <li key={row.name} className="rounded-xl border bg-white p-4">
-              <div className="flex flex-wrap justify-between gap-3">
-                <span>{labels[row.name]}</span>
-                <strong>
-                  {row.count}
-                  {row.conversion !== null
-                    ? ` · ${row.conversion}% от предыдущего шага`
-                    : ""}
-                </strong>
-              </div>
-              <div
-                className="mt-3 h-2 rounded-full bg-stone-100"
-                aria-hidden="true"
-              >
+      <div className="admin-report-panels">
+        <section className="mt-8">
+          <h2 className="text-xl font-semibold">Воронка за период</h2>
+          <p className="mt-3 text-sm leading-7">
+            Уникальные участники каждого шага в выбранном периоде. Это не одна
+            когорта: оплата могла начаться до него, поэтому отношение соседних
+            шагов может превышать 100%.
+          </p>
+          <ol className="mt-5 space-y-3">
+            {data.funnel.map((row) => (
+              <li key={row.name} className="rounded-xl border bg-white p-4">
+                <div className="flex flex-wrap justify-between gap-3">
+                  <span>{labels[row.name]}</span>
+                  <strong>
+                    {row.count}
+                    {row.conversion !== null
+                      ? ` · ${row.conversion}% от предыдущего шага`
+                      : ""}
+                  </strong>
+                </div>
                 <div
-                  className="h-2 rounded-full bg-emerald-600"
-                  style={{
-                    width:
-                      Math.min(
-                        100,
-                        data.funnel[0].count
-                          ? (row.count / data.funnel[0].count) * 100
-                          : 0,
-                      ) + "%",
-                  }}
-                />
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-      <section className="mt-8">
-        <h2 className="text-xl font-semibold">Возвращаются к обучению</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {data.retention.map((r) => (
-            <article key={r.day} className="rounded-xl border bg-white p-5">
-              <h3 className="font-semibold">
-                На {r.day === 1 ? "следующий" : "седьмой"} день · D{r.day}
-              </h3>
-              <p className="mt-3">
-                {r.percent === null
-                  ? "Ещё нет созревших регистраций"
-                  : `${r.percent}% · ${r.retained} из ${r.mature}`}
-              </p>
-            </article>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-6 text-stone-600">
-          Когорта — регистрации выбранного периода. День считается по UTC;
-          учитываются только полностью прошедшие дни. Активность: ответы, тесты,
-          повторение или вопрос тьютору.
-        </p>
-      </section>
+                  className="mt-3 h-2 rounded-full bg-stone-100"
+                  aria-hidden="true"
+                >
+                  <div
+                    className="h-2 rounded-full bg-[var(--gum)]"
+                    style={{
+                      width:
+                        Math.min(
+                          100,
+                          data.funnel[0].count
+                            ? (row.count / data.funnel[0].count) * 100
+                            : 0,
+                        ) + "%",
+                    }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section className="mt-8">
+          <h2 className="text-xl font-semibold">Возвращаются к обучению</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {data.retention.map((r) => (
+              <article key={r.day} className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold">
+                  На {r.day === 1 ? "следующий" : "седьмой"} день · D{r.day}
+                </h3>
+                <p className="mt-3">
+                  {r.percent === null
+                    ? "Ещё нет созревших регистраций"
+                    : `${r.percent}% · ${r.retained} из ${r.mature}`}
+                </p>
+              </article>
+            ))}
+          </div>
+          <p className="mt-3 text-xs leading-6 text-stone-600">
+            Когорта — регистрации выбранного периода. День считается по UTC;
+            учитываются только полностью прошедшие дни. Активность: ответы,
+            тесты, повторение или вопрос тьютору.
+          </p>
+        </section>
+      </div>
       <section className="mt-8">
         <h2 className="text-xl font-semibold">Платежи по UTM-источникам</h2>
         {!data.sources.length && (

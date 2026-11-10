@@ -171,10 +171,10 @@ test("paid lesson sends only a safe preview and protects all answer endpoints", 
   const f = fixture!;
   const response = await page.goto(`/learn/${f.subject.slug}/paid`);
   expect(response?.status()).toBe(200);
+  const html = await response!.text();
   await expect(
     page.getByRole("heading", { name: /Откройте предмет/ }),
   ).toBeVisible();
-  const html = await response!.text();
   for (const secret of [
     "ПЛАТНЫЙ_СЕКРЕТ_ТОЛЬКО_ПО_ДОСТУПУ",
     "верный-один",

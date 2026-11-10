@@ -21,6 +21,7 @@ export function ImportWorkspace({
   maxBytes,
   timeZone,
   mock,
+  lockedSubject = false,
 }: {
   subjects: Subject[];
   initial: ImportDTO[];
@@ -28,6 +29,7 @@ export function ImportWorkspace({
   maxBytes: number;
   timeZone: string;
   mock: boolean;
+  lockedSubject?: boolean;
 }) {
   const [subjectId, setSubjectId] = useState(
       subjects.some((s) => s.id === initialSubject)
@@ -49,10 +51,13 @@ export function ImportWorkspace({
       if (running) return;
       running = true;
       try {
-        const r = await fetch("/api/admin/imports", {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const r = await fetch(
+          `/api/admin/imports${lockedSubject ? `?subjectId=${encodeURIComponent(subjectId)}` : ""}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         if (!r.ok) throw new Error();
         setJobs(await r.json());
         setNotice("");
@@ -72,7 +77,7 @@ export function ImportWorkspace({
       clearInterval(timer);
       controller.abort();
     };
-  }, [active]);
+  }, [active, lockedSubject, subjectId]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -140,7 +145,9 @@ export function ImportWorkspace({
         onSubmit={submit}
         className="min-w-0 space-y-5 rounded-2xl border border-stone-200 bg-white p-5 sm:p-7"
       >
-        <h2 className="text-xl font-semibold">Новый импорт</h2>
+        <h2 className="text-xl font-semibold">
+          {lockedSubject ? "Создать уроки из материала" : "Новый импорт"}
+        </h2>
         {mock && (
           <p className="rounded-xl bg-amber-50 p-4 text-sm leading-6">
             Включён тестовый ИИ: он создаёт технические примеры из исходника для
@@ -149,7 +156,10 @@ export function ImportWorkspace({
             «Интеграции».
           </p>
         )}
-        <label className="block text-sm font-medium">
+        <label
+          hidden={lockedSubject}
+          className={lockedSubject ? "hidden" : "block text-sm font-medium"}
+        >
           Предмет
           <select
             aria-label="Предмет"

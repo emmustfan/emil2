@@ -1,5 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -41,6 +47,7 @@ export function TopicEditor({
   minQuestions,
   maxQuestions,
   imageMaxBytes,
+  tree,
 }: {
   initial: TopicDTO;
   initialParsed: ParsedTopic;
@@ -49,6 +56,7 @@ export function TopicEditor({
   minQuestions: number;
   maxQuestions: number;
   imageMaxBytes: number;
+  tree?: ReactNode;
 }) {
   const router = useRouter();
   const [imageIds, setImageIds] = useState(initial.imageIds ?? []);
@@ -310,21 +318,10 @@ export function TopicEditor({
   );
   const issues = publishIssues.length ? publishIssues : parsed.errors;
   return (
-    <div className="space-y-7">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Link
-          href={`/admin/subjects/${initial.subjectId}`}
-          className="text-sm text-emerald-800 underline"
-        >
-          ← {t.backSubject}: {row.subject.title}
-        </Link>
-        <span className="rounded-full bg-stone-100 px-4 py-2 text-xs">
-          {t.statuses[row.status]} · {t.version} {row.version}
-        </span>
-      </div>
+    <div className="lesson-editor space-y-4">
       <nav
         aria-label="Этапы создания урока"
-        className="flex flex-wrap gap-3 rounded-2xl border bg-white p-4 text-sm"
+        className="editor-step-nav flex flex-wrap gap-1 border-b pb-2 text-sm"
       >
         {[
           ["lesson-basics", "1. Основное"],
@@ -342,11 +339,6 @@ export function TopicEditor({
           </a>
         ))}
       </nav>
-      <p className="text-sm leading-7 text-stone-600">
-        Создайте черновик, добавьте текст и задания, проверьте ответы в
-        предпросмотре. Затем укажите источники и рецензента внизу страницы.
-        Черновик сохраняется автоматически.
-      </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
@@ -363,14 +355,23 @@ export function TopicEditor({
         >
           Проверить урок перед публикацией
         </a>
+        <p
+          id="lesson-editor-status"
+          role="status"
+          className="text-sm text-emerald-800"
+        >
+          {message}
+        </p>
+        <Link
+          href={`/admin/subjects/${initial.subjectId}`}
+          className="text-sm text-emerald-800 underline"
+        >
+          ← {t.backSubject}: {row.subject.title}
+        </Link>
+        <span className="rounded-full bg-stone-100 px-4 py-2 text-xs">
+          {t.statuses[row.status]} · {t.version} {row.version}
+        </span>
       </div>
-      <p
-        id="lesson-editor-status"
-        role="status"
-        className="text-sm text-emerald-800"
-      >
-        {message}
-      </p>
       {error && (
         <p
           role="alert"
@@ -389,230 +390,239 @@ export function TopicEditor({
           {t.reload}
         </Button>
       )}
-      <div className="grid gap-7 xl:grid-cols-2">
-        <section className="space-y-5">
-          <h2 id="lesson-basics" className="scroll-mt-5 text-xl font-semibold">
-            1. Основные параметры
-          </h2>
-          <fieldset
-            disabled={busy || conflict}
-            className="grid gap-4 rounded-2xl border border-stone-200 bg-white p-5 sm:grid-cols-2"
-          >
-            <label className="text-sm font-medium">
-              {t.name}
-              <input
-                className={fieldClass}
-                value={form.title}
-                onChange={(e) => change("title", e.target.value)}
-                maxLength={200}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              {t.slug}
-              <span
-                className="mt-1 block text-xs font-normal leading-6 text-stone-500"
-                aria-hidden="true"
-              >
-                Адрес темы латиницей. Обычно его можно оставить автоматически
-                созданным.
-              </span>
-              <input
-                className={fieldClass}
-                aria-label={t.slug}
-                value={form.slug}
-                maxLength={100}
-                onChange={(e) => change("slug", e.target.value)}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              {t.section}
-              <select
-                className={fieldClass}
-                value={form.sectionId ?? ""}
-                onChange={(e) => change("sectionId", e.target.value || null)}
-              >
-                <option value="">{t.noSection}</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              {t.order}
-              <input
-                type="number"
-                min={0}
-                max={10000}
-                className={fieldClass}
-                value={form.order}
-                onChange={(e) => change("order", Number(e.target.value))}
-              />
-            </label>
-            <label className="flex min-h-11 items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isFree}
-                onChange={(e) => change("isFree", e.target.checked)}
-                className="size-5 accent-emerald-800"
-              />
-              {t.free}
-            </label>
-            <label className="text-sm font-medium">
-              {t.readingMinutes}
-              <input
-                className={fieldClass}
-                type="number"
-                min={1}
-                max={600}
-                value={form.readingMinutes ?? ""}
-                onChange={(e) =>
-                  change(
-                    "readingMinutes",
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
-              />
-            </label>
-          </fieldset>
-          <h2 id="lesson-text" className="scroll-mt-5 text-xl font-semibold">
-            2. Текст методички
-          </h2>
-          <div className="rounded-xl bg-emerald-50 p-4 text-sm leading-7">
-            Заголовки, списки и таблицы можно оформить кнопками ниже. Задания
-            добавляются отдельным конструктором после текста. Картинку
-            вставляйте кнопкой «Добавить изображение».
-          </div>
-          <div className="flex flex-wrap gap-2" aria-label="Оформление текста">
-            {[
-              ["Заголовок", "## Новый раздел"],
-              ["Список", "- Первый пункт\n- Второй пункт"],
-              [
-                "Таблица",
-                "| Термин | Значение |\n| --- | --- |\n| Пример | Описание |",
-              ],
-              ["Важно", "> [!important] Важная мысль"],
-            ].map(([title, md]) => (
-              <button
-                key={title}
-                type="button"
-                className="min-h-11 rounded-lg border bg-white px-3 text-sm"
-                disabled={busy || conflict}
-                onClick={() => insertText(md)}
-              >
-                {title}
-              </button>
-            ))}
-          </div>
-          <ImageUpload
-            topicId={initial.id}
-            maxBytes={imageMaxBytes}
-            busy={busy || conflict}
-            onInsert={(md, id) => {
-              setImageIds((ids) => [...new Set([...ids, id])]);
-              insertText(md);
-            }}
-          />
-          <label className="block text-sm font-medium">
-            {t.markdown}
-            <span className="mt-2 block text-xs font-normal leading-6 text-stone-500">
-              {t.syntax}
-            </span>
-            <span className="relative mt-3 block rounded-xl border border-stone-300 bg-white">
-              <pre
-                ref={pre}
-                aria-hidden
-                className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-transparent"
-              >
-                {form.contentMd
-                  .split(/(\[\[[\s\S]*?(?:\]\]|$))/g)
-                  .map((part, i) =>
-                    part.startsWith("[[") ? (
-                      <span
-                        key={i}
-                        className={
-                          part.endsWith("]]")
-                            ? "rounded bg-emerald-100"
-                            : "rounded bg-red-100"
-                        }
-                      >
-                        {part}
-                      </span>
-                    ) : (
-                      part
-                    ),
-                  )}
-                {"\n"}
-              </pre>
-              <textarea
-                ref={textarea}
-                aria-label={t.markdown}
-                value={form.contentMd}
-                onChange={(e) => change("contentMd", e.target.value)}
-                onScroll={(e) => {
-                  if (pre.current) {
-                    pre.current.scrollTop = e.currentTarget.scrollTop;
-                    pre.current.scrollLeft = e.currentTarget.scrollLeft;
-                  }
-                }}
-                disabled={busy || conflict}
-                maxLength={100000}
-                spellCheck={false}
-                className="relative block h-[30rem] w-full resize-y bg-transparent p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-stone-900 outline-offset-4 focus:outline-emerald-700"
-              />
-            </span>
-          </label>
-          {issues.length > 0 && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-              <h3 className="text-sm font-semibold text-red-900">{t.errors}</h3>
-              <ul className="mt-2 space-y-2 text-sm text-red-800">
-                {issues.map((issue, i) => (
-                  <li key={i}>
-                    <button
-                      type="button"
-                      className="min-h-11 text-left underline"
-                      onClick={() => {
-                        const input = textarea.current;
-                        if (input) {
-                          const at =
-                            form.contentMd
-                              .split("\n")
-                              .slice(0, issue.line - 1)
-                              .join("\n").length + (issue.line > 1 ? 1 : 0);
-                          input.focus();
-                          input.setSelectionRange(at, at);
-                        }
-                      }}
-                    >
-                      {t.line} {issue.line}: {issue.message}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-        <section
-          aria-label={t.preview}
-          className="min-w-0 rounded-2xl border border-emerald-900/10 bg-white p-6 xl:sticky xl:top-4 xl:max-h-[85vh] xl:self-start xl:overflow-auto"
+      <section className="editor-metadata space-y-4">
+        <h2 id="lesson-basics" className="scroll-mt-5 text-xl font-semibold">
+          Параметры урока
+        </h2>
+        <fieldset
+          disabled={busy || conflict}
+          className="grid gap-4 rounded-2xl border border-stone-200 bg-white p-5 sm:grid-cols-2 xl:grid-cols-6"
         >
-          <div className="mb-5 border-b border-stone-200 pb-4">
-            <h2 className="text-xl font-semibold">{t.preview}</h2>
-            <p className="mt-2 text-xs text-stone-500">
-              {t.gaps}: {parsed.gaps.length} · {t.blocks}:{" "}
-              {parsed.blocks.length}
-            </p>
-            <p className="mt-2 text-xs leading-5 text-stone-500">
-              {t.previewNote}
-            </p>
-          </div>
-          <MarkdownPreview
-            markdown={previewSource}
-            parsed={parsed}
-            exercises={form.gapExercises ?? {}}
-          />
-        </section>
+          <label className="text-sm font-medium">
+            {t.name}
+            <input
+              className={fieldClass}
+              value={form.title}
+              onChange={(e) => change("title", e.target.value)}
+              maxLength={200}
+            />
+          </label>
+          <label className="text-sm font-medium">
+            {t.slug}
+            <span id="lesson-slug-help" className="sr-only">
+              Адрес темы латиницей. Обычно его можно оставить автоматически
+              созданным.
+            </span>
+            <input
+              className={fieldClass}
+              aria-label={t.slug}
+              aria-describedby="lesson-slug-help"
+              title="Адрес темы латиницей. Обычно его можно оставить автоматически созданным."
+              value={form.slug}
+              maxLength={100}
+              onChange={(e) => change("slug", e.target.value)}
+            />
+          </label>
+          <label className="text-sm font-medium">
+            {t.section}
+            <select
+              className={fieldClass}
+              value={form.sectionId ?? ""}
+              onChange={(e) => change("sectionId", e.target.value || null)}
+            >
+              <option value="">{t.noSection}</option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium">
+            {t.order}
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              className={fieldClass}
+              value={form.order}
+              onChange={(e) => change("order", Number(e.target.value))}
+            />
+          </label>
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={form.isFree}
+              onChange={(e) => change("isFree", e.target.checked)}
+              className="size-5 accent-emerald-800"
+            />
+            {t.free}
+          </label>
+          <label className="text-sm font-medium">
+            {t.readingMinutes}
+            <input
+              className={fieldClass}
+              type="number"
+              min={1}
+              max={600}
+              value={form.readingMinutes ?? ""}
+              onChange={(e) =>
+                change(
+                  "readingMinutes",
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
+            />
+          </label>
+        </fieldset>
+      </section>
+      <div className="editor-three-pane">
+        {tree}
+        <div className="editor-workspace">
+          <section className="space-y-5">
+            <h2 id="lesson-text" className="scroll-mt-5 text-xl font-semibold">
+              2. Текст методички
+            </h2>
+            <div className="rounded-xl bg-emerald-50 p-4 text-sm leading-7">
+              Заголовки, списки и таблицы можно оформить кнопками ниже. Задания
+              добавляются отдельным конструктором после текста. Картинку
+              вставляйте кнопкой «Добавить изображение».
+            </div>
+            <div
+              className="flex flex-wrap gap-2"
+              aria-label="Оформление текста"
+            >
+              {[
+                ["Заголовок", "## Новый раздел"],
+                ["Список", "- Первый пункт\n- Второй пункт"],
+                [
+                  "Таблица",
+                  "| Термин | Значение |\n| --- | --- |\n| Пример | Описание |",
+                ],
+                ["Важно", "> [!important] Важная мысль"],
+              ].map(([title, md]) => (
+                <button
+                  key={title}
+                  type="button"
+                  className="min-h-11 rounded-lg border bg-white px-3 text-sm"
+                  disabled={busy || conflict}
+                  onClick={() => insertText(md)}
+                >
+                  {title}
+                </button>
+              ))}
+            </div>
+            <ImageUpload
+              topicId={initial.id}
+              maxBytes={imageMaxBytes}
+              busy={busy || conflict}
+              onInsert={(md, id) => {
+                setImageIds((ids) => [...new Set([...ids, id])]);
+                insertText(md);
+              }}
+            />
+            <label className="block text-sm font-medium">
+              {t.markdown}
+              <span className="mt-2 block text-xs font-normal leading-6 text-stone-500">
+                {t.syntax}
+              </span>
+              <span className="relative mt-3 block rounded-xl border border-stone-300 bg-white">
+                <pre
+                  ref={pre}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 m-0 overflow-hidden p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-transparent"
+                >
+                  {form.contentMd
+                    .split(/(\[\[[\s\S]*?(?:\]\]|$))/g)
+                    .map((part, i) =>
+                      part.startsWith("[[") ? (
+                        <span
+                          key={i}
+                          className={
+                            part.endsWith("]]")
+                              ? "rounded bg-emerald-100"
+                              : "rounded bg-red-100"
+                          }
+                        >
+                          {part}
+                        </span>
+                      ) : (
+                        part
+                      ),
+                    )}
+                  {"\n"}
+                </pre>
+                <textarea
+                  ref={textarea}
+                  aria-label={t.markdown}
+                  value={form.contentMd}
+                  onChange={(e) => change("contentMd", e.target.value)}
+                  onScroll={(e) => {
+                    if (pre.current) {
+                      pre.current.scrollTop = e.currentTarget.scrollTop;
+                      pre.current.scrollLeft = e.currentTarget.scrollLeft;
+                    }
+                  }}
+                  disabled={busy || conflict}
+                  maxLength={100000}
+                  spellCheck={false}
+                  className="editor-source relative block h-[30rem] w-full resize-y bg-transparent p-4 font-mono text-sm leading-6 break-words whitespace-pre-wrap text-stone-900 outline-offset-4 focus:outline-emerald-700"
+                />
+              </span>
+            </label>
+            {issues.length > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <h3 className="text-sm font-semibold text-red-900">
+                  {t.errors}
+                </h3>
+                <ul className="mt-2 space-y-2 text-sm text-red-800">
+                  {issues.map((issue, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        className="min-h-11 text-left underline"
+                        onClick={() => {
+                          const input = textarea.current;
+                          if (input) {
+                            const at =
+                              form.contentMd
+                                .split("\n")
+                                .slice(0, issue.line - 1)
+                                .join("\n").length + (issue.line > 1 ? 1 : 0);
+                            input.focus();
+                            input.setSelectionRange(at, at);
+                          }
+                        }}
+                      >
+                        {t.line} {issue.line}: {issue.message}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+          <section
+            aria-label={t.preview}
+            className="min-w-0 rounded-2xl border border-emerald-900/10 bg-white p-6 xl:sticky xl:top-4 xl:max-h-[85vh] xl:self-start xl:overflow-auto"
+          >
+            <div className="mb-5 border-b border-stone-200 pb-4">
+              <h2 className="text-xl font-semibold">{t.preview}</h2>
+              <p className="mt-2 text-xs text-stone-500">
+                {t.gaps}: {parsed.gaps.length} · {t.blocks}:{" "}
+                {parsed.blocks.length}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-stone-500">
+                {t.previewNote}
+              </p>
+            </div>
+            <MarkdownPreview
+              markdown={previewSource}
+              parsed={parsed}
+              exercises={form.gapExercises ?? {}}
+            />
+          </section>
+        </div>
       </div>
       <h2 id="lesson-exercises" className="scroll-mt-5 text-2xl font-semibold">
         3. Задания в методичке

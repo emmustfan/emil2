@@ -164,6 +164,8 @@ test("email link, explicit consent, profile, role guard and logout", async ({
   await expect(
     page.getByRole("textbox", { name: "Имя", exact: true }),
   ).toHaveValue("Обновлённое имя");
+  const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
+  if (await menu.isVisible()) await menu.click();
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   expect(
@@ -258,6 +260,8 @@ test("synthetic Telegram login and replay protection", async ({
   expect(response.status()).toBe(200);
   await page.goto("/cabinet");
   await finishOnboarding(page);
+  const menu = page.getByRole("button", { name: "Открыть меню", exact: true });
+  if (await menu.isVisible()) await menu.click();
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   const replay = await context.request.post("/api/auth/telegram", {
     data: { data: { ...data, hash }, intent: "login" },

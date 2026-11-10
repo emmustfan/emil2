@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { MaterialQueue } from "@/components/admin/material-queue";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
 import { listSubjects } from "@/lib/content/service";
 import { searchState } from "@/lib/content/page";
-import { WorkspaceNav } from "@/components/workspace/nav";
+import { WorkspaceShell } from "@/components/workspace/shell";
 import { Pagination } from "@/components/admin/pagination";
 import { rolesRu as t, contentRu } from "@/lib/i18n/ru";
 export const dynamic = "force-dynamic";
@@ -20,13 +21,30 @@ export default async function Teacher({
     { q, page } = searchState(await searchParams),
     data = await listSubjects(q, page, user.id);
   return (
-    <>
-      <WorkspaceNav />
-      <main className="mx-auto max-w-6xl px-5 py-10">
+    <WorkspaceShell area="teacher">
+      <main className="teacher-home">
         <h1 className="text-3xl font-semibold">{t.teacherTitle}</h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-stone-600">
           {t.teacherDescription}
         </p>
+        <div className="student-stats">
+          <div>
+            <small>Закреплено предметов</small>
+            <strong>{data.total}</strong>
+          </div>
+          <div>
+            <small>Тем на этой странице</small>
+            <strong>
+              {data.items.reduce((n, s) => n + s._count.topic_subjectId, 0)}
+            </strong>
+          </div>
+          <div>
+            <small>Разделов на этой странице</small>
+            <strong>
+              {data.items.reduce((n, s) => n + s._count.section_subjectId, 0)}
+            </strong>
+          </div>
+        </div>
         <form className="mt-7 flex flex-wrap gap-3" role="search">
           <input
             aria-label={contentRu.searchPlaceholder}
@@ -64,7 +82,8 @@ export default async function Teacher({
           </p>
         )}
         <Pagination base="/teacher" q={q} {...data} />
+        <MaterialQueue actor={user} />
       </main>
-    </>
+    </WorkspaceShell>
   );
 }

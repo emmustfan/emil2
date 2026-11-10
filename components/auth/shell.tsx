@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { BookOpen, ArrowLeft } from "lucide-react";
-import { authRu, ru } from "@/lib/i18n/ru";
+import { Brand } from "@/components/workspace/brand";
+import { ArrowLeft } from "lucide-react";
+import { authRu } from "@/lib/i18n/ru";
 export function AuthShell({
   title,
   description,
@@ -11,14 +12,10 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="mx-auto max-w-2xl px-5 py-10 sm:py-16">
-      <Link
-        href="/"
-        className="mb-10 inline-flex min-h-11 items-center gap-3 text-sm font-semibold text-emerald-900"
-      >
-        <BookOpen aria-hidden size={24} />
-        {ru.brand}
-      </Link>
+    <main className="auth-shell mx-auto max-w-2xl px-5 py-10 sm:py-16">
+      <div className="auth-brand mb-10">
+        <Brand />
+      </div>
       <section className="rounded-3xl border border-emerald-900/10 bg-white p-6 shadow-sm sm:p-10">
         <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
         {description && (
@@ -28,7 +25,7 @@ export function AuthShell({
       </section>
       <Link
         href="/"
-        className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm text-emerald-800"
+        className="auth-back mt-6 inline-flex min-h-11 items-center gap-2 text-sm text-emerald-800"
       >
         <ArrowLeft size={16} aria-hidden />
         {authRu.back}

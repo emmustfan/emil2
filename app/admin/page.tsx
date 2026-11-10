@@ -1,3 +1,5 @@
+import { getDb } from "@/lib/db";
+import { MaterialQueue } from "@/components/admin/material-queue";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
@@ -15,9 +17,29 @@ export default async function Admin({
   if (user.role === "EDITOR") redirect("/teacher");
   const { q, page } = searchState(await searchParams);
   const data = await listSubjects(q, page, user.id);
+  const [users, review, paid] = await Promise.all([
+    getDb().user.count({ where: { deletedAt: null } }),
+    getDb().topic.count({ where: { status: "REVIEW" } }),
+    getDb().payment.count({ where: { status: "SUCCEEDED" } }),
+  ]);
   return (
     <main>
       <h1 className="text-3xl font-semibold">{rolesRu.adminTitle}</h1>
+      <div className="student-stats">
+        <div>
+          <small>Пользователей</small>
+          <strong>{users}</strong>
+        </div>
+        <div>
+          <small>Уроков на проверке</small>
+          <strong>{review}</strong>
+        </div>
+        <div>
+          <small>Успешных оплат</small>
+          <strong>{paid}</strong>
+        </div>
+      </div>
+      <MaterialQueue actor={user} />
       <Link
         href="/admin/users"
         className="mt-5 inline-flex min-h-11 items-center text-emerald-800 underline"
@@ -44,7 +66,10 @@ export default async function Admin({
           <Button variant="outline">{t.search}</Button>
         </form>
         <div className="overflow-auto">
-          <table className="w-full min-w-xl text-left text-sm">
+          <table
+            aria-label="Предметы"
+            className="w-full min-w-xl text-left text-sm"
+          >
             <thead>
               <tr className="border-b border-stone-200">
                 <th className="p-3">{t.name}</th>

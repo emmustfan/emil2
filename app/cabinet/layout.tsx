@@ -1,13 +1,8 @@
-import { WorkspaceNav } from "@/components/workspace/nav";
-export default async function CabinetLayout({
+import { WorkspaceShell } from "@/components/workspace/shell";
+export default function CabinetLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <WorkspaceNav />
-      {children}
-    </>
-  );
+  return <WorkspaceShell>{children}</WorkspaceShell>;
 }

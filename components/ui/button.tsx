@@ -7,8 +7,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-emerald-800 text-white hover:bg-emerald-900",
-        outline: "border border-stone-300 bg-white hover:bg-stone-100",
+        default: "emal-button",
+        outline: "emal-button emal-button-outline",
       },
     },
     defaultVariants: { variant: "default" },

@@ -12,9 +12,9 @@ export default function Image() {
         justifyContent: "center",
         width: "100%",
         height: "100%",
-        background: "#f7f7f2",
+        background: "#f3f6f5",
         padding: 90,
-        color: "#154d3e",
+        color: "#15242c",
         fontSize: 64,
         fontWeight: 700,
       }}

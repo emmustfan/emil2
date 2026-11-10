@@ -12,7 +12,7 @@ import { ManageSubscription } from "@/components/billing/manage";
 export const dynamic = "force-dynamic";
 export default async function Subscription() {
   const user = await requireUser(),
-    [subs, pending, cfg, text, legal] = await Promise.all([
+    [subs, pending, cfg, text, legal, history] = await Promise.all([
       getDb().subscription.findMany({
         where: { userId: user.id },
         include: { plan: true, subject: { select: { title: true } } },
@@ -26,6 +26,18 @@ export default async function Subscription() {
       billingConfig(),
       billingContent(),
       currentLegal(),
+      getDb().payment.findMany({
+        where: { userId: user.id, status: { not: "PENDING" } },
+        select: {
+          id: true,
+          planTitle: true,
+          amountKopecks: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
     ]);
   const date = (value: Date) =>
     new Intl.DateTimeFormat("ru-RU", {
@@ -146,6 +158,51 @@ export default async function Subscription() {
           ))}
         </section>
       )}
+      <section className="billing-history">
+        <h2>История платежей</h2>
+        <p className="mt-2 text-sm emal-muted">
+          Последние платежи вашего аккаунта
+        </p>
+        {history.length ? (
+          <div className="mt-4 overflow-x-auto">
+            <table
+              aria-label="История платежей"
+              className="w-full min-w-[480px] text-left text-sm"
+            >
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Тариф</th>
+                  <th>Сумма</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((payment) => (
+                  <tr key={payment.id}>
+                    <td>{date(payment.createdAt)}</td>
+                    <td>{payment.planTitle}</td>
+                    <td>{formatPrice(payment.amountKopecks)}</td>
+                    <td>
+                      {{
+                        SUCCEEDED: "Оплачен",
+                        PENDING: "Ожидает оплаты",
+                        CANCELED: "Отменён",
+                        REFUNDED: "Возвращён",
+                      }[
+                        payment.status as
+                          "SUCCEEDED" | "PENDING" | "CANCELED" | "REFUNDED"
+                      ] ?? "Ожидает оплаты"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="emal-empty">Завершённых платежей пока нет.</p>
+        )}
+      </section>
       <p className="mt-7 text-sm">
         <Link href="/legal/refund" className="underline">
           Правила возврата

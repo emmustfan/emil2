@@ -32,7 +32,7 @@ RUN --mount=type=bind,from=production-dependencies,source=/app,target=/deps,ro \
     mkdir -p /usr/local/lib/node_modules /app/scripts /app/tmp/uploads && \
     cp -a /pnpm/pnpm /usr/local/lib/node_modules/pnpm && \
     ln -s ../lib/node_modules/pnpm/bin/pnpm.cjs /usr/local/bin/pnpm && \
-    cp -a /deps/node_modules /build/.next /build/lib /build/worker /build/package.json /build/next.config.ts /app/ && \
+    cp -a /deps/node_modules /build/.next /build/public /build/lib /build/worker /build/package.json /build/next.config.ts /app/ && \
     cp -a /build/scripts/ops /app/scripts/ && \
     rm -rf /app/.next/cache && mkdir -p /app/.next/cache && \
     chown -R node:node /app

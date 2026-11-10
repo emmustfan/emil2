@@ -88,6 +88,60 @@ test.afterEach(async ({ context }) => {
 test.afterAll(async () => {
   await db.$disconnect();
 });
+test("sidebar navigation supports mobile keyboard dismissal, role switching and integration panels", async ({
+  page,
+}) => {
+  await page.goto("/admin");
+  const toggle = page.getByRole("button", {
+    name: "Открыть меню",
+    exact: true,
+  });
+  const mobile = await toggle.isVisible();
+  if (mobile) {
+    await expect(
+      page.getByRole("link", { name: "Интеграции", exact: true }),
+    ).not.toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      page.getByRole("dialog", { name: "Меню кабинета" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(toggle).toBeFocused();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+  }
+  await page.getByRole("link", { name: "Интеграции", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/integrations$/);
+  if (mobile) await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await page
+    .getByRole("navigation", { name: "Сервисы платформы" })
+    .getByRole("link", { name: /ИИ-тьютор/ })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "ИИ: два вида модели", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Почта и повторный вход", exact: true }),
+  ).not.toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "ИИ: два вида модели", exact: true }),
+  ).toBeVisible();
+  if (mobile) await toggle.click();
+  await page.getByRole("link", { name: "Моё обучение", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Моё обучение", exact: true }),
+  ).toBeVisible();
+  if (mobile) await toggle.click();
+  await page.getByRole("link", { name: "Профиль", exact: true }).click();
+  await expect(page).toHaveURL(/\/cabinet\/profile$/);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
 test("administrator assigns a teacher, teacher edits only their subject, and revocation reaches an already open editor", async ({
   page,
   browser,

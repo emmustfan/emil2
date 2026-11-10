@@ -145,9 +145,15 @@ test.afterAll(async () => {
 test("teacher uploads a five-page PDF, leaves the page and returns to the generated draft", async ({
   page,
 }, info) => {
-  await page.goto(`/admin/imports?subjectId=${f.subject.id}`);
+  await page.goto(`/admin/subjects/${f.subject.id}/topics/new`);
+  await page
+    .getByRole("tab", { name: "Из файла PDF / DOCX", exact: true })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Импорт материалов", exact: true }),
+    page.getByRole("heading", {
+      name: "Создать уроки из материала",
+      exact: true,
+    }),
   ).toBeVisible();
   await page
     .getByLabel("Раздел", { exact: true })
@@ -167,7 +173,10 @@ test("teacher uploads a five-page PDF, leaves the page and returns to the genera
   expect(response.status()).toBe(201);
   const { id } = await response.json();
   await page.goto("/teacher");
-  await page.goto(`/admin/imports?subjectId=${f.subject.id}`);
+  await page.goto(`/admin/subjects/${f.subject.id}/topics/new`);
+  await page
+    .getByRole("tab", { name: "Из файла PDF / DOCX", exact: true })
+    .click();
   const job = page.locator(`[data-import-id="${id}"]`);
   await expect(job.getByText("Черновики готовы", { exact: true })).toBeVisible({
     timeout: 45000,
