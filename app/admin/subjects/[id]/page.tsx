@@ -30,6 +30,9 @@ export default async function SubjectPage({
   return (
     <main className="space-y-8">
       <h1 className="text-3xl font-semibold">{subject.title}</h1>
+      <Link className="lesson-primary" href={`/admin/subjects/${id}/editor`}>
+        Открыть книгу и редактор уроков →
+      </Link>
       {user.role === "ADMIN" && (
         <details className="rounded-2xl border border-stone-200 bg-white p-6">
           <summary className="min-h-11 cursor-pointer text-lg font-semibold">

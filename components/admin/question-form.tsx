@@ -60,7 +60,7 @@ export function QuestionForm({
   return (
     <form
       onSubmit={submit}
-      className="space-y-5 rounded-2xl border border-emerald-900/15 bg-white p-5"
+      className="book-question-form space-y-4 rounded-2xl border border-emerald-900/15 bg-white p-5"
     >
       <h3 className="text-lg font-semibold">
         {initial ? t.editQuestion : t.newQuestion}
@@ -115,11 +115,17 @@ export function QuestionForm({
           <input
             type="checkbox"
             name="isDiagnostic"
-            className="size-5 accent-emerald-800"
+            aria-describedby="question-demo-hint"
+            className="book-switch"
             defaultChecked={initial?.isDiagnostic}
           />
           {t.diagnostic}
         </label>
+        <p id="question-demo-hint" className="text-xs leading-6 text-stone-500">
+          Включает вопрос в диагностику демо после проверки и публикации. Для
+          полного демо предмету нужны три опубликованных урока с такими
+          вопросами и хотя бы один бесплатный урок.
+        </p>
       </fieldset>
       <section
         className="border-t border-stone-200 pt-5"

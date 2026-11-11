@@ -15,6 +15,27 @@ export default async function Integrations() {
         хранятся в настройках сервера, а не в уроках. На этой странице их
         значения не отображаются.
       </p>
+      <p className="mt-4 mb-6 text-sm leading-7">
+        Запуск на своём домене:{" "}
+        <a
+          className="underline"
+          href="https://github.com/emmustfan/emil2/blob/codex/macos-local-preview/docs/launch-shkolaru.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          инструкция для study.shkolaru.ru
+        </a>
+        {" · "}
+        <a
+          className="underline"
+          href="https://github.com/emmustfan/emil2/blob/codex/macos-local-preview/docs/integrations-production.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          настройка сервисов на сервере
+        </a>
+        .
+      </p>
       <IntegrationWorkspace
         cards={cards}
         panels={[

@@ -200,7 +200,7 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
   await p.getByRole("link", { name: f.free.title, exact: true }).click();
   await expect(p).toHaveURL(new RegExp(`/admin/topics/${f.free.id}$`));
   await expect(
-    p.getByRole("heading", { name: "Редактор темы", exact: true }),
+    p.getByRole("heading", { name: f.free.title, exact: true, level: 1 }),
   ).toBeVisible();
   const title = p.getByRole("textbox", { name: "Название", exact: true });
   await title.fill("Тема учителя после изменения");

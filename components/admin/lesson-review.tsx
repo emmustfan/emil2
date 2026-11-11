@@ -10,7 +10,7 @@ export function LessonReview({
 }) {
   const [message, setMessage] = useState("");
   return (
-    <div className="mt-6 space-y-5">
+    <div className="lesson-readiness mt-6 space-y-5">
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
         <h3 className="text-lg font-semibold">Готовность к публикации</h3>
         <p className="mt-2 text-sm leading-7">
@@ -18,7 +18,7 @@ export function LessonReview({
           {checks.length}. Это проверка заполнения и разметки. Медицинскую
           точность подтверждает рецензент.
         </p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        <ul className="readiness-list mt-4 grid gap-3">
           {checks.map((c) => (
             <li key={c.id} className="rounded-xl border bg-white p-4">
               <a

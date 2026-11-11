@@ -3,6 +3,8 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useImperativeHandle,
+  type Ref,
   useState,
   type ReactNode,
 } from "react";
@@ -40,6 +42,9 @@ function fields(row: TopicDTO): TopicInput {
     reviewed: !row.needsExpertReview,
   };
 }
+export type TopicEditorHandle = {
+  withSavedDraft: (action: () => Promise<void>) => Promise<void>;
+};
 export function TopicEditor({
   initial,
   initialParsed,
@@ -49,6 +54,8 @@ export function TopicEditor({
   maxQuestions,
   imageMaxBytes,
   tree,
+  ref,
+  onTopicChange,
 }: {
   initial: TopicDTO;
   initialParsed: ParsedTopic;
@@ -58,6 +65,8 @@ export function TopicEditor({
   maxQuestions: number;
   imageMaxBytes: number;
   tree?: ReactNode;
+  ref?: Ref<TopicEditorHandle>;
+  onTopicChange?: (topic: TopicDTO) => void;
 }) {
   const router = useRouter();
   const [imageIds, setImageIds] = useState(initial.imageIds ?? []);
@@ -77,6 +86,8 @@ export function TopicEditor({
   const [previewSource, setPreviewSource] = useState(initial.contentMd);
   const [publishIssues, setPublishIssues] = useState<ParsedTopic["errors"]>([]);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const richEditor = useRef<RichEditorHandle>(null);
   const pre = useRef<HTMLPreElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +109,7 @@ export function TopicEditor({
   function accept(next: TopicDTO) {
     rowRef.current = next;
     setRow(next);
+    onTopicChange?.(next);
   }
   const saveDraft = useCallback(
     async function saveDraft(): Promise<TopicDTO> {
@@ -118,6 +130,7 @@ export function TopicEditor({
         .then((next) => {
           rowRef.current = next;
           setRow(next);
+          onTopicChange?.(next);
           if (sequence.current === at) {
             dirty.current = false;
             setMessage(t.saved);
@@ -142,7 +155,7 @@ export function TopicEditor({
       saving.current = operation;
       return operation;
     },
-    [initial.id],
+    [initial.id, onTopicChange],
   );
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -311,6 +324,35 @@ export function TopicEditor({
     setParsed(result);
     setPreviewSource(contentMd);
   }
+  useImperativeHandle(ref, () => ({
+    async withSavedDraft(action) {
+      if (busyRef.current)
+        throw new Error("Дождитесь завершения текущего действия.");
+      if (conflict)
+        throw new Error(
+          "Сохраните свой текст отдельно и обновите страницу: урок изменён в другом окне.",
+        );
+      busyRef.current = true;
+      setBusy(true);
+      setError("");
+      try {
+        await saveDraft();
+        await action();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t.error);
+        if (
+          e instanceof EditorRequestError &&
+          e.status === 409 &&
+          e.code === "stale"
+        )
+          setConflict(true);
+        throw e;
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    },
+  }));
   const checks = lessonReadiness(form, parsed, row.questions, {
     minQuestions,
     maxQuestions,
@@ -338,7 +380,7 @@ export function TopicEditor({
           ["lesson-text", "2. Методичка"],
           ["lesson-exercises", "3. Задания"],
           ["lesson-questions", "4. Тест"],
-          ["lesson-review", "5. Проверка и публикация"],
+          ["lesson-review", "Перед публикацией"],
         ].map(([id, title]) => (
           <a
             key={id}
@@ -400,13 +442,29 @@ export function TopicEditor({
           {t.reload}
         </Button>
       )}
+      <div className="book-live-checks" aria-label="Проверка урока">
+        {checks
+          .filter((check) =>
+            ["text", "gaps", "questions", "expert"].includes(check.id),
+          )
+          .map((check) => (
+            <a
+              key={check.id}
+              href={`#${check.target}`}
+              className={check.ok ? "is-ok" : "is-pending"}
+            >
+              <span aria-hidden>{check.ok ? "✓" : "○"}</span> {check.label}
+              <small>{check.note}</small>
+            </a>
+          ))}
+      </div>
       <section className="editor-metadata space-y-4">
         <h2 id="lesson-basics" className="scroll-mt-5 text-xl font-semibold">
           Параметры урока
         </h2>
         <fieldset
           disabled={busy || conflict}
-          className="grid gap-4 rounded-2xl border border-stone-200 bg-white p-5 sm:grid-cols-2 xl:grid-cols-6"
+          className="book-metadata grid gap-4 rounded-2xl border border-stone-200 bg-white p-5 sm:grid-cols-2"
         >
           <label className="text-sm font-medium">
             {t.name}
@@ -464,7 +522,7 @@ export function TopicEditor({
               type="checkbox"
               checked={form.isFree}
               onChange={(e) => change("isFree", e.target.checked)}
-              className="size-5 accent-emerald-800"
+              className="book-switch"
             />
             {t.free}
           </label>
@@ -482,6 +540,24 @@ export function TopicEditor({
                   e.target.value ? Number(e.target.value) : null,
                 )
               }
+            />
+          </label>
+          <label className="text-sm font-medium">
+            {t.author}
+            <input
+              className={fieldClass}
+              maxLength={200}
+              value={form.authorName ?? ""}
+              onChange={(e) => change("authorName", e.target.value || null)}
+            />
+          </label>
+          <label className="text-sm font-medium">
+            {t.reviewer}
+            <input
+              className={fieldClass}
+              maxLength={200}
+              value={form.reviewerName ?? ""}
+              onChange={(e) => change("reviewerName", e.target.value || null)}
             />
           </label>
         </fieldset>
@@ -518,6 +594,7 @@ export function TopicEditor({
                 type="button"
                 aria-expanded={sourceOpen}
                 aria-controls="lesson-source-input"
+                disabled={!hydrated}
                 onClick={() => setSourceOpen((open) => !open)}
               >
                 Исходный текст — для переноса материалов
@@ -614,7 +691,7 @@ export function TopicEditor({
             className="min-w-0 rounded-2xl border border-emerald-900/10 bg-white p-6 xl:sticky xl:top-4 xl:max-h-[85vh] xl:self-start xl:overflow-auto"
           >
             <div className="mb-5 border-b border-stone-200 pb-4">
-              <h2 className="text-xl font-semibold">{t.preview}</h2>
+              <h2 className="text-xl font-semibold">Как увидит студент</h2>
               <p className="mt-2 text-xs text-stone-500">
                 {t.gaps}: {parsed.gaps.length} · {t.blocks}:{" "}
                 {parsed.blocks.length}
@@ -645,38 +722,32 @@ export function TopicEditor({
         busy={busy || conflict}
         onChange={(configs) => change("gapExercises", configs)}
       />
-      <section
-        id="lesson-questions"
-        className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
-      >
-        <h2 className="text-2xl font-semibold">
-          4. {t.questions} · {row.questions.length}
-        </h2>
-        <p className="text-sm leading-7 text-stone-600">
-          Итоговый тест: от {minQuestions} до {maxQuestions} вопросов. У каждого
-          вопроса нужны правильный ответ и объяснение. Нажмите «Редактировать»,
-          чтобы проверить вопрос в его предпросмотре.
-        </p>
-        <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-          <table className="w-full min-w-xl text-left text-sm">
-            <thead>
-              <tr className="border-b border-stone-200 bg-stone-50">
-                <th className="p-4">{t.order}</th>
-                <th className="p-4">{t.stem}</th>
-                <th className="p-4">{t.diagnostic}</th>
-                <th className="p-4" />
-              </tr>
-            </thead>
-            <tbody>
-              {row.questions.map((q) => (
-                <tr key={q.id} className="border-b border-stone-100">
-                  <td className="p-4">{q.order}</td>
-                  <td className="p-4">{q.stem}</td>
-                  <td className="p-4">{q.isDiagnostic ? "✓" : "—"}</td>
-                  <td className="flex gap-4 p-4">
+      <div className="book-bottom">
+        <section
+          id="lesson-questions"
+          className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
+        >
+          <h2 className="text-2xl font-semibold">
+            Тест по теме · {row.questions.length}
+          </h2>
+          <p className="text-sm leading-7 text-stone-600">
+            Итоговый тест: от {minQuestions} до {maxQuestions} вопросов. У
+            каждого вопроса нужны правильный ответ и объяснение. Нажмите
+            «Редактировать», чтобы проверить вопрос в его предпросмотре.
+          </p>
+          <div className="book-question-list">
+            {row.questions.map((q, index) => (
+              <article
+                key={q.id}
+                className="book-question"
+                aria-label={`Вопрос ${index + 1}`}
+              >
+                <div className="book-question-heading">
+                  <span className="book-question-number">{index + 1}</span>
+                  <h3>{q.stem}</h3>
+                  <div className="book-question-actions">
                     <button
                       type="button"
-                      className="min-h-11 text-emerald-800 underline"
                       disabled={busy || conflict}
                       onClick={() => {
                         setSelected(q);
@@ -687,125 +758,141 @@ export function TopicEditor({
                     </button>
                     <button
                       type="button"
-                      className="min-h-11 text-red-800 underline"
                       disabled={busy || conflict}
                       onClick={() => void removeQuestion(q)}
                     >
                       {t.remove}
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <QuestionForm
-          key={`${selected?.id ?? "new"}-${questionNonce}`}
-          initial={selected}
-          blocks={parsed.blocks}
-          busy={busy || conflict}
-          onSave={question}
-          onCancel={() => {
-            setSelected(undefined);
-            setQuestionNonce((n) => n + 1);
-          }}
-        />
-      </section>
-      <section
-        id="lesson-review"
-        className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
-      >
-        <h2 className="text-2xl font-semibold">5. Проверка и публикация</h2>
-        <p className="text-sm leading-7 text-stone-600">
-          Проверьте содержание, эталоны и объяснения. После этого заполните
-          автора, рецензента и источники, отметьте экспертную проверку.
-          Изменение текста или вопроса снимает отметку и возвращает
-          опубликованный урок в черновик.
-        </p>
-        <fieldset
-          disabled={busy || conflict}
-          className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"
+                  </div>
+                </div>
+                {q.answerType === "SHORT_TEXT" ? (
+                  <p className="book-question-answer">
+                    Эталон: {q.acceptedAnswers.join("; ")}
+                  </p>
+                ) : (
+                  <div className="book-question-options">
+                    {q.options.map((option) => (
+                      <span
+                        key={option.id}
+                        className={
+                          q.correctOptionIds.includes(option.id)
+                            ? "is-correct"
+                            : ""
+                        }
+                      >
+                        {option.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="book-question-note">
+                  Объяснение: {q.explanation || "не заполнено"}
+                </p>
+                <p className="book-question-note">
+                  Источник:{" "}
+                  {q.sourceBlockKey
+                    ? (parsed.blocks.find(
+                        (block) => block.blockKey === q.sourceBlockKey,
+                      )?.heading ?? "Фрагмент методички")
+                    : "не выбран"}
+                  {q.isDiagnostic ? " · Для диагностики демо" : ""}
+                </p>
+              </article>
+            ))}
+            {!row.questions.length && (
+              <p className="emal-empty">Добавьте первый вопрос в форму ниже.</p>
+            )}
+          </div>
+          <QuestionForm
+            key={`${selected?.id ?? "new"}-${questionNonce}`}
+            initial={selected}
+            blocks={parsed.blocks}
+            busy={busy || conflict}
+            onSave={question}
+            onCancel={() => {
+              setSelected(undefined);
+              setQuestionNonce((n) => n + 1);
+            }}
+          />
+        </section>
+        <section
+          id="lesson-review"
+          className="scroll-mt-5 space-y-5 border-t border-stone-200 pt-7"
         >
-          <label className="text-sm font-medium">
-            {t.author}
-            <input
-              className={fieldClass}
-              maxLength={200}
-              value={form.authorName ?? ""}
-              onChange={(e) => change("authorName", e.target.value || null)}
-            />
-          </label>
-          <label className="text-sm font-medium">
-            {t.reviewer}
-            <input
-              className={fieldClass}
-              maxLength={200}
-              value={form.reviewerName ?? ""}
-              onChange={(e) => change("reviewerName", e.target.value || null)}
-            />
-          </label>
-          <label className="text-sm font-medium sm:col-span-2">
-            {t.references}
-            <textarea
-              className={fieldClass}
-              rows={3}
-              maxLength={20000}
-              value={form.referencesMd ?? ""}
-              onChange={(e) => change("referencesMd", e.target.value || null)}
-            />
-          </label>
-          <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={form.reviewed}
-              onChange={(e) => change("reviewed", e.target.checked)}
-              className="size-5 accent-emerald-800"
-            />
-            {t.reviewed}
-          </label>
-          <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
-            {t.reviewNote} {t.publicationNote}
+          <h2 className="text-2xl font-semibold">Перед публикацией</h2>
+          <p className="text-sm leading-7 text-stone-600">
+            Проверьте содержание, эталоны и объяснения. После этого заполните
+            автора, рецензента и источники, отметьте экспертную проверку.
+            Изменение текста или вопроса снимает отметку и возвращает
+            опубликованный урок в черновик.
           </p>
-        </fieldset>
-        <LessonReview checks={checks} prompt={reviewPrompt} />
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
+          <fieldset
             disabled={busy || conflict}
-            onClick={() => void status("REVIEW")}
+            className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"
           >
-            {t.sendReview}
-          </Button>
-          <Button
-            type="button"
-            disabled={busy || conflict}
-            onClick={() => void publish()}
-          >
-            {t.publish}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || conflict}
-            onClick={() => void status("DRAFT")}
-          >
-            {t.draft}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || conflict}
-            onClick={() => void removeTopic()}
-          >
-            {t.remove}
-          </Button>
-        </div>
-        <p className="text-sm leading-7 text-emerald-800">
-          Состояние урока: {t.statuses[row.status]} · версия {row.version}.{" "}
-          {message}
-        </p>
-      </section>
+            <label className="text-sm font-medium sm:col-span-2">
+              {t.references}
+              <textarea
+                className={fieldClass}
+                rows={3}
+                maxLength={20000}
+                value={form.referencesMd ?? ""}
+                onChange={(e) => change("referencesMd", e.target.value || null)}
+              />
+            </label>
+            <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={form.reviewed}
+                onChange={(e) => change("reviewed", e.target.checked)}
+                className="book-switch"
+              />
+              {t.reviewed}
+            </label>
+            <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
+              {t.reviewNote} {t.publicationNote}
+            </p>
+          </fieldset>
+          <LessonReview checks={checks} prompt={reviewPrompt} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || conflict}
+              onClick={() => void status("REVIEW")}
+            >
+              {t.sendReview}
+            </Button>
+            <Button
+              type="button"
+              disabled={busy || conflict}
+              onClick={() => void publish()}
+            >
+              {t.publish}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || conflict}
+              onClick={() => void status("DRAFT")}
+            >
+              {t.draft}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || conflict}
+              onClick={() => void removeTopic()}
+            >
+              {t.remove}
+            </Button>
+          </div>
+          <p className="text-sm leading-7 text-emerald-800">
+            Состояние урока: {t.statuses[row.status]} · версия {row.version}.{" "}
+            {message}
+          </p>
+        </section>
+      </div>
     </div>
   );
 }

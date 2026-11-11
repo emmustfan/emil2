@@ -104,7 +104,10 @@ async function fillQuestion(page: Page, index: number) {
     .getByRole("button", { name: "Сохранить вопрос", exact: true })
     .click();
   await expect(
-    page.getByRole("cell", { name: `Вопрос фикстуры ${index}`, exact: true }),
+    page.getByRole("heading", {
+      name: `Вопрос фикстуры ${index}`,
+      exact: true,
+    }),
   ).toBeVisible();
 }
 async function fiveQuestions(request: APIRequestContext, row: TopicDTO) {
@@ -565,8 +568,8 @@ test("editor configures multi and text questions, inserts a typed gap and publis
     .click();
   const edit = (name: string) =>
     page
-      .getByRole("row")
-      .filter({ has: page.getByRole("cell", { name, exact: true }) })
+      .getByRole("article")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) })
       .getByRole("button", { name: "Изменить", exact: true });
   const form = () =>
     page.locator("form").filter({

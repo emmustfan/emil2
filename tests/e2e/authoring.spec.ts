@@ -320,3 +320,81 @@ test("visual author formats a selection and creates a dropdown gap without Markd
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
 });
+
+test("teacher creates sections and lessons inside the book and switching flushes the current draft", async ({
+  page,
+  context,
+}) => {
+  await signIn(context, teacher);
+  await page.goto(`/admin/topics/${f.free.id}`);
+  await page
+    .getByRole("textbox", { name: "Название", exact: true })
+    .fill("Черновик перед переключением");
+  const tree = page.getByRole("navigation", {
+    name: "Разделы и уроки",
+    exact: true,
+  });
+  await tree.getByRole("link", { name: new RegExp(f.paid.title) }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    f.paid.title,
+  );
+  expect(
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+  ).toBe("Черновик перед переключением");
+  await tree
+    .getByRole("link", { name: /Черновик перед переключением/ })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Название", exact: true }),
+  ).toHaveValue("Черновик перед переключением");
+  await page
+    .getByRole("button", { name: "+ Новый раздел", exact: true })
+    .click();
+  const section = page.getByRole("form", { name: "Новый раздел", exact: true });
+  await section
+    .getByRole("textbox", { name: "Название раздела", exact: true })
+    .fill("Раздел из книги");
+  await section
+    .getByRole("button", { name: "Добавить раздел", exact: true })
+    .click();
+  const lesson = page.getByRole("form", { name: "Новый урок", exact: true });
+  await expect(
+    lesson
+      .getByRole("combobox", { name: "Раздел для урока", exact: true })
+      .locator("option:checked"),
+  ).toHaveText("Раздел из книги");
+  await lesson
+    .getByRole("textbox", { name: "Название урока", exact: true })
+    .fill("Урок из книги");
+  await lesson
+    .getByRole("button", { name: "Создать урок", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Урок из книги",
+  );
+  const created = await db.topic.findFirstOrThrow({
+    where: { subjectId: f.subject.id, title: "Урок из книги" },
+    include: { section: true },
+  });
+  expect(created.section?.title).toBe("Раздел из книги");
+  expect(created.status).toBe("DRAFT");
+  await expect(page).toHaveURL(new RegExp(`/admin/topics/${created.id}$`));
+  await expect(
+    page.getByRole("heading", { name: "Как увидит студент", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Перед публикацией", exact: true }),
+  ).toBeVisible();
+  expect(
+    (
+      await context.request.get(`/admin/subjects/${f.subject.id}/editor`)
+    ).status(),
+  ).toBe(200);
+  await page.screenshot({
+    path: `tmp/screenshots/lesson-book-${page.viewportSize()!.width}.png`,
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
