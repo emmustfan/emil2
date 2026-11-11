@@ -93,6 +93,119 @@ test.afterEach(async () => {
 test.afterAll(async () => {
   await db.$disconnect();
 });
+test("publication names invalid fields, focuses them and succeeds after correction", async ({
+  page,
+}, info) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const title = page.getByRole("textbox", { name: "Название", exact: true }),
+    slug = page.getByRole("textbox", { name: "Slug", exact: true }),
+    minutes = page.getByRole("spinbutton", {
+      name: "Время чтения, мин.",
+      exact: true,
+    });
+  await title.fill("");
+  await slug.fill("Неправильный адрес");
+  await minutes.fill("0");
+  await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "Исправьте указанные поля" });
+  await expect(alert.getByRole("link", { name: /^Название:/ })).toBeVisible();
+  await expect(
+    alert.getByRole("link", { name: /^Время чтения, мин\.:/ }),
+  ).toContainText("не меньше 1");
+  await expect(title).toHaveAttribute("aria-invalid", "true");
+  await expect(slug).toHaveAttribute("aria-invalid", "true");
+  await alert.getByRole("link", { name: /^Адрес урока \(Slug\):/ }).click();
+  await expect(slug).toBeFocused();
+  await page.screenshot({
+    path: `tmp/screenshots/publication-field-errors-${info.project.name}.png`,
+  });
+  await title.fill("Исправленный урок");
+  await slug.fill("corrected-lesson");
+  await minutes.fill("5");
+  await page
+    .getByRole("button", { name: "Сохранить черновик", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+    )
+    .toBe("Исправленный урок");
+  await expect(title).not.toHaveAttribute("aria-invalid", "true");
+  await expect(alert).not.toBeVisible();
+  await page
+    .getByRole("checkbox", { name: "Проверено экспертом", exact: true })
+    .check();
+  await page
+    .getByRole("button", { name: "Отправить на проверку", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
+    )
+    .toBe("REVIEW");
+  await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+  await expect(
+    page.getByText("Материал опубликован", { exact: true }),
+  ).toBeVisible();
+});
+test("publication identifies an invalid saved question and opens its editor for repair", async ({
+  page,
+}) => {
+  const q = f.free.question_topicId.find((question) => question.order === 1)!;
+  await db.question.update({ where: { id: q.id }, data: { explanation: "" } });
+  await db.topic.update({
+    where: { id: f.free.id },
+    data: { status: "REVIEW" },
+  });
+  await page.goto(`/admin/topics/${f.free.id}`);
+  await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+  const alert = page
+    .getByRole("alert")
+    .filter({ hasText: "Исправьте указанные поля" });
+  await alert
+    .getByRole("link", { name: /^Вопрос 2 — Объяснение ответа:/ })
+    .click();
+  const form = page.locator("#lesson-question-form");
+  await expect(
+    form.getByRole("textbox", { name: "Текст вопроса", exact: true }),
+  ).toHaveValue(q.stem);
+  const explanation = form.getByRole("textbox", {
+    name: "Объяснение после проверки",
+    exact: true,
+  });
+  await expect(explanation).toBeFocused();
+  await explanation.fill("Исправленное объяснение синтетического задания.");
+  await form
+    .getByRole("button", { name: "Сохранить вопрос", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.question.findUniqueOrThrow({ where: { id: q.id } }))
+          .explanation,
+    )
+    .toBe("Исправленное объяснение синтетического задания.");
+  await page
+    .getByRole("checkbox", { name: "Проверено экспертом", exact: true })
+    .check();
+  await page
+    .getByRole("button", { name: "Отправить на проверку", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
+    )
+    .toBe("REVIEW");
+  await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
+  await expect(
+    page.getByText("Материал опубликован", { exact: true }),
+  ).toBeVisible();
+});
 test("table controls expand, merge, split and preserve spans after reload and student preview", async ({
   page,
 }, info) => {

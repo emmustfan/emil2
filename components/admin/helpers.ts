@@ -1,3 +1,5 @@
+import type { ContentFieldIssue } from "@/lib/content/field-errors";
+
 export class EditorRequestError extends Error {
   constructor(
     message: string,
@@ -9,6 +11,7 @@ export class EditorRequestError extends Error {
       code: string;
     }[] = [],
     public readonly code?: string,
+    public readonly fields: ContentFieldIssue[] = [],
   ) {
     super(message);
   }
@@ -31,6 +34,7 @@ export async function requestContent<T>(
       response.status,
       data.issues ?? [],
       data.code,
+      data.fields ?? [],
     );
   return data as T;
 }

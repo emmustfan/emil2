@@ -59,6 +59,7 @@ export function QuestionForm({
   }
   return (
     <form
+      id="lesson-question-form"
       onSubmit={submit}
       className="book-question-form space-y-4 rounded-2xl border border-emerald-900/15 bg-white p-5"
     >

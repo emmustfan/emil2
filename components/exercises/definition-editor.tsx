@@ -61,6 +61,7 @@ export function DefinitionEditor({
       <label className="block text-sm font-medium">
         {t.type}
         <select
+          name="answerType"
           className={field}
           value={value.answerType}
           onChange={(e) => type(e.target.value as AnswerType)}
@@ -219,6 +220,7 @@ export function DefinitionEditor({
       <label className="block text-sm font-medium">
         {t.explanation}
         <textarea
+          name="explanation"
           className={field}
           rows={3}
           maxLength={5000}

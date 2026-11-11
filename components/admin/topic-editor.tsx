@@ -17,6 +17,7 @@ import type { TopicDTO, SectionDTO, QuestionDTO } from "@/lib/content/types";
 import type { TopicInput, QuestionInput } from "@/lib/content/validation";
 import type { ParsedTopic } from "@/lib/content/parse";
 import { requestContent, EditorRequestError, fieldClass } from "./helpers";
+import type { ContentFieldIssue } from "@/lib/content/field-errors";
 import {
   gapDefinition,
   type Definition,
@@ -87,6 +88,7 @@ export function TopicEditor({
   const [parsed, setParsed] = useState(initialParsed);
   const [previewSource, setPreviewSource] = useState(initial.contentMd);
   const [publishIssues, setPublishIssues] = useState<ParsedTopic["errors"]>([]);
+  const [fieldErrors, setFieldErrors] = useState<ContentFieldIssue[]>([]);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -138,11 +140,19 @@ export function TopicEditor({
             dirty.current = false;
             setMessage(t.saved);
             setError("");
+            setFieldErrors([]);
           }
           return next;
         })
         .catch((e: unknown) => {
-          setError(e instanceof Error ? e.message : t.error);
+          setError(
+            e instanceof EditorRequestError && e.fields.length
+              ? "Исправьте указанные поля:"
+              : e instanceof Error
+                ? e.message
+                : t.error,
+          );
+          setFieldErrors(e instanceof EditorRequestError ? e.fields : []);
           setMessage(t.unsaved);
           if (
             e instanceof EditorRequestError &&
@@ -200,6 +210,7 @@ export function TopicEditor({
     setBusy(true);
     setError("");
     setPublishIssues([]);
+    setFieldErrors([]);
     try {
       await saveDraft();
       const next = await action(rowRef.current);
@@ -209,7 +220,14 @@ export function TopicEditor({
       setForm(synced);
       return next;
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.error);
+      setError(
+        e instanceof EditorRequestError && e.fields.length
+          ? "Исправьте указанные поля:"
+          : e instanceof Error
+            ? e.message
+            : t.error,
+      );
+      setFieldErrors(e instanceof EditorRequestError ? e.fields : []);
       document
         .getElementById("lesson-editor-status")
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -365,6 +383,56 @@ export function TopicEditor({
     form.gapExercises,
   );
   const issues = publishIssues.length ? publishIssues : parsed.errors;
+  function inputProps(key: string, label: string, help?: string) {
+    const invalid = fieldErrors.some((issue) => issue.path === key);
+    return {
+      id: `lesson-field-${key}`,
+      "aria-label": label,
+      "aria-invalid": invalid || undefined,
+      "aria-describedby":
+        [help, invalid ? `lesson-error-${key}` : undefined]
+          .filter(Boolean)
+          .join(" ") || undefined,
+    };
+  }
+  function inputError(key: string) {
+    const errors = fieldErrors.filter((issue) => issue.path === key);
+    return errors.length ? (
+      <span id={`lesson-error-${key}`} className="lesson-field-error">
+        {errors.map((issue) => issue.message).join(" ")}
+      </span>
+    ) : null;
+  }
+  function goToField(issue: ContentFieldIssue) {
+    if (issue.path === "subject") return;
+    const q =
+      issue.questionId &&
+      row.questions.find((question) => question.id === issue.questionId);
+    if (q && selected?.id !== q.id) {
+      setSelected(q);
+      setQuestionNonce((n) => n + 1);
+    }
+    requestAnimationFrame(() => {
+      const target = document.getElementById(
+        q ? "lesson-question-form" : issue.target,
+      );
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const path = issue.path.replace(/^questions\.\d+\./, "");
+      let focus: HTMLElement | null = target;
+      if (target instanceof HTMLFormElement) {
+        const named = target.elements.namedItem(path.split(".")[0]);
+        focus =
+          named instanceof HTMLElement
+            ? named
+            : target.querySelector<HTMLElement>(
+                path.startsWith("options.")
+                  ? `[aria-label="Вариант ${Number(path.split(".")[1]) + 1}"]`
+                  : "input,textarea,select",
+              );
+      }
+      focus?.focus({ preventScroll: true });
+    });
+  }
   return (
     <div className="lesson-editor space-y-4">
       <nav
@@ -423,6 +491,7 @@ export function TopicEditor({
           {message}
         </p>
         <Link
+          id="lesson-subject-settings"
           href={`/admin/subjects/${initial.subjectId}`}
           className="text-sm text-emerald-800 underline"
         >
@@ -433,12 +502,35 @@ export function TopicEditor({
         </span>
       </div>
       {error && (
-        <p
+        <div
           role="alert"
           className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800"
         >
-          {error}
-        </p>
+          <p>{error}</p>
+          {fieldErrors.length > 0 && (
+            <ul className="lesson-error-links">
+              {fieldErrors.map((issue, index) => (
+                <li key={`${issue.path}-${index}`}>
+                  <a
+                    href={
+                      issue.path === "subject"
+                        ? `/admin/subjects/${initial.subjectId}#subject-settings`
+                        : `#${issue.questionId ? "lesson-question-form" : issue.target}`
+                    }
+                    onClick={(event) => {
+                      if (issue.path !== "subject") {
+                        event.preventDefault();
+                        goToField(issue);
+                      }
+                    }}
+                  >
+                    <strong>{issue.label}</strong>: {issue.message}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       {conflict && (
         <Button
@@ -477,11 +569,13 @@ export function TopicEditor({
           <label className="text-sm font-medium">
             {t.name}
             <input
+              {...inputProps("title", t.name)}
               className={fieldClass}
               value={form.title}
               onChange={(e) => change("title", e.target.value)}
               maxLength={200}
             />
+            {inputError("title")}
           </label>
           <label className="text-sm font-medium">
             {t.slug}
@@ -491,17 +585,18 @@ export function TopicEditor({
             </span>
             <input
               className={fieldClass}
-              aria-label={t.slug}
-              aria-describedby="lesson-slug-help"
+              {...inputProps("slug", t.slug, "lesson-slug-help")}
               title="Адрес темы латиницей. Обычно его можно оставить автоматически созданным."
               value={form.slug}
               maxLength={100}
               onChange={(e) => change("slug", e.target.value)}
             />
+            {inputError("slug")}
           </label>
           <label className="text-sm font-medium">
             {t.section}
             <select
+              {...inputProps("sectionId", t.section)}
               className={fieldClass}
               value={form.sectionId ?? ""}
               onChange={(e) => change("sectionId", e.target.value || null)}
@@ -513,17 +608,20 @@ export function TopicEditor({
                 </option>
               ))}
             </select>
+            {inputError("sectionId")}
           </label>
           <label className="text-sm font-medium">
             {t.order}
             <input
               type="number"
+              {...inputProps("order", t.order)}
               min={0}
               max={10000}
               className={fieldClass}
               value={form.order}
               onChange={(e) => change("order", Number(e.target.value))}
             />
+            {inputError("order")}
           </label>
           <label className="flex min-h-11 items-center gap-3 text-sm">
             <input
@@ -539,6 +637,7 @@ export function TopicEditor({
             <input
               className={fieldClass}
               type="number"
+              {...inputProps("readingMinutes", t.readingMinutes)}
               min={1}
               max={600}
               value={form.readingMinutes ?? ""}
@@ -549,6 +648,7 @@ export function TopicEditor({
                 )
               }
             />
+            {inputError("readingMinutes")}
           </label>
           <label className="text-sm font-medium">
             {t.author}
@@ -556,8 +656,10 @@ export function TopicEditor({
               className={fieldClass}
               maxLength={200}
               value={form.authorName ?? ""}
+              {...inputProps("authorName", t.author)}
               onChange={(e) => change("authorName", e.target.value || null)}
             />
+            {inputError("authorName")}
           </label>
           <label className="text-sm font-medium">
             {t.reviewer}
@@ -565,8 +667,10 @@ export function TopicEditor({
               className={fieldClass}
               maxLength={200}
               value={form.reviewerName ?? ""}
+              {...inputProps("reviewerName", t.reviewer)}
               onChange={(e) => change("reviewerName", e.target.value || null)}
             />
+            {inputError("reviewerName")}
           </label>
         </fieldset>
       </section>
@@ -736,6 +840,11 @@ export function TopicEditor({
             {row.questions.map((q, index) => (
               <article
                 key={q.id}
+                id={`lesson-question-${q.id}`}
+                data-invalid={
+                  fieldErrors.some((issue) => issue.questionId === q.id) ||
+                  undefined
+                }
                 className="book-question"
                 aria-label={`Вопрос ${index + 1}`}
               >
@@ -830,21 +939,25 @@ export function TopicEditor({
             <label className="text-sm font-medium sm:col-span-2">
               {t.references}
               <textarea
+                {...inputProps("referencesMd", t.references)}
                 className={fieldClass}
                 rows={3}
                 maxLength={20000}
                 value={form.referencesMd ?? ""}
                 onChange={(e) => change("referencesMd", e.target.value || null)}
               />
+              {inputError("referencesMd")}
             </label>
             <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
               <input
                 type="checkbox"
+                {...inputProps("reviewed", t.reviewed)}
                 checked={form.reviewed}
                 onChange={(e) => change("reviewed", e.target.checked)}
                 className="book-switch"
               />
               {t.reviewed}
+              {inputError("reviewed")}
             </label>
             <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
               {t.reviewNote} {t.publicationNote}

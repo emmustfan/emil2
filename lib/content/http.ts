@@ -5,6 +5,7 @@ import { hasCurrentConsent } from "../auth/legal";
 import { AuthError } from "../auth/errors";
 import { authFailure } from "../auth/http";
 import { ContentError } from "./errors";
+import { contentFieldIssues, contentFieldSummary } from "./field-errors";
 export async function requireContentEditor() {
   const session = await getCurrentSession();
   if (!session) throw new AuthError("unauthorized", 401);
@@ -25,20 +26,24 @@ export function contentFailure(error: unknown) {
   if (error instanceof AuthError) return authFailure(error);
   if (error instanceof ContentError)
     return contentJSON(
-      { error: error.message, issues: error.issues, code: error.code },
+      {
+        error: error.message,
+        issues: error.issues,
+        code: error.code,
+        ...(error.fields.length ? { fields: error.fields } : {}),
+      },
       error.status,
     );
-  if (error instanceof ZodError)
+  if (error instanceof ZodError) {
+    const fields = contentFieldIssues(error.issues);
     return contentJSON(
       {
-        error: "Проверьте заполненные поля.",
-        fields: error.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
+        error: contentFieldSummary(fields),
+        fields,
       },
       422,
     );
+  }
   if (typeof error === "object" && error !== null && "code" in error) {
     if (error.code === "P2002")
       return contentJSON(

@@ -2183,6 +2183,29 @@ button:disabled {
   color: #a02d40;
   font-size: 13px;
 }
+.lesson-error-links {
+  list-style: disc;
+  margin: 10px 0 0 20px;
+  line-height: 1.7;
+}
+.lesson-error-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lesson-field-error {
+  display: block;
+  margin-top: 6px;
+  color: #a02d40;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.lesson-editor [aria-invalid="true"] {
+  border-color: #bf3557;
+  box-shadow: 0 0 0 1px #bf3557;
+}
+.book-question[data-invalid="true"] {
+  border-color: #bf3557;
+}
 .book-saving {
   font-size: 12px;
   color: var(--gum-ink);

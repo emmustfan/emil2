@@ -5,6 +5,11 @@ import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
 import { getSetting } from "../settings";
 import { ContentError } from "./errors";
+import {
+  contentFieldIssues,
+  contentFieldSummary,
+  fieldIssue,
+} from "./field-errors";
 import { parseTopic } from "./parse";
 import { getContentQueue, enqueuePublication } from "./jobs";
 import {
@@ -544,6 +549,15 @@ export async function publishTopic(
       )
         throw new ContentError(
           "Изображение не найдено или относится к другой теме. Загрузите его в эту тему.",
+          422,
+          [],
+          "validation",
+          [
+            fieldIssue(
+              "contentMd",
+              "Повторно загрузите изображения этого урока кнопкой редактора.",
+            ),
+          ],
         );
       if (parsed.errors.length)
         throw new ContentError(
@@ -552,16 +566,36 @@ export async function publishTopic(
           parsed.errors,
         );
       if (!parsed.gaps.length)
-        throw new ContentError("Добавьте хотя бы один пропуск.");
+        throw new ContentError(
+          "Добавьте хотя бы один пропуск.",
+          422,
+          [],
+          "validation",
+          [
+            fieldIssue(
+              "contentMd",
+              "Выделите слово в методичке и создайте хотя бы один пропуск.",
+            ),
+          ],
+        );
       if (
         topic.questions.length < minQuestions ||
         topic.questions.length > maxQuestions
       )
         throw new ContentError(
           `В теме должно быть от ${minQuestions} до ${maxQuestions} вопросов.`,
+          422,
+          [],
+          "validation",
+          [
+            fieldIssue(
+              "questions",
+              `Сохранено вопросов: ${topic.questions.length}. Нужно от ${minQuestions} до ${maxQuestions}.`,
+            ),
+          ],
         );
-      for (const q of topic.questions) {
-        questionFields.parse({
+      for (const [questionIndex, q] of topic.questions.entries()) {
+        const checkedQuestion = questionFields.safeParse({
           answerType: q.answerType,
           acceptedAnswers: q.acceptedAnswers,
           stem: q.stem,
@@ -572,32 +606,106 @@ export async function publishTopic(
           isDiagnostic: q.isDiagnostic,
           order: q.order,
         });
+        if (!checkedQuestion.success) {
+          const fields = contentFieldIssues(checkedQuestion.error.issues, {
+            id: q.id,
+            number: questionIndex + 1,
+          });
+          throw new ContentError(
+            contentFieldSummary(fields),
+            422,
+            [],
+            "validation",
+            fields,
+          );
+        }
         if (
           q.sourceBlockKey &&
           !parsed.blocks.some((b) => b.blockKey === q.sourceBlockKey)
         )
           throw new ContentError(
-            "У вопроса устарел блок-источник. Выберите его заново.",
+            `У вопроса ${questionIndex + 1} устарел блок-источник. Выберите его заново.`,
+            422,
+            [],
+            "validation",
+            [
+              {
+                ...fieldIssue(
+                  "sourceBlockKey",
+                  "Выберите блок-источник заново в редакторе вопроса.",
+                ),
+                path: `questions.${questionIndex}.sourceBlockKey`,
+                label: `Вопрос ${questionIndex + 1} — Блок-источник`,
+                target: `lesson-question-${q.id}`,
+                questionId: q.id,
+              },
+            ],
           );
       }
       const subject = await tx.subject.findUniqueOrThrow({
         where: { id: topic.subjectId },
       });
       if (subject.status !== "PUBLISHED")
-        throw new ContentError("Сначала опубликуйте предмет.");
+        throw new ContentError(
+          "Сначала опубликуйте предмет.",
+          422,
+          [],
+          "validation",
+          [
+            fieldIssue(
+              "subject",
+              "Откройте настройки предмета и установите статус «Опубликовано». Это делает администратор.",
+            ),
+          ],
+        );
       if (
         topic.needsExpertReview ||
         !topic.reviewedAt ||
-        !topic.authorName ||
-        !topic.reviewerName ||
-        !topic.referencesMd
-      )
+        !topic.authorName?.trim() ||
+        !topic.reviewerName?.trim() ||
+        !topic.referencesMd?.trim()
+      ) {
+        const fields = [];
+        if (!topic.authorName?.trim())
+          fields.push(fieldIssue("authorName", "Укажите автора урока."));
+        if (!topic.reviewerName?.trim())
+          fields.push(fieldIssue("reviewerName", "Укажите рецензента урока."));
+        if (!topic.referencesMd?.trim())
+          fields.push(
+            fieldIssue(
+              "referencesMd",
+              "Добавьте источники учебного материала.",
+            ),
+          );
+        if (topic.needsExpertReview || !topic.reviewedAt)
+          fields.push(
+            fieldIssue(
+              "reviewed",
+              "После фактической проверки отметьте «Проверено экспертом».",
+            ),
+          );
         throw new ContentError(
           "Тема должна быть проверена экспертом: укажите автора, рецензента, источники и отметку проверки.",
+          422,
+          [],
+          "validation",
+          fields,
         );
+      }
       if (topic.status === "PUBLISHED") return topic;
       if (topic.status !== "REVIEW")
-        throw new ContentError("Сначала отправьте тему на проверку.");
+        throw new ContentError(
+          "Сначала отправьте тему на проверку.",
+          422,
+          [],
+          "validation",
+          [
+            fieldIssue(
+              "status",
+              "В блоке «Перед публикацией» нажмите «Отправить на проверку», затем опубликуйте урок.",
+            ),
+          ],
+        );
       const activeKeys = parsed.gaps.map((g) => g.gapKey);
       const removed = await tx.gap.findMany({
         where: { topicId: id, archivedAt: null, gapKey: { notIn: activeKeys } },

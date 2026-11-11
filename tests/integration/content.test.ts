@@ -143,6 +143,35 @@ afterAll(async () => {
   await db.$disconnect();
 });
 describe("content publication with PostgreSQL and pg-boss", () => {
+  it("identifies the exact invalid saved question and publishes after it is repaired", async () => {
+    const row = await reviewed(await draft());
+    const q = row.questions[1];
+    await db.question.update({
+      where: { id: q.id },
+      data: { explanation: "" },
+    });
+    await expect(
+      service.publishTopic(row.id, row.editRevision),
+    ).rejects.toMatchObject({
+      status: 422,
+      fields: [
+        expect.objectContaining({
+          questionId: q.id,
+          path: "questions.1.explanation",
+          label: "Вопрос 2 — Объяснение ответа",
+          message: "Заполните это поле.",
+        }),
+      ],
+    });
+    expect((await service.getTopic(row.id)).version).toBe(0);
+    await db.question.update({
+      where: { id: q.id },
+      data: { explanation: q.explanation },
+    });
+    expect((await service.publishTopic(row.id, row.editRevision)).status).toBe(
+      "PUBLISHED",
+    );
+  });
   it("publishes 10 gaps and 5 questions atomically and is idempotent on a repeat request", async () => {
     let row = await reviewed(await draft());
     row = await service.publishTopic(row.id, row.editRevision);

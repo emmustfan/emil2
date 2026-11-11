@@ -18,6 +18,10 @@ export function LessonReview({
           {checks.length}. Это проверка заполнения и разметки. Медицинскую
           точность подтверждает рецензент.
         </p>
+        <p className="mt-2 text-xs leading-6 text-stone-600">
+          Пункты с отметкой «○» требуют исправления. Нажмите на название, чтобы
+          перейти к ним.
+        </p>
         <ul className="readiness-list mt-4 grid gap-3">
           {checks.map((c) => (
             <li key={c.id} className="rounded-xl border bg-white p-4">

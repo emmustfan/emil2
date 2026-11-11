@@ -3,6 +3,7 @@ import type { TopicInput } from "./validation";
 import { questionFields } from "./validation";
 import type { QuestionDTO } from "./types";
 import { gapDefinition } from "../exercises";
+import { contentFieldIssues, contentFieldSummary } from "./field-errors";
 export function lessonReadiness(
   form: TopicInput,
   parsed: ParsedTopic,
@@ -16,30 +17,49 @@ export function lessonReadiness(
     previewCurrent: boolean;
   },
 ) {
-  const definitions = parsed.gaps.every((g) => {
+  const gapProblems = parsed.gaps.flatMap((g) => {
     try {
       gapDefinition(g, form.gapExercises?.[g.gapKey]);
-      return true;
-    } catch {
-      return false;
+      return [];
+    } catch (e) {
+      return [
+        `Пропуск ${g.order + 1}: ${e instanceof Error ? e.message : "проверьте ответы"}`,
+      ];
     }
   });
-  const validQuestions = questions.every(
-    (q) =>
-      questionFields.safeParse({
-        answerType: q.answerType,
-        acceptedAnswers: q.acceptedAnswers,
-        stem: q.stem,
-        options: q.options,
-        correctOptionIds: q.correctOptionIds,
-        explanation: q.explanation,
-        sourceBlockKey: q.sourceBlockKey,
-        isDiagnostic: q.isDiagnostic,
-        order: q.order,
-      }).success &&
-      (!q.sourceBlockKey ||
-        parsed.blocks.some((b) => b.blockKey === q.sourceBlockKey)),
-  );
+  const questionProblems = questions.flatMap((q, index) => {
+    const validation = questionFields.safeParse({
+      answerType: q.answerType,
+      acceptedAnswers: q.acceptedAnswers,
+      stem: q.stem,
+      options: q.options,
+      correctOptionIds: q.correctOptionIds,
+      explanation: q.explanation,
+      sourceBlockKey: q.sourceBlockKey,
+      isDiagnostic: q.isDiagnostic,
+      order: q.order,
+    });
+    if (!validation.success)
+      return [
+        contentFieldSummary(
+          contentFieldIssues(validation.error.issues, {
+            id: q.id,
+            number: index + 1,
+          }),
+        ),
+      ];
+    if (
+      q.sourceBlockKey &&
+      !parsed.blocks.some((b) => b.blockKey === q.sourceBlockKey)
+    )
+      return [`Вопрос ${index + 1}: выберите блок-источник заново.`];
+    return [];
+  });
+  const missingSources = [
+    !form.authorName?.trim() ? "Автор" : null,
+    !form.reviewerName?.trim() ? "Рецензент" : null,
+    !form.referencesMd?.trim() ? "Источники" : null,
+  ].filter(Boolean);
   return [
     {
       id: "text",
@@ -49,16 +69,22 @@ export function lessonReadiness(
         !!form.contentMd.trim() &&
         !parsed.errors.length &&
         options.previewCurrent,
-      note: options.previewCurrent
-        ? `${parsed.errors.length} ошибок разметки`
-        : "Предпросмотр обновляется",
+      note: !form.contentMd.trim()
+        ? "Напишите текст методички."
+        : options.previewCurrent
+          ? `${parsed.errors.length} ошибок разметки`
+          : "Предпросмотр обновляется",
     },
     {
       id: "gaps",
       target: "lesson-text",
       label: "Пропуски в тексте",
-      ok: parsed.gaps.length > 0 && definitions,
-      note: `Добавлено: ${parsed.gaps.length}`,
+      ok: parsed.gaps.length > 0 && !gapProblems.length,
+      note: !parsed.gaps.length
+        ? "Выделите слово в тексте и нажмите «Пропуск»."
+        : gapProblems.length
+          ? gapProblems.join(" ")
+          : `Добавлено: ${parsed.gaps.length}. Настройки заполнены.`,
     },
     {
       id: "images",
@@ -74,8 +100,15 @@ export function lessonReadiness(
       ok:
         questions.length >= options.minQuestions &&
         questions.length <= options.maxQuestions &&
-        validQuestions,
-      note: `${questions.length} из ${options.minQuestions}–${options.maxQuestions}; объяснения и источники проверяются`,
+        !questionProblems.length,
+      note:
+        questions.length < options.minQuestions
+          ? `Сохранено ${questions.length}. Добавьте ещё ${options.minQuestions - questions.length} вопросов; нужно от ${options.minQuestions} до ${options.maxQuestions}.`
+          : questions.length > options.maxQuestions
+            ? `Сохранено ${questions.length}. Уберите ${questions.length - options.maxQuestions} вопросов; максимум ${options.maxQuestions}.`
+            : questionProblems.length
+              ? questionProblems.join(" ")
+              : `Сохранено ${questions.length} вопросов. Ответы и объяснения заполнены.`,
     },
     {
       id: "sources",
@@ -85,14 +118,18 @@ export function lessonReadiness(
         !!form.authorName?.trim() &&
         !!form.reviewerName?.trim() &&
         !!form.referencesMd?.trim(),
-      note: "Заполните три поля выше",
+      note: missingSources.length
+        ? `Заполните: ${missingSources.join(", ")}.`
+        : "Автор, рецензент и источники указаны.",
     },
     {
       id: "expert",
       target: "lesson-review",
       label: "Эксперт подтвердил содержание",
       ok: !!form.reviewed,
-      note: "Отметка ставится после ручной проверки",
+      note: form.reviewed
+        ? "Проверка подтверждена."
+        : "После проверки содержания отметьте «Проверено экспертом».",
     },
     {
       id: "subject",
