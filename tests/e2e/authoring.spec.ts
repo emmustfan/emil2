@@ -7,6 +7,7 @@ import { getEnv } from "../../lib/env";
 import { createStorageDriver } from "../../lib/storage";
 import { currentLegal } from "../../lib/auth/legal";
 import { newToken, hashToken } from "../../lib/auth/crypto";
+import { ensureDentalDemo } from "../../scripts/preview/dental-demo";
 import {
   createLessonFixture,
   cleanupLessonFixture,
@@ -16,6 +17,7 @@ const db = getDb(),
   origin = "http://localhost:3100",
   users: string[] = [],
   contexts: BrowserContext[] = [];
+test.setTimeout(90000);
 let f: LessonFixture,
   admin: string,
   teacher: string,
@@ -76,7 +78,7 @@ test.beforeEach(async ({ context }) => {
 test.afterEach(async () => {
   for (const c of contexts.splice(0)) await c.close();
   const images = await db.topicImage.findMany({
-    where: { topicId: { in: [f.free.id, f.paid.id] } },
+    where: { topic: { subjectId: f.subject.id } },
     select: { storageKey: true },
   });
   await db.teacherSubject.deleteMany({
@@ -90,6 +92,276 @@ test.afterEach(async () => {
 });
 test.afterAll(async () => {
   await db.$disconnect();
+});
+test("table controls expand, merge, split and preserve spans after reload and student preview", async ({
+  page,
+}, info) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
+  });
+  await editor.fill("Материал до таблицы.");
+  await editor.press("End");
+  await editor.press("Enter");
+  await page
+    .getByRole("button", { name: "Вставить таблицу", exact: true })
+    .click();
+  const table = editor.locator("table");
+  await expect(table.locator("tr")).toHaveCount(3);
+  await table.locator("th").first().click();
+  await page
+    .getByRole("button", { name: "Столбец справа", exact: true })
+    .click();
+  await expect(table.locator("tr").first().locator("th,td")).toHaveCount(3);
+  await page.getByRole("button", { name: "Строка ниже", exact: true }).click();
+  await expect(table.locator("tr")).toHaveCount(4);
+  const body = table.locator("tr").nth(1);
+  await body.locator("td").nth(0).click();
+  await page.keyboard.type("Общая ячейка");
+  await body
+    .locator("td")
+    .nth(1)
+    .click({ modifiers: ["Shift"] });
+  await page
+    .getByRole("button", { name: "Объединить ячейки", exact: true })
+    .click();
+  await expect(body.locator('td[colspan="2"]')).toContainText("Общая ячейка");
+  await page
+    .getByRole("button", { name: "Сохранить черновик", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .contentMd,
+    )
+    .toContain("<!-- emal-table:v1");
+  await page.reload();
+  await expect(table.locator('td[colspan="2"]')).toContainText("Общая ячейка");
+  await table.locator('td[colspan="2"]').click();
+  await page
+    .getByRole("button", { name: "Разделить ячейку", exact: true })
+    .click();
+  await expect(body.locator("td")).toHaveCount(3);
+  await table.locator("th").first().click();
+  await body
+    .locator("td")
+    .first()
+    .click({ modifiers: ["Shift"] });
+  await page
+    .getByRole("button", { name: "Объединить ячейки", exact: true })
+    .click();
+  await expect(table.locator('[rowspan="2"]')).toContainText("Общая ячейка");
+  await page
+    .getByRole("button", { name: "Открыть как ученик", exact: true })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/admin/topics/${f.free.id}/student-preview$`),
+  );
+  await expect(page.locator('[rowspan="2"]')).toContainText("Общая ячейка");
+  await expect(page.locator(".student-preview-material thead")).toHaveCount(0);
+  await page
+    .getByRole("link", { name: "Вернуться в редактор", exact: true })
+    .click();
+  await table.locator('[rowspan="2"]').click();
+  await page
+    .getByRole("button", { name: "Разделить ячейку", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Удалить столбец", exact: true })
+    .click();
+  await expect(table.locator("tr").first().locator("th,td")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "Удалить строку", exact: true })
+    .click();
+  await expect(table.locator("tr")).toHaveCount(3);
+  await page.screenshot({
+    path: `tmp/screenshots/table-controls-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "Удалить таблицу", exact: true })
+    .click();
+  await expect(table).toHaveCount(0);
+});
+test("images insert between text blocks, move in both directions and can be removed and restored", async ({
+  page,
+}, info) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
+  });
+  await editor.fill("Первый абзац.");
+  await editor.press("End");
+  await editor.press("Enter");
+  await page.keyboard.type("Последний абзац.");
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await page
+    .getByRole("button", { name: "Вставить изображение", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Изображение в уроке",
+    exact: true,
+  });
+  await dialog
+    .getByLabel("Файл изображения", { exact: true })
+    .setInputFiles({ name: "scheme.png", mimeType: "image/png", buffer: png });
+  await dialog
+    .getByRole("textbox", { name: "Описание под изображением", exact: true })
+    .fill("Схема между абзацами");
+  await dialog
+    .getByRole("button", { name: "Загрузить и вставить", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  const img = editor.getByRole("img", {
+    name: "Схема между абзацами",
+    exact: true,
+  });
+  await expect(img).toBeVisible();
+  await img.click();
+  const index = () =>
+    editor.evaluate((el) =>
+      Array.from(el.children).findIndex((n) => n.tagName === "IMG"),
+    );
+  const before = await index();
+  expect(before).toBeGreaterThan(0);
+  await page
+    .getByRole("button", { name: "Переместить блок ниже", exact: true })
+    .click();
+  await expect.poll(index).toBe(before + 1);
+  await page
+    .getByRole("button", { name: "Переместить блок выше", exact: true })
+    .click();
+  await expect.poll(index).toBe(before);
+  await page
+    .getByRole("button", { name: "Текст после изображения", exact: true })
+    .click();
+  await page.keyboard.type("Добавленный абзац после схемы.");
+  await expect(editor).toContainText("Добавленный абзац после схемы.");
+  await img.click();
+  await page
+    .getByRole("button", { name: "Удалить изображение", exact: true })
+    .click();
+  await expect(img).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Отменить действие", exact: true })
+    .click();
+  await expect(img).toBeVisible();
+  await page
+    .getByRole("button", { name: "Сохранить черновик", exact: true })
+    .click();
+  await expect
+    .poll(async () => {
+      const saved = await db.topic.findUniqueOrThrow({
+        where: { id: f.free.id },
+      });
+      return (
+        saved.contentMd.includes("Добавленный абзац после схемы.") &&
+        saved.contentMd.includes("/api/content-images/")
+      );
+    })
+    .toBe(true);
+  await page.reload();
+  await expect(img).toBeVisible();
+  await expect(editor).toContainText("Добавленный абзац после схемы.");
+  await img.click();
+  await page.screenshot({
+    path: `tmp/screenshots/image-blocks-${info.project.name}.png`,
+    fullPage: true,
+  });
+});
+test("content tree exposes the dental draft and interactive student preview without publishing or overwriting it", async ({
+  page,
+  browser,
+}, info) => {
+  const demo = await ensureDentalDemo({
+    subjectId: f.subject.id,
+    sectionId: f.free.sectionId!,
+  });
+  expect(demo.status).toBe("DRAFT");
+  expect(demo.needsExpertReview).toBe(true);
+  await page.goto(`/admin?q=${encodeURIComponent(f.subject.title)}`);
+  const tree = page.getByRole("navigation", {
+    name: "Предметы, разделы и уроки",
+    exact: true,
+  });
+  await expect(
+    tree.getByRole("link", { name: demo.title, exact: true }),
+  ).toBeVisible();
+  await expect(
+    tree.getByText("Раздел проверки", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: `tmp/screenshots/content-tree-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await tree.getByRole("link", { name: demo.title, exact: true }).click();
+  await page
+    .getByRole("button", { name: "Открыть как ученик", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(demo.title);
+  const images = page.locator(".student-preview-material img");
+  await expect(images).toHaveCount(2);
+  for (const img of await images.all()) {
+    await img.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+  }
+  await expect(page.locator(".student-preview-material select")).toHaveCount(9);
+  const written = page
+    .locator(".student-preview-material")
+    .getByRole("textbox");
+  await written.fill("36");
+  const quiz = page.locator(".student-preview-test");
+  await expect(quiz.getByRole("checkbox")).toHaveCount(9);
+  await expect(quiz.getByRole("textbox")).toHaveCount(1);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: `tmp/screenshots/dental-student-${info.project.name}.png`,
+    fullPage: true,
+  });
+  const pupil = await browser.newContext({ baseURL: origin });
+  contexts.push(pupil);
+  await signIn(pupil, student);
+  expect(
+    (
+      await pupil.request.get(`/admin/topics/${demo.id}/student-preview`)
+    ).status(),
+  ).toBe(403);
+  expect(
+    (await pupil.request.get(`/learn/${f.subject.slug}/${demo.slug}`)).status(),
+  ).toBe(404);
+  const staff = await browser.newContext({ baseURL: origin });
+  contexts.push(staff);
+  await signIn(staff, teacher);
+  expect(
+    (
+      await staff.request.get(`/admin/topics/${demo.id}/student-preview`)
+    ).status(),
+  ).toBe(200);
+  await db.teacherSubject.deleteMany({
+    where: { teacherId: teacher, subjectId: f.subject.id },
+  });
+  expect(
+    (
+      await staff.request.get(`/admin/topics/${demo.id}/student-preview`)
+    ).status(),
+  ).toBe(404);
+  await db.topic.update({
+    where: { id: demo.id },
+    data: { title: "Сохранённая правка автора" },
+  });
+  const again = await ensureDentalDemo({
+    subjectId: f.subject.id,
+    sectionId: f.free.sectionId!,
+  });
+  expect(again.id).toBe(demo.id);
+  expect(again.title).toBe("Сохранённая правка автора");
+  expect(await db.topicImage.count({ where: { topicId: demo.id } })).toBe(2);
 });
 test("author follows editor steps, uploads an image, reviews and publishes a lesson visible to a guest", async ({
   page,

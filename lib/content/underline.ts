@@ -8,6 +8,10 @@ export function remarkUnderline() {
       for (const child of children) walk(child as { children?: RootContent[] });
       for (let i = 0; i < children.length; i++) {
         const start = children[i];
+        if (start.type === "html" && /^<br\s*\/?>$/i.test(start.value)) {
+          children[i] = { type: "break" };
+          continue;
+        }
         if (start.type !== "html" || !/^<u>$/i.test(start.value)) continue;
         let depth = 1,
           end = i + 1;

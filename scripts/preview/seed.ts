@@ -1,6 +1,7 @@
 import { ensureFunnelDemo } from "./demo-funnel";
 import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
+import { ensureDentalDemo } from "./dental-demo";
 import { getDb } from "../../lib/db";
 import { parseTopic } from "../../lib/content/parse";
 import { decodeSetting } from "../../lib/settings/defaults";
@@ -125,6 +126,7 @@ if (!existing) {
 }
 await ensureFunnelDemo();
 await ensureExerciseDemo();
+await ensureDentalDemo();
 await ensureRoleDemo();
 await db.$disconnect();
 console.log(

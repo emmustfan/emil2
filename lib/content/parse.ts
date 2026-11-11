@@ -4,7 +4,12 @@ import { createHash } from "node:crypto";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
-import type { Root, RootContent } from "mdast";
+import type { Root, RootContent, Table } from "mdast";
+import {
+  TABLE_SPAN_PREFIX,
+  readTableSpans,
+  tableDimensions,
+} from "./table-spans";
 import { imageId } from "./image-reference";
 export type ParseError = {
   code: string;
@@ -132,8 +137,32 @@ export function parseTopic(md: string): ParsedTopic {
   const candidates: Candidate[] = [];
   for (const [rootIndex, rootNode] of root.children.entries()) {
     const node = rootNode as Node;
-    const start = node.position?.start.offset ?? 0;
+    let start = node.position?.start.offset ?? 0;
     const end = node.position?.end.offset ?? start;
+    if (
+      node.type === "html" &&
+      (node.value ?? "").startsWith(TABLE_SPAN_PREFIX)
+    ) {
+      ignored.push([start, end]);
+      const next = root.children[rootIndex + 1];
+      if (
+        next?.type !== "table" ||
+        !readTableSpans(node.value ?? "", ...tableDimensions(next as Table))
+      )
+        error(
+          "table_spans",
+          "Объединения таблицы повреждены. Восстановите таблицу в редакторе.",
+          start,
+        );
+      continue;
+    }
+    const previous = root.children[rootIndex - 1];
+    if (
+      node.type === "table" &&
+      previous?.type === "html" &&
+      previous.value.startsWith(TABLE_SPAN_PREFIX)
+    )
+      start = previous.position?.start.offset ?? start;
     const raw = md.slice(start, end);
     if (node.type === "definition") continue;
     if (node.type === "heading") {

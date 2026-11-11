@@ -86,6 +86,7 @@ export function TopicEditor({
   const [previewSource, setPreviewSource] = useState(initial.contentMd);
   const [publishIssues, setPublishIssues] = useState<ParsedTopic["errors"]>([]);
   const [sourceOpen, setSourceOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
   const richEditor = useRef<RichEditorHandle>(null);
@@ -407,6 +408,19 @@ export function TopicEditor({
         >
           Проверить урок перед публикацией
         </a>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy || conflict}
+          onClick={() => {
+            void foreground(async (current) => {
+              router.push(`/admin/topics/${initial.id}/student-preview`);
+              return current;
+            }).catch(() => {});
+          }}
+        >
+          Открыть как ученик
+        </Button>
         <p
           id="lesson-editor-status"
           role="status"
@@ -579,11 +593,14 @@ export function TopicEditor({
               parsed={parsed}
               exercises={form.gapExercises ?? {}}
               onGapChange={configureGap}
+              onImage={() => setImageOpen(true)}
             />
             <ImageUpload
               topicId={initial.id}
               maxBytes={imageMaxBytes}
-              busy={busy || conflict}
+              busy={busy || conflict || sourceOpen}
+              open={imageOpen}
+              onOpenChange={setImageOpen}
               onInsert={(md, id) => {
                 setImageIds((ids) => [...new Set([...ids, id])]);
                 insertText(md);

@@ -62,7 +62,12 @@ export function ProfileForm({
     }
   }
   return (
-    <form onSubmit={submit} className="space-y-5">
+    <form
+      method="POST"
+      action={onboarding ? "/api/onboarding" : "/api/profile"}
+      onSubmit={submit}
+      className="space-y-5"
+    >
       <label className="block text-sm font-medium">
         {authRu.name}
         <input

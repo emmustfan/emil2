@@ -19,7 +19,12 @@ import {
   Redo2,
   ListPlus,
   Table2,
+  ImagePlus,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
 } from "lucide-react";
+import { moveBlock, removeBlock, selectedBlock } from "@/lib/editor/blocks";
 import { lessonEditorExtensions } from "@/lib/editor/extensions";
 import {
   createGapMarkdown,
@@ -41,6 +46,7 @@ export function RichEditor({
   parsed,
   exercises,
   onGapChange,
+  onImage,
   ref,
 }: {
   value: string;
@@ -53,6 +59,7 @@ export function RichEditor({
     order: number,
     config: GapExercise,
   ) => Promise<void>;
+  onImage?: () => void;
   ref?: Ref<RichEditorHandle>;
 }) {
   const extensions = useMemo(() => lessonEditorExtensions(), []);
@@ -102,6 +109,13 @@ export function RichEditor({
             canGap: !e.state.selection.empty || e.isActive("lessonGap"),
             undo: e.can().undo(),
             redo: e.can().redo(),
+            table: e.isActive("table"),
+            merge: e.can().mergeCells(),
+            split: e.can().splitCell(),
+            block: selectedBlock(e)?.node.type.name,
+            blockUp: (selectedBlock(e)?.index ?? 0) > 0,
+            blockDown:
+              (selectedBlock(e)?.index ?? 0) < e.state.doc.childCount - 1,
           }
         : null,
   });
@@ -226,6 +240,18 @@ export function RichEditor({
           </button>
         ))}
         <span className="rich-toolbar-divider" />
+        {onImage && (
+          <button
+            type="button"
+            aria-label="Вставить изображение"
+            title="Вставить изображение в текст"
+            disabled={disabled || !editor}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onImage}
+          >
+            <ImagePlus size={18} />
+          </button>
+        )}
         <button
           type="button"
           title="Вставить таблицу"
@@ -273,9 +299,158 @@ export function RichEditor({
           Пропуск
         </button>
       </div>
+      {state?.table && (
+        <div
+          className="rich-context-tools"
+          role="toolbar"
+          aria-label="Управление таблицей"
+        >
+          <strong>Таблица</strong>
+          {[
+            ["Строка выше", () => editor?.chain().focus().addRowBefore().run()],
+            ["Строка ниже", () => editor?.chain().focus().addRowAfter().run()],
+            [
+              "Столбец слева",
+              () => editor?.chain().focus().addColumnBefore().run(),
+            ],
+            [
+              "Столбец справа",
+              () => editor?.chain().focus().addColumnAfter().run(),
+            ],
+            ["Удалить строку", () => editor?.chain().focus().deleteRow().run()],
+            [
+              "Удалить столбец",
+              () => editor?.chain().focus().deleteColumn().run(),
+            ],
+          ].map(([name, run]) => (
+            <button
+              key={name as string}
+              type="button"
+              disabled={disabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={run as () => void}
+            >
+              {name as string}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={disabled || !state.merge}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().mergeCells().run()}
+          >
+            Объединить ячейки
+          </button>
+          <button
+            type="button"
+            disabled={disabled || !state.split}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().splitCell().run()}
+          >
+            Разделить ячейку
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor?.chain().focus().deleteTable().run()}
+          >
+            Удалить таблицу
+          </button>
+          <small>
+            Выделите соседние ячейки мышью или с Shift, затем объедините. Tab в
+            последней ячейке добавляет строку.
+          </small>
+        </div>
+      )}
+      {editor && (
+        <div
+          className="rich-block-tools"
+          role="toolbar"
+          aria-label="Порядок блоков"
+        >
+          <span>
+            {state?.block === "image"
+              ? "Изображение"
+              : state?.table
+                ? "Таблица"
+                : "Блок текста"}
+          </span>
+          <button
+            type="button"
+            title="Переместить блок выше"
+            aria-label="Переместить блок выше"
+            disabled={disabled || !state?.blockUp}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => moveBlock(editor, -1)}
+          >
+            <ArrowUp size={16} />
+          </button>
+          <button
+            type="button"
+            title="Переместить блок ниже"
+            aria-label="Переместить блок ниже"
+            disabled={disabled || !state?.blockDown}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => moveBlock(editor, 1)}
+          >
+            <ArrowDown size={16} />
+          </button>
+          {state?.block === "image" && (
+            <>
+              <button
+                type="button"
+                disabled={disabled}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const b = selectedBlock(editor);
+                  if (b) {
+                    editor.commands.insertContentAt(b.from + b.node.nodeSize, {
+                      type: "paragraph",
+                    });
+                    editor.commands.setTextSelection(
+                      b.from + b.node.nodeSize + 1,
+                    );
+                    editor.commands.focus();
+                  }
+                }}
+              >
+                Текст после изображения
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  const b = selectedBlock(editor);
+                  if (b) {
+                    editor.commands.insertContentAt(b.from, {
+                      type: "paragraph",
+                    });
+                    editor.commands.setTextSelection(b.from + 1);
+                    editor.commands.focus();
+                  }
+                }}
+              >
+                Текст перед изображением
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => removeBlock(editor)}
+              >
+                <Trash2 size={16} />
+                Удалить изображение
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <p className="rich-hint">
         Выделите текст и выберите оформление. Чтобы спрятать слово в задании,
-        выделите его и нажмите «Пропуск».
+        выделите его и нажмите «Пропуск». Картинка вставляется между абзацами.
+        Выберите блок и используйте стрелки выше, чтобы изменить его место.
       </p>
       <EditorContent editor={editor} />
       {!editor && (

@@ -16,6 +16,8 @@ services:
       POSTGRES_DB: dental_preview_000000000001
   migrate:
     environment: *preview-environment
+    volumes:
+      - uploads:/app/tmp/uploads
     command:
       - sh
       - -c

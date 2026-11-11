@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { ContentTree } from "@/components/admin/content-tree";
 import { MaterialQueue } from "@/components/admin/material-queue";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
@@ -39,7 +40,6 @@ export default async function Admin({
           <strong>{paid}</strong>
         </div>
       </div>
-      <MaterialQueue actor={user} />
       <Link
         href="/admin/users"
         className="mt-5 inline-flex min-h-11 items-center text-emerald-800 underline"
@@ -65,50 +65,10 @@ export default async function Admin({
           />
           <Button variant="outline">{t.search}</Button>
         </form>
-        <div className="overflow-auto">
-          <table
-            aria-label="Предметы"
-            className="w-full min-w-xl text-left text-sm"
-          >
-            <thead>
-              <tr className="border-b border-stone-200">
-                <th className="p-3">{t.name}</th>
-                <th className="p-3">{t.status}</th>
-                <th className="p-3">{t.sections}</th>
-                <th className="p-3">{t.topics}</th>
-                <th className="p-3">{t.order}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((s) => (
-                <tr key={s.id} className="border-b border-stone-100">
-                  <td className="p-3">
-                    <Link
-                      href={`/admin/subjects/${s.id}`}
-                      className="inline-flex min-h-11 items-center font-medium text-emerald-800 underline"
-                    >
-                      {s.title}
-                    </Link>
-                    <p className="text-xs text-stone-500">{s.slug}</p>
-                  </td>
-                  <td className="p-3">{t.statuses[s.status]}</td>
-                  <td className="p-3">{s._count.section_subjectId}</td>
-                  <td className="p-3">{s._count.topic_subjectId}</td>
-                  <td className="p-3">{s.order}</td>
-                </tr>
-              ))}
-              {!data.items.length && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-stone-500">
-                    {t.empty}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ContentTree subjects={data.items} canManageSubjects />
         <Pagination base="/admin" q={q} {...data} />
       </section>
+      <MaterialQueue actor={user} />
     </main>
   );
 }

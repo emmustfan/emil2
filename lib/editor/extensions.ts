@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
+import { LessonTable } from "./table";
 import { imageId } from "../content/image-reference";
 const LessonImageNode = Image.extend({
   parseHTML() {
@@ -73,7 +74,9 @@ export const LessonGapNode = Node.create({
   },
   markdownTokenName: "lessonGap",
   parseMarkdown(token, helpers) {
-    return helpers.createNode("lessonGap", { source: token.raw });
+    return helpers.createNode("lessonGap", {
+      source: String(token.raw ?? "").replace(/\\\|/g, "|"),
+    });
   },
   renderMarkdown(node) {
     return String(node.attrs?.source ?? "");
@@ -95,7 +98,8 @@ export function lessonEditorExtensions() {
       link: { openOnClick: false },
     }),
     LessonImageNode.configure({ inline: false, allowBase64: false }),
-    TableKit,
+    TableKit.configure({ table: false }),
+    LessonTable,
     LessonGapNode,
     Markdown,
   ];

@@ -4,6 +4,8 @@ import { lessonEditorExtensions } from "../../lib/editor/extensions";
 import { parseTopic } from "../../lib/content/parse";
 import { SafeMarkdown } from "../../components/lessons/markdown";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readTableSpans } from "../../lib/content/table-spans";
+import { previewMarkdown } from "../../lib/content/preview";
 const manager = () =>
   new MarkdownManager({ extensions: lessonEditorExtensions() });
 test("visual editing preserves gaps, images, tables and formatting through storage", () => {
@@ -50,4 +52,103 @@ test("visual editor does not load external or embedded images from pasted materi
     expect(JSON.stringify(json)).not.toContain('"type":"image"');
     expect(JSON.stringify(json)).not.toContain(source);
   }
+});
+test("merged rows and columns survive editing, storage and student rendering", () => {
+  const paragraph = (text: string) => [
+    { type: "paragraph", content: [{ type: "text", text }] },
+  ];
+  const cell = (text: string, rowspan = 1, colspan = 1) => ({
+    type: "tableCell",
+    attrs: { rowspan, colspan },
+    content: paragraph(text),
+  });
+  const m = manager(),
+    original = {
+      type: "doc",
+      content: [
+        {
+          type: "table",
+          content: [
+            {
+              type: "tableRow",
+              content: ["A", "B", "C"].map((text) => ({
+                type: "tableHeader",
+                content: paragraph(text),
+              })),
+            },
+            {
+              type: "tableRow",
+              content: [
+                {
+                  ...cell("Общий", 2, 2),
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        { type: "text", text: "Общий " },
+                        {
+                          type: "lessonGap",
+                          attrs: { source: "[[ответ|ошибка]]" },
+                        },
+                      ],
+                    },
+                  ],
+                },
+                cell("Справа"),
+              ],
+            },
+            { type: "tableRow", content: [cell("Последняя")] },
+          ],
+        },
+      ],
+    };
+  const out = m.serialize(original);
+  expect(out).toContain("<!-- emal-table:v1 [[1,0,2,2]] -->");
+  const restored = m.parse(out),
+    table = restored.content![0];
+  expect(table.content![1].content![0].attrs).toMatchObject({
+    rowspan: 2,
+    colspan: 2,
+  });
+  expect(table.content![2].content).toHaveLength(1);
+  expect(m.serialize(restored)).toBe(out);
+  const parsed = parseTopic(out);
+  expect(parsed.errors).toEqual([]);
+  expect(parsed.gaps).toHaveLength(1);
+  expect(parsed.blocks[0].markdown).toContain("<!-- emal-table:v1");
+  const html = renderToStaticMarkup(
+    <SafeMarkdown markdown={previewMarkdown(out, parsed)} />,
+  );
+  expect(html).toContain('rowSpan="2"');
+  expect(html).toContain('colSpan="2"');
+  expect(html).toContain("Последняя");
+  expect(html).not.toContain("<thead>");
+  expect(html).not.toContain("emal-table");
+});
+test("table metadata cannot add attributes, overlap cells or allocate unbounded spans", () => {
+  for (const value of [
+    "[[0,0,1000000,1000000]]",
+    "[[0,0,2,2],[1,1,1,1]]",
+    '[[0,0,1,"onclick"]]',
+    "[[0,0,1,1,9]]",
+    '{"onclick":"unsafe"}',
+  ]) {
+    const marker = `<!-- emal-table:v1 ${value} -->`;
+    expect(readTableSpans(marker, 3, 3)).toBeNull();
+    const md = `${marker}\n| A | B |\n| --- | --- |\n| C | D |`;
+    expect(parseTopic(md).errors.some((e) => e.code === "table_spans")).toBe(
+      true,
+    );
+    expect(renderToStaticMarkup(<SafeMarkdown markdown={md} />)).not.toContain(
+      "onclick=",
+    );
+  }
+  const shortRow =
+    "<!-- emal-table:v1 [[1,1,1,1]] -->\n| A | B |\n| --- | --- |\n| C |";
+  expect(
+    parseTopic(shortRow).errors.some((e) => e.code === "table_spans"),
+  ).toBe(true);
+  expect(() =>
+    renderToStaticMarkup(<SafeMarkdown markdown={shortRow} />),
+  ).not.toThrow();
 });

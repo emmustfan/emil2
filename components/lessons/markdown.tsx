@@ -1,6 +1,10 @@
 "use client";
 import Markdown from "react-markdown";
 import { remarkUnderline } from "@/lib/content/underline";
+import {
+  remarkTableSpans,
+  rehypeTableRowGroups,
+} from "@/lib/content/table-spans";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { Root } from "mdast";
@@ -45,8 +49,9 @@ export function SafeMarkdown({
     <div className="lesson-markdown">
       <Markdown
         skipHtml
-        remarkPlugins={[remarkGfm, remarkUnderline, callouts]}
+        remarkPlugins={[remarkGfm, remarkUnderline, callouts, remarkTableSpans]}
         rehypePlugins={[
+          rehypeTableRowGroups,
           [
             rehypeSanitize,
             {

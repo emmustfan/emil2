@@ -125,7 +125,12 @@ test("full demo resumes and transfers diagnostic, lesson, cards and attribution 
       name: "Даю согласие на обработку персональных данных",
     })
     .check();
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  // Exercise native submission too: a fast click before hydration must still
+  // POST consent and transfer progress rather than putting profile data in a URL.
+  await page
+    .locator("form")
+    .filter({ has: page.getByRole("textbox", { name: "Имя", exact: true }) })
+    .evaluate((form) => HTMLFormElement.prototype.submit.call(form));
   await expect(page).toHaveURL(/\/cabinet$/);
   await expect(
     page.getByText("Диагностика: 3 из 3.", { exact: false }),

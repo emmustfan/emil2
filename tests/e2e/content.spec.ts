@@ -221,27 +221,38 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
   await expect(page).toHaveURL(/\/admin\/subjects\/[^/]+$/);
   const subjectId = page.url().split("/").at(-1)!;
   subjectIds.push(subjectId);
-  const sectionArea = page.locator("section").filter({
-    has: page.getByRole("heading", { name: "Разделы", exact: true }),
+  await page
+    .getByRole("link", {
+      name: "Открыть книгу и редактор уроков →",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "+ Новый раздел", exact: true })
+    .click();
+  const sectionArea = page.getByRole("form", {
+    name: "Новый раздел",
+    exact: true,
   });
   await sectionArea
-    .getByRole("textbox", { name: "Название", exact: true })
+    .getByRole("textbox", { name: "Название раздела", exact: true })
     .fill("Раздел фикстуры");
   await sectionArea
     .getByRole("button", { name: "Добавить раздел", exact: true })
     .click();
-  await expect(
-    sectionArea.getByRole("button", { name: "Сохранить", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Добавить тему", exact: true }).click();
-  await expect(page).toHaveURL(/\/topics\/new$/);
-  await page
-    .getByRole("textbox", { name: "Название", exact: true })
+  const lessonForm = page.getByRole("form", {
+    name: "Новый урок",
+    exact: true,
+  });
+  await lessonForm
+    .getByRole("textbox", { name: "Название урока", exact: true })
     .fill("Методичка фикстуры");
-  await page
-    .getByRole("combobox", { name: "Раздел", exact: true })
+  await lessonForm
+    .getByRole("combobox", { name: "Раздел для урока", exact: true })
     .selectOption({ label: "Раздел фикстуры" });
-  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await lessonForm
+    .getByRole("button", { name: "Создать урок", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/admin\/topics\/[^/]+$/);
   const topicId = page.url().split("/").at(-1)!;
   await page
@@ -542,15 +553,21 @@ test("subject search and pagination show the matching records", async ({
   await page.goto(`/admin?q=${prefix}`);
   await expect(
     page
-      .getByRole("table", { name: "Предметы", exact: true })
-      .locator("tbody tr"),
+      .getByRole("navigation", {
+        name: "Предметы, разделы и уроки",
+        exact: true,
+      })
+      .getByRole("link", { name: new RegExp(prefix) }),
   ).toHaveCount(20);
   await page.getByRole("link", { name: "Далее", exact: true }).click();
   await expect(page).toHaveURL(/page=2/);
   await expect(
     page
-      .getByRole("table", { name: "Предметы", exact: true })
-      .locator("tbody tr"),
+      .getByRole("navigation", {
+        name: "Предметы, разделы и уроки",
+        exact: true,
+      })
+      .getByRole("link", { name: new RegExp(prefix) }),
   ).toHaveCount(1);
   await expect(
     page.getByRole("link", { name: "Назад", exact: true }),

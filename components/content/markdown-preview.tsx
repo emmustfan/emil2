@@ -12,6 +12,10 @@ import {
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import { createElement, type HTMLAttributes } from "react";
 import { remarkUnderline } from "@/lib/content/underline";
+import {
+  remarkTableSpans,
+  rehypeTableRowGroups,
+} from "@/lib/content/table-spans";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { Root } from "mdast";
@@ -169,8 +173,9 @@ export function MarkdownPreview({
     <div className="break-words text-base leading-8 text-stone-800 [&_h1]:mt-7 [&_h1]:mb-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:mt-7 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-5 [&_h3]:font-semibold [&_p]:my-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:my-5 [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-600 [&_blockquote]:bg-emerald-50 [&_blockquote]:px-5 [&_blockquote]:py-2 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-stone-100 [&_pre]:p-4 [&_table]:block [&_table]:overflow-auto [&_th]:border [&_th]:border-stone-300 [&_th]:p-3 [&_td]:border [&_td]:border-stone-300 [&_td]:p-3">
       <Markdown
         skipHtml
-        remarkPlugins={[remarkGfm, remarkUnderline, anchors]}
+        remarkPlugins={[remarkGfm, remarkUnderline, anchors, remarkTableSpans]}
         rehypePlugins={[
+          rehypeTableRowGroups,
           [
             rehypeSanitize,
             {
