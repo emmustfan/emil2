@@ -55,8 +55,8 @@ export function lessonReadiness(
     },
     {
       id: "gaps",
-      target: "lesson-exercises",
-      label: "Задания в методичке",
+      target: "lesson-text",
+      label: "Пропуски в тексте",
       ok: parsed.gaps.length > 0 && definitions,
       note: `Добавлено: ${parsed.gaps.length}`,
     },

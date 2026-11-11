@@ -17,9 +17,11 @@ import type { TopicDTO, SectionDTO, QuestionDTO } from "@/lib/content/types";
 import type { TopicInput, QuestionInput } from "@/lib/content/validation";
 import type { ParsedTopic } from "@/lib/content/parse";
 import { requestContent, EditorRequestError, fieldClass } from "./helpers";
-import { GapInsertForm } from "./gap-insert-form";
-import type { GapExercise } from "@/lib/exercises";
-import { GapExercisesEditor } from "./gap-exercises";
+import {
+  gapDefinition,
+  type Definition,
+  type GapExercise,
+} from "@/lib/exercises";
 import { QuestionForm } from "./question-form";
 import { RichEditor, type RichEditorHandle } from "./rich-editor";
 import { ImageUpload } from "./image-upload";
@@ -281,24 +283,17 @@ export function TopicEditor({
       });
     } catch {}
   }
-  async function insertExercise(markdown: string, config: GapExercise) {
-    const before = formRef.current.contentMd;
-    const contentMd = before.trimEnd() + "\n\n" + markdown;
-    const result = await requestContent<ParsedTopic>("preview", "POST", {
-      contentMd,
-    });
-    if (result.errors.length) throw new Error(result.errors[0].message);
-    if (formRef.current.contentMd !== before)
-      throw new Error("Текст методички изменился. Повторите вставку.");
-    const gap = result.gaps.at(-1);
+  async function readGap(
+    contentMd: string,
+    order: number,
+  ): Promise<Definition> {
+    const result =
+      previewSource === contentMd
+        ? parsed
+        : await requestContent<ParsedTopic>("preview", "POST", { contentMd });
+    const gap = result.gaps[order];
     if (!gap) throw new Error("Пропуск не найден. Проверьте текст задания.");
-    change("contentMd", contentMd);
-    change("gapExercises", {
-      ...formRef.current.gapExercises,
-      [gap.gapKey]: config,
-    });
-    setParsed(result);
-    setPreviewSource(contentMd);
+    return gapDefinition(gap, formRef.current.gapExercises?.[gap.gapKey]);
   }
   function insertText(markdown: string) {
     richEditor.current?.insertMarkdown(markdown);
@@ -379,8 +374,7 @@ export function TopicEditor({
         {[
           ["lesson-basics", "1. Основное"],
           ["lesson-text", "2. Методичка"],
-          ["lesson-exercises", "3. Задания"],
-          ["lesson-questions", "4. Тест"],
+          ["lesson-questions", "3. Тест"],
           ["lesson-review", "Перед публикацией"],
         ].map(([id, title]) => (
           <a
@@ -590,8 +584,7 @@ export function TopicEditor({
               onChange={(value) => {
                 if (!sourceOpen) change("contentMd", value);
               }}
-              parsed={parsed}
-              exercises={form.gapExercises ?? {}}
+              onReadGap={readGap}
               onGapChange={configureGap}
               onImage={() => setImageOpen(true)}
             />
@@ -610,6 +603,7 @@ export function TopicEditor({
               <button
                 type="button"
                 aria-expanded={sourceOpen}
+                aria-label="Исходный текст — для переноса материалов"
                 aria-controls="lesson-source-input"
                 disabled={!hydrated}
                 onClick={() => setSourceOpen((open) => !open)}
@@ -725,20 +719,6 @@ export function TopicEditor({
           </section>
         </div>
       </div>
-      <h2 id="lesson-exercises" className="scroll-mt-5 text-2xl font-semibold">
-        3. Задания в методичке
-      </h2>
-      <p className="text-sm leading-7 text-stone-600">
-        Это короткие задания внутри текста. Для проверки ответа укажите эталон и
-        допустимые варианты: ИИ здесь не нужен.
-      </p>
-      <GapInsertForm busy={busy || conflict} onInsert={insertExercise} />
-      <GapExercisesEditor
-        gaps={parsed.gaps}
-        configs={form.gapExercises ?? {}}
-        busy={busy || conflict}
-        onChange={(configs) => change("gapExercises", configs)}
-      />
       <div className="book-bottom">
         <section
           id="lesson-questions"

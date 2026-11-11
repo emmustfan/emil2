@@ -573,7 +573,7 @@ test("visual author formats a selection and creates a dropdown gap without Markd
   await expect(editor.locator("u")).toHaveText("Выделяем");
   await expect(editor.locator(".rich-gap-token")).toContainText("слово");
   await editor.locator(".rich-gap-token").click();
-  await page.getByRole("button", { name: "Пропуск", exact: true }).click();
+  await expect(dialog).toBeVisible();
   await dialog
     .getByRole("textbox", { name: "Вариант 2", exact: true })
     .fill("иной");
@@ -591,6 +591,131 @@ test("visual author formats a selection and creates a dropdown gap without Markd
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
+test("gap buttons open the matching saved choices by click or keyboard and cancellation keeps the text", async ({
+  page,
+}) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
+  });
+  const first = editor.getByRole("button", {
+    name: "Изменить пропуск «верный-один»",
+    exact: true,
+  });
+  const second = editor.getByRole("button", {
+    name: "Изменить пропуск «верный-два»",
+    exact: true,
+  });
+  const dialog = page.getByRole("dialog", {
+    name: "Настройка пропуска",
+    exact: true,
+  });
+  const initialRow = await db.topic.findUniqueOrThrow({
+    where: { id: f.free.id },
+  });
+  await first.click();
+  await expect(
+    dialog.getByRole("textbox", { name: "Вариант 1", exact: true }),
+  ).toHaveValue("верный-один");
+  await dialog
+    .getByRole("textbox", { name: "Вариант 2", exact: true })
+    .fill("Не сохранять");
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator("#lesson-editor-status")).toHaveText("Сохранено");
+  const afterCancel = await db.topic.findUniqueOrThrow({
+    where: { id: f.free.id },
+  });
+  expect(afterCancel.contentMd).toBe(initialRow.contentMd);
+  expect(afterCancel.editRevision).toBe(initialRow.editRevision);
+  expect(afterCancel.status).toBe("PUBLISHED");
+  expect(afterCancel.needsExpertReview).toBe(false);
+  await first.click();
+  await dialog
+    .getByRole("combobox", { name: "Тип задания", exact: true })
+    .selectOption("MULTIPLE_CHOICE");
+  await dialog.getByRole("checkbox", { name: "2", exact: true }).check();
+  await dialog
+    .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
+    .fill("Проверка первого задания.");
+  await dialog
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await second.focus();
+  await second.press("Enter");
+  await expect(
+    dialog.getByRole("textbox", { name: "Вариант 1", exact: true }),
+  ).toHaveValue("верный-два");
+  await expect(
+    dialog.getByRole("textbox", {
+      name: "Объяснение после проверки",
+      exact: true,
+    }),
+  ).toHaveValue("");
+  await dialog
+    .getByRole("textbox", { name: "Вариант 2", exact: true })
+    .fill("Ещё вариант");
+  await dialog
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .contentMd,
+    )
+    .toContain("[[верный-два|Ещё вариант]]");
+  await page.reload();
+  await first.click();
+  await expect(
+    dialog.getByRole("combobox", { name: "Тип задания", exact: true }),
+  ).toHaveValue("MULTIPLE_CHOICE");
+  await expect(
+    dialog.getByRole("checkbox", { name: "2", exact: true }),
+  ).toBeChecked();
+  await expect(
+    dialog.getByRole("textbox", {
+      name: "Объяснение после проверки",
+      exact: true,
+    }),
+  ).toHaveValue("Проверка первого задания.");
+  const saved = (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+    .contentMd;
+  await dialog
+    .getByRole("textbox", { name: "Вариант 1", exact: true })
+    .fill("Несохранённое значение");
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  expect(
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).contentMd,
+  ).toBe(saved);
+  await second.focus();
+  await second.press("Space");
+  await expect(
+    dialog.getByRole("textbox", { name: "Вариант 2", exact: true }),
+  ).toHaveValue("Ещё вариант");
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", {
+      name: "Исходный текст — для переноса материалов",
+      exact: true,
+    })
+    .click();
+  await expect(first).toBeDisabled();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "3. Задания в методичке", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Этапы создания урока", exact: true })
+      .getByRole("link", { name: "3. Тест", exact: true }),
+  ).toBeVisible();
 });
 
 test("teacher creates sections and lessons inside the book and switching flushes the current draft", async ({

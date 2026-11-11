@@ -31,12 +31,53 @@ const LessonImageNode = Image.extend({
       : ["span", {}, String(node.attrs.alt || "Изображение недоступно")];
   },
 });
-export const LessonGapNode = Node.create({
+export const LessonGapNode = Node.create<{
+  onEdit?: (position: number) => void;
+}>({
   name: "lessonGap",
   group: "inline",
   inline: true,
   atom: true,
   selectable: true,
+  addOptions() {
+    return { onEdit: undefined };
+  },
+  addNodeView() {
+    return ({ node, editor, getPos }) => {
+      const dom = document.createElement("button");
+      dom.type = "button";
+      dom.disabled = !editor.isEditable;
+      dom.contentEditable = "false";
+      dom.className = "rich-gap-token";
+      dom.setAttribute("aria-haspopup", "dialog");
+      const refresh = (source: string) => {
+        const label = source.slice(2, -2).replace(/^=/, "").split("|")[0];
+        dom.textContent = `${label} ▾`;
+        dom.setAttribute("data-lesson-gap", source);
+        dom.setAttribute("aria-label", `Изменить пропуск «${label}»`);
+        dom.title = "Нажмите, чтобы изменить варианты и настройки пропуска";
+      };
+      refresh(String(node.attrs.source));
+      const activate = (event: MouseEvent) => {
+        event.preventDefault();
+        const position = getPos();
+        if (editor.isEditable && typeof position === "number")
+          this.options.onEdit?.(position);
+      };
+      dom.addEventListener("click", activate);
+      return {
+        dom,
+        update: (next) => {
+          if (next.type !== node.type) return false;
+          refresh(String(next.attrs.source));
+          return true;
+        },
+        stopEvent: () => true,
+        ignoreMutation: () => true,
+        destroy: () => dom.removeEventListener("click", activate),
+      };
+    };
+  },
   addAttributes() {
     return {
       source: {
@@ -64,7 +105,7 @@ export const LessonGapNode = Node.create({
       mergeAttributes(HTMLAttributes, {
         "data-lesson-gap": source,
         class: "rich-gap-token",
-        title: "Выберите пропуск и нажмите «Пропуск», чтобы изменить ответы",
+        title: "Нажмите, чтобы изменить варианты и настройки пропуска",
       }),
       `${label} ▾`,
     ];
@@ -91,7 +132,7 @@ export const LessonGapNode = Node.create({
     },
   },
 });
-export function lessonEditorExtensions() {
+export function lessonEditorExtensions(onEditGap?: (position: number) => void) {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -100,7 +141,7 @@ export function lessonEditorExtensions() {
     LessonImageNode.configure({ inline: false, allowBase64: false }),
     TableKit.configure({ table: false }),
     LessonTable,
-    LessonGapNode,
+    LessonGapNode.configure({ onEdit: onEditGap }),
     Markdown,
   ];
 }

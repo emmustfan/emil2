@@ -580,9 +580,6 @@ test("editor configures multi and text questions, inserts a typed gap and publis
   const f = await fixture(page.request);
   const topic = await fiveQuestions(page.request, f.topic);
   await page.goto(`/admin/topics/${topic.id}`);
-  await page
-    .getByText("Исходный текст — для переноса материалов", { exact: true })
-    .click();
   const edit = (name: string) =>
     page
       .getByRole("article")
@@ -639,10 +636,17 @@ test("editor configures multi and text questions, inserts a typed gap and publis
         ).acceptedAnswers,
     )
     .toEqual(["зелёная ёлка", "ель"]);
-  const detail = page.locator("details").filter({
-    has: page.locator("summary").filter({ hasText: /^Пропуск 1:/ }),
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
   });
-  await detail.locator("summary").click();
+  await editor
+    .getByRole("button", { name: "Изменить пропуск «ответ-0»", exact: true })
+    .click();
+  const detail = page.getByRole("dialog", {
+    name: "Настройка пропуска",
+    exact: true,
+  });
   await detail
     .getByRole("combobox", { name: "Тип задания", exact: true })
     .selectOption("MULTIPLE_CHOICE");
@@ -651,14 +655,16 @@ test("editor configures multi and text questions, inserts a typed gap and publis
     .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
     .fill("Оба варианта верны в этом синтетическом примере.");
   await detail
-    .getByRole("button", { name: "Сохранить настройки пропуска", exact: true })
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
     .click();
-  const insert = page.locator("details").filter({
-    has: page
-      .locator("summary")
-      .filter({ hasText: /^Добавить задание в методичку$/ }),
-  });
-  await insert.locator("summary").click();
+  await expect(detail).not.toBeVisible();
+  await editor.focus();
+  await editor.press("Control+End");
+  await editor.press("Enter");
+  await page.keyboard.type("Дерево: ёлка");
+  for (let i = 0; i < 4; i++) await editor.press("Shift+ArrowLeft");
+  await page.getByRole("button", { name: "Пропуск", exact: true }).click();
+  const insert = detail;
   await insert
     .getByRole("combobox", { name: "Тип задания", exact: true })
     .selectOption("SHORT_TEXT");
@@ -672,10 +678,14 @@ test("editor configures multi and text questions, inserts a typed gap and publis
     })
     .fill("ель");
   await insert
-    .getByRole("textbox", { name: "Текст вокруг пропуска", exact: true })
-    .fill("Дерево: ____.");
-  await insert
-    .getByRole("button", { name: "Вставить задание", exact: true })
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(insert).not.toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Исходный текст — для переноса материалов",
+      exact: true,
+    })
     .click();
   await expect(
     page.getByRole("textbox", {

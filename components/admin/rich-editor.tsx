@@ -28,12 +28,9 @@ import { moveBlock, removeBlock, selectedBlock } from "@/lib/editor/blocks";
 import { lessonEditorExtensions } from "@/lib/editor/extensions";
 import {
   createGapMarkdown,
-  gapDefinition,
   type Definition,
   type GapExercise,
-  type GapExercises,
 } from "@/lib/exercises";
-import type { ParsedTopic } from "@/lib/content/parse";
 import {
   DefinitionEditor,
   cleanDefinition,
@@ -43,8 +40,7 @@ export function RichEditor({
   value,
   disabled,
   onChange,
-  parsed,
-  exercises,
+  onReadGap,
   onGapChange,
   onImage,
   ref,
@@ -52,8 +48,7 @@ export function RichEditor({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
-  parsed: ParsedTopic;
-  exercises: GapExercises;
+  onReadGap: (markdown: string, order: number) => Promise<Definition>;
   onGapChange: (
     markdown: string,
     order: number,
@@ -62,7 +57,12 @@ export function RichEditor({
   onImage?: () => void;
   ref?: Ref<RichEditorHandle>;
 }) {
-  const extensions = useMemo(() => lessonEditorExtensions(), []);
+  const activateGap = useRef<(position: number) => void>(() => {});
+  const gapRequest = useRef(0);
+  const extensions = useMemo(
+    () => lessonEditorExtensions((position) => activateGap.current(position)),
+    [],
+  );
   const [initialContent] = useState(value);
   const external = useRef(value);
   const last = useRef(value),
@@ -70,7 +70,7 @@ export function RichEditor({
   const [gapForm, setGapForm] = useState<{
       from: number;
       to: number;
-      definition: Definition;
+      snapshot: string;
     } | null>(null),
     [definition, setDefinition] = useState<Definition | null>(null),
     [error, setError] = useState(""),
@@ -133,6 +133,11 @@ export function RichEditor({
   }, [value, editor]);
   useEffect(() => {
     editor?.setEditable(!disabled, false);
+    editor?.view.dom
+      .querySelectorAll<HTMLButtonElement>("button.rich-gap-token")
+      .forEach((button) => {
+        button.disabled = disabled;
+      });
   }, [disabled, editor]);
   useEffect(() => {
     if (gapForm && !dialog.current?.open) dialog.current?.showModal();
@@ -147,25 +152,47 @@ export function RichEditor({
     }),
     [editor],
   );
-  function openGap() {
-    if (!editor) return;
-    const { from, to } = editor.state.selection;
+  useEffect(() => {
+    activateGap.current = (position) => {
+      void openGap(position);
+    };
+  });
+  useEffect(
+    () => () => {
+      gapRequest.current++;
+    },
+    [],
+  );
+  function closeGap() {
+    if (pending) return;
+    gapRequest.current++;
+    dialog.current?.close();
+    setGapForm(null);
+    setDefinition(null);
+    setError("");
+  }
+  async function openGap(position?: number) {
+    if (!editor || disabled || pending) return;
+    const { from, to } =
+      position === undefined
+        ? editor.state.selection
+        : { from: position, to: position + 1 };
     const node = editor.state.doc.nodeAt(from);
-    let order = 0;
-    editor.state.doc.descendants((item, pos) => {
-      if (pos < from && item.type.name === "lessonGap") order++;
-    });
-    let d: Definition;
-    if (node?.type.name === "lessonGap" && parsed.gaps[order]) {
-      const gap = parsed.gaps[order];
-      d = gapDefinition(gap, exercises[gap.gapKey]);
-    } else {
-      const text = editor.state.doc.textBetween(from, to, " ").trim();
-      if (!text) {
-        setError("Сначала выделите слово или фразу в тексте.");
-        return;
-      }
-      d = {
+    const existing = node?.type.name === "lessonGap";
+    const text = existing
+      ? ""
+      : editor.state.doc.textBetween(from, to, " ").trim();
+    if (!existing && !text) {
+      setError("Сначала выделите слово или фразу в тексте.");
+      return;
+    }
+    const snapshot = editor.getMarkdown(),
+      request = ++gapRequest.current;
+    setError("");
+    setDefinition(null);
+    setGapForm({ from, to, snapshot });
+    if (!existing) {
+      setDefinition({
         answerType: "SINGLE_CHOICE",
         options: [
           { id: "a", text },
@@ -174,11 +201,29 @@ export function RichEditor({
         correctOptionIds: ["a"],
         acceptedAnswers: [],
         explanation: "",
-      };
+      });
+      return;
     }
-    setError("");
-    setDefinition(d);
-    setGapForm({ from, to, definition: d });
+    let order = 0;
+    editor.state.doc.descendants((item, pos) => {
+      if (pos < from && item.type.name === "lessonGap") order++;
+    });
+    try {
+      const next = await onReadGap(snapshot, order);
+      if (request !== gapRequest.current || editor.isDestroyed) return;
+      if (editor.getMarkdown() !== snapshot)
+        throw new Error(
+          "Текст изменился. Закройте окно и выберите пропуск снова.",
+        );
+      setDefinition(next);
+    } catch (e) {
+      if (request === gapRequest.current)
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Не удалось открыть настройки пропуска.",
+        );
+    }
   }
   const actions = [
     {
@@ -293,7 +338,9 @@ export function RichEditor({
           className="rich-gap-button"
           disabled={disabled || !state?.canGap}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={openGap}
+          onClick={() => {
+            void openGap();
+          }}
         >
           <ListPlus size={17} />
           Пропуск
@@ -449,8 +496,10 @@ export function RichEditor({
       )}
       <p className="rich-hint">
         Выделите текст и выберите оформление. Чтобы спрятать слово в задании,
-        выделите его и нажмите «Пропуск». Картинка вставляется между абзацами.
-        Выберите блок и используйте стрелки выше, чтобы изменить его место.
+        выделите его и нажмите «Пропуск». Нажмите готовый пропуск, чтобы
+        изменить варианты, правильные ответы и объяснение. Картинка вставляется
+        между абзацами. Выберите блок и используйте стрелки выше, чтобы изменить
+        его место.
       </p>
       <EditorContent editor={editor} />
       {!editor && (
@@ -469,12 +518,28 @@ export function RichEditor({
         aria-label="Настройка пропуска"
         onCancel={(e) => {
           e.preventDefault();
-          if (!pending) {
-            dialog.current?.close();
-            setGapForm(null);
-          }
+          closeGap();
         }}
       >
+        {gapForm && (
+          <div className="flex items-center justify-between gap-4">
+            <h2>Настройка пропуска</h2>
+            <button
+              type="button"
+              className="min-h-11 px-3"
+              disabled={pending}
+              onClick={closeGap}
+              aria-label="Закрыть настройку пропуска"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {gapForm && !definition && !error && (
+          <p className="my-4 text-sm" role="status">
+            Загрузка вариантов…
+          </p>
+        )}
         {gapForm && definition && (
           <form
             onSubmit={async (e) => {
@@ -483,6 +548,10 @@ export function RichEditor({
               setPending(true);
               setError("");
               try {
+                if (editor.getMarkdown() !== gapForm.snapshot)
+                  throw new Error(
+                    "Текст изменился. Закройте окно и выберите пропуск снова.",
+                  );
                 const result = createGapMarkdown(
                   "____",
                   cleanDefinition(definition),
@@ -491,7 +560,10 @@ export function RichEditor({
                 const node = editor.schema.nodes.lessonGap.create(
                   { source },
                   null,
-                  editor.state.selection.$from.marks(),
+                  editor.state.doc.nodeAt(gapForm.from)?.type.name ===
+                    "lessonGap"
+                    ? editor.state.doc.nodeAt(gapForm.from)!.marks
+                    : editor.state.selection.$from.marks(),
                 );
                 const transaction = editor.state.tr.replaceWith(
                   gapForm.from,
@@ -513,6 +585,7 @@ export function RichEditor({
                 });
                 dialog.current?.close();
                 setGapForm(null);
+                setDefinition(null);
                 editor
                   .chain()
                   .focus()
@@ -534,22 +607,6 @@ export function RichEditor({
               }
             }}
           >
-            <div className="flex items-center justify-between gap-4">
-              <h2>Настройка пропуска</h2>
-              <button
-                type="button"
-                className="min-h-11 px-3"
-                disabled={pending}
-                onClick={() => {
-                  dialog.current?.close();
-                  setGapForm(null);
-                  editor?.commands.focus();
-                }}
-                aria-label="Закрыть настройку пропуска"
-              >
-                ✕
-              </button>
-            </div>
             <p className="my-4 text-sm emal-muted">
               Слово останется на своём месте в тексте. Ученик увидит выбор
               вариантов или поле ответа.
@@ -560,12 +617,12 @@ export function RichEditor({
                 {pending ? "Сохранение…" : "Сохранить пропуск"}
               </button>
             </fieldset>
-            {error && (
-              <p role="alert" className="mt-3 text-sm text-red-800">
-                {error}
-              </p>
-            )}
           </form>
+        )}
+        {gapForm && error && (
+          <p role="alert" className="mt-3 text-sm text-red-800">
+            {error}
+          </p>
         )}
       </dialog>
     </div>
