@@ -1,5 +1,3 @@
-"use client";
-import { useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 type Topic = {
@@ -16,8 +14,6 @@ const fdi = [
   45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38,
 ];
 export function CourseMap({ topics }: { topics: Topic[] }) {
-  const [selected, setSelected] = useState(0),
-    topic = topics[selected];
   return (
     <section className="course-map" aria-label="Карта тем курса">
       <div className="course-map-head">
@@ -33,17 +29,17 @@ export function CourseMap({ topics }: { topics: Topic[] }) {
           {fdi.map((n, i) => {
             const t = topics[i];
             return t ? (
-              <button
+              <Link
                 key={n}
+                href={t.href}
+                prefetch={false}
                 className={`course-tooth ${t.completed ? "is-done" : t.started ? "is-started" : t.free ? "is-free" : "is-locked"}`}
-                aria-label={`Тема ${i + 1}: ${t.title}`}
-                aria-pressed={selected === i}
-                onClick={() => setSelected(i)}
-                title={t.title}
+                aria-label={`Открыть урок ${i + 1}: ${t.subject} — ${t.title}`}
+                title={`${n} · ${t.subject} · ${t.title}`}
               >
                 <small>{n}</small>
-                {t.completed && <Check size={15} />}
-              </button>
+                {t.completed && <Check size={15} aria-hidden />}
+              </Link>
             ) : (
               <span key={n} className="course-tooth is-empty" aria-hidden>
                 <small>{n}</small>
@@ -68,15 +64,14 @@ export function CourseMap({ topics }: { topics: Topic[] }) {
           <i className="free" />
           Бесплатная
         </span>
+        <span>
+          <i className="empty" />
+          Пока без урока
+        </span>
       </div>
       <div className="course-map-detail">
-        {topic ? (
-          <>
-            <span>
-              {topic.subject} · {topic.title}
-            </span>
-            <Link href={topic.href}>Открыть урок →</Link>
-          </>
+        {topics.length ? (
+          <span>Нажмите на зуб, чтобы сразу открыть соответствующий урок.</span>
         ) : (
           <span className="emal-muted">
             Сейчас материалы проходят подготовку и экспертную проверку.
