@@ -8,6 +8,8 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "../../lib/db";
 import { newToken, hashToken } from "../../lib/auth/crypto";
 import type { TopicDTO, SubjectDTO, SectionDTO } from "../../lib/content/types";
+import { parseTopic } from "../../lib/content/parse";
+import { GAP_ID_PATTERN } from "../../lib/content/gap-id";
 const db = getDb(),
   origin = "http://localhost:3100";
 let userId: string | undefined;
@@ -16,6 +18,18 @@ const subjectIds: string[] = [];
 test.setTimeout(90000);
 const md = () =>
   `## Проверка\n\n${Array.from({ length: 10 }, (_, i) => `Фрагмент ${i} [[ответ-${i}|ошибка-${i}]].`).join("\n\n")}`;
+function legacyView(markdown: string) {
+  const parsed = parseTopic(markdown);
+  return {
+    text: markdown.replace(/\[\[#(?:[a-z0-9]{6,12}|[a-f0-9]{40})[ \t]+/g, "[["),
+    errors: parsed.errors,
+    count: parsed.gaps.length,
+    validIds: parsed.gaps.every((gap) =>
+      GAP_ID_PATTERN.test(gap.explicitId ?? ""),
+    ),
+    uniqueIds: new Set(parsed.gaps.map((gap) => gap.gapKey)).size,
+  };
+}
 function topicInput(subjectId: string, contentMd = md()) {
   return {
     subjectId,
@@ -264,12 +278,22 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
   });
   await textarea.fill(md());
   await expect
-    .poll(
-      async () =>
+    .poll(async () =>
+      legacyView(
         (await db.topic.findUniqueOrThrow({ where: { id: topicId } }))
           .contentMd,
+      ),
     )
-    .toBe(md());
+    .toEqual({
+      text: md(),
+      errors: [],
+      count: 10,
+      validIds: true,
+      uniqueIds: 10,
+    });
+  await expect(textarea).toHaveValue(
+    (await db.topic.findUniqueOrThrow({ where: { id: topicId } })).contentMd,
+  );
   const preview = page.getByRole("region", {
     name: "Предпросмотр",
     exact: true,
@@ -379,12 +403,22 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
     .getByRole("textbox", { name: "Текст методички (Markdown)", exact: true })
     .fill(md());
   await expect
-    .poll(
-      async () =>
+    .poll(async () =>
+      legacyView(
         (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
           .contentMd,
+      ),
     )
-    .toBe(md());
+    .toEqual({
+      text: md(),
+      errors: [],
+      count: 10,
+      validIds: true,
+      uniqueIds: 10,
+    });
+  const correctedSource = (
+    await db.topic.findUniqueOrThrow({ where: { id: topic.id } })
+  ).contentMd;
   await page.reload();
   await page
     .getByText("Исходный текст — для переноса материалов", { exact: true })
@@ -394,7 +428,7 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
       name: "Текст методички (Markdown)",
       exact: true,
     }),
-  ).toHaveValue(md());
+  ).toHaveValue(correctedSource);
   await expect(
     page.getByRole("checkbox", { name: "Проверено экспертом", exact: true }),
   ).not.toBeChecked();
@@ -433,7 +467,7 @@ test("parallel editor changes produce a conflict without overwriting the local d
   ).toHaveText(unsafe, { useInnerText: true });
   expect(
     (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).contentMd,
-  ).toBe(md());
+  ).toBe(topic.contentMd);
   const preview = page.getByRole("region", {
     name: "Предпросмотр",
     exact: true,
@@ -692,7 +726,7 @@ test("editor configures multi and text questions, inserts a typed gap and publis
       name: "Текст методички (Markdown)",
       exact: true,
     }),
-  ).toHaveValue(/\[\[=ёлка\]\]/);
+  ).toHaveValue(/\[\[#[a-z0-9]{6,12} =ёлка\]\]/);
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
     .click();
@@ -702,7 +736,7 @@ test("editor configures multi and text questions, inserts a typed gap and publis
         (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
           .contentMd,
     )
-    .toContain("[[=ёлка]]");
+    .toMatch(/\[\[#[a-z0-9]{6,12} =ёлка\]\]/);
   await page.reload();
   await page
     .getByText("Исходный текст — для переноса материалов", { exact: true })
@@ -712,7 +746,7 @@ test("editor configures multi and text questions, inserts a typed gap and publis
       name: "Текст методички (Markdown)",
       exact: true,
     }),
-  ).toHaveValue(/\[\[=ёлка\]\]/);
+  ).toHaveValue(/\[\[#[a-z0-9]{6,12} =ёлка\]\]/);
   await page
     .getByRole("checkbox", { name: "Проверено экспертом", exact: true })
     .check();

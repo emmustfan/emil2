@@ -3,7 +3,7 @@ import type { Prisma } from "../generated/prisma/client";
 import type { Actor } from "../lessons/types";
 import { hasAccess } from "../access";
 import { ContentError } from "../content/errors";
-import { lock } from "../auth/session";
+import { lockTopicForLearning } from "../content/locks";
 import { optionsFromJSON } from "../lessons/public";
 import { explainQuestion } from "./prompts";
 import type { TutorInput, Citation } from "./types";
@@ -33,7 +33,7 @@ export async function resolveScope(
       "Гость может задать вопрос только по открытой бесплатной теме.",
       403,
     );
-  if (topicId) await lock(tx, `content:topic:${topicId}`);
+  if (topicId) await lockTopicForLearning(tx, topicId);
   const topic = topicId
     ? await tx.topic.findFirst({
         where: {

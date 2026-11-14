@@ -12,7 +12,38 @@ import { questionFields } from "../../lib/content/validation";
 import { parseTopic, makeGapKey } from "../../lib/content/parse";
 import { publicBlocks } from "../../lib/lessons/public";
 import { AnswerCard } from "../../components/exercises/answer-card";
+import { InlineGap } from "../../components/exercises/inline-gap";
 import { gapAnswerInput, testAnswerInput } from "../../lib/lessons/http";
+
+it("keeps the first chosen value visible after the author removes that option", () => {
+  const html = renderToStaticMarkup(
+    <InlineGap
+      gap={{
+        id: "stable-gap-row",
+        answerType: "SINGLE_CHOICE",
+        options: [
+          { id: "new-a", text: "Новый вариант" },
+          { id: "new-b", text: "Другой вариант" },
+        ],
+        feedback: {
+          correct: true,
+          chosenValues: ["Первоначальный ответ"],
+          correctValues: ["Первоначальный ответ"],
+          explanation: "Прежнее объяснение",
+        },
+      }}
+      number={1}
+      pending={false}
+      onAnswer={() => {}}
+    />,
+  );
+  expect(html).toMatch(
+    /<option[^>]*selected[^>]*>Первоначальный ответ<\/option>/,
+  );
+  expect(html).toContain("Прежнее объяснение");
+  expect(html).not.toContain("Выберите слово…");
+});
+
 const single: Definition = {
   answerType: "SINGLE_CHOICE",
   options: [

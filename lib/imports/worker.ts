@@ -9,6 +9,7 @@ import { contentWrite, authorizeSubject } from "../content/permissions";
 import { hasCurrentConsent } from "../auth/legal";
 import { ContentError } from "../content/errors";
 import { headingSlug } from "../content/slug";
+import { stabilizeGapIds } from "../content/gap-identity";
 import { importLimits, type SourceFormat } from "./policy";
 import { extractIsolated } from "./extractor";
 import { generateDraft, splitSource, type ImportDraft } from "./draft";
@@ -144,7 +145,7 @@ export async function processImport(id: string, provider?: LLMProvider) {
               slug: `${headingSlug(draft.title).slice(0, 40)}-${id}-${i + 1}`,
               order: 0,
               isFree: false,
-              contentMd: draft.contentMd,
+              ...stabilizeGapIds(draft.contentMd),
               status: "DRAFT",
               aiGenerated: true,
               needsExpertReview: true,

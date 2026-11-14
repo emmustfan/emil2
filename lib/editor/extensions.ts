@@ -5,6 +5,7 @@ import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
 import { LessonTable } from "./table";
 import { imageId } from "../content/image-reference";
+import { gapSourceLabel } from "../content/gap-id";
 const LessonImageNode = Image.extend({
   parseHTML() {
     return [
@@ -51,7 +52,7 @@ export const LessonGapNode = Node.create<{
       dom.className = "rich-gap-token";
       dom.setAttribute("aria-haspopup", "dialog");
       const refresh = (source: string) => {
-        const label = source.slice(2, -2).replace(/^=/, "").split("|")[0];
+        const label = gapSourceLabel(source);
         dom.textContent = `${label} ▾`;
         dom.setAttribute("data-lesson-gap", source);
         dom.setAttribute("aria-label", `Изменить пропуск «${label}»`);
@@ -99,7 +100,7 @@ export const LessonGapNode = Node.create<{
   },
   renderHTML({ node, HTMLAttributes }) {
     const source = String(node.attrs.source);
-    const label = source.slice(2, -2).replace(/^=/, "").split("|")[0];
+    const label = gapSourceLabel(source);
     return [
       "span",
       mergeAttributes(HTMLAttributes, {

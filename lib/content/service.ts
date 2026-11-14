@@ -1,5 +1,9 @@
 import { contentActor, authorizeSubject, contentWrite } from "./permissions";
-import { gapDefinition, gapExercisesSchema } from "../exercises";
+import {
+  gapDefinition,
+  gapExercisesSchema,
+  gapExerciseFor,
+} from "../exercises";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
@@ -22,6 +26,13 @@ import {
 import type { SubjectDTO, TopicDTO, QuestionDTO } from "./types";
 import { createStorageDriver } from "../storage";
 import { getEnv } from "../env";
+import { lockTopicForChange } from "./locks";
+import {
+  pinLegacyGapIds,
+  stabilizeGapIds,
+  correctGapAnswersChanged,
+  existingGapIdentities,
+} from "./gap-identity";
 type Db = Prisma.TransactionClient;
 const optionsSchema = z.array(z.object({ id: z.string(), text: z.string() }));
 const notFound = () => new ContentError("Материал не найден.", 404);
@@ -130,6 +141,7 @@ export async function getTopic(
     include: {
       subject: { select: { id: true, title: true, slug: true, status: true } },
       images: { select: { id: true } },
+      gap_topicId: { select: { gapKey: true, sentence: true, answer: true } },
       question_topicId: {
         where: { archivedAt: null },
         orderBy: [{ order: "asc" }, { id: "asc" }],
@@ -138,6 +150,11 @@ export async function getTopic(
   });
   if (!row) throw notFound();
   await authorizeSubject(row.subjectId, actorId, db);
+  const stable = pinLegacyGapIds(
+    row.contentMd,
+    gapExercisesSchema.parse(row.gapExercises),
+    existingGapIdentities(row.gap_topicId),
+  );
   const questions: QuestionDTO[] = row.question_topicId.map((q) => ({
     id: q.id,
     topicId: q.topicId,
@@ -160,8 +177,7 @@ export async function getTopic(
     slug: row.slug,
     order: row.order,
     isFree: row.isFree,
-    contentMd: row.contentMd,
-    gapExercises: gapExercisesSchema.parse(row.gapExercises),
+    ...stable,
     readingMinutes: row.readingMinutes,
     authorName: row.authorName,
     reviewerName: row.reviewerName,
@@ -316,6 +332,7 @@ export async function createTopic(
     const row = await tx.topic.create({
       data: {
         ...data.fields,
+        ...stabilizeGapIds(data.fields.contentMd, data.fields.gapExercises),
         subjectId,
         needsExpertReview: !data.reviewed,
         reviewedAt: data.reviewed ? new Date() : null,
@@ -334,27 +351,58 @@ export async function updateTopic(
   validateReview(data);
   return getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
-    await lock(tx, `topic:${id}`);
+    await lockTopicForChange(tx, id);
     const row = await tx.topic.findUnique({ where: { id } });
     if (!row) throw notFound();
     await authorizeSubject(row.subjectId, actorId, tx);
     checkRevision(row.editRevision, revision);
     await validSection(tx, row.subjectId, data.fields.sectionId);
+    const known = existingGapIdentities(
+      await tx.gap.findMany({
+        where: { topicId: id },
+        select: { gapKey: true, sentence: true, answer: true },
+      }),
+    );
+    const oldExercises = gapExercisesSchema.parse(row.gapExercises);
+    const fields = {
+      ...data.fields,
+      ...stabilizeGapIds(
+        data.fields.contentMd,
+        data.fields.gapExercises ?? oldExercises,
+        known,
+      ),
+    };
+    const before = {
+      ...row,
+      ...pinLegacyGapIds(row.contentMd, oldExercises, known),
+    };
     const unchanged =
-      Object.entries(data.fields).every(
+      Object.entries(fields).every(
         ([key, value]) =>
-          JSON.stringify(row[key as keyof typeof row]) ===
+          JSON.stringify(before[key as keyof typeof before]) ===
           JSON.stringify(value),
       ) && data.reviewed === !row.needsExpertReview;
     if (!unchanged)
       await tx.topic.update({
         where: { id },
         data: {
-          ...data.fields,
+          ...fields,
           needsExpertReview: !data.reviewed,
           reviewedAt: data.reviewed ? new Date() : null,
           status: row.status === "PUBLISHED" ? "DRAFT" : row.status,
           editRevision: { increment: 1 },
+        },
+      });
+    else if (
+      row.contentMd !== fields.contentMd ||
+      JSON.stringify(row.gapExercises) !== JSON.stringify(fields.gapExercises)
+    )
+      // A lazy identity migration alone is not a content edit or a new publication.
+      await tx.topic.update({
+        where: { id },
+        data: {
+          contentMd: fields.contentMd,
+          gapExercises: fields.gapExercises,
         },
       });
     return getTopic(id, tx);
@@ -368,7 +416,7 @@ export async function setTopicStatus(
 ) {
   return getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
-    await lock(tx, `topic:${id}`);
+    await lockTopicForChange(tx, id);
     const row = await tx.topic.findUnique({ where: { id } });
     if (!row) throw notFound();
     await authorizeSubject(row.subjectId, actorId, tx);
@@ -417,7 +465,7 @@ export async function createQuestion(
   const data = questionFields.parse(input);
   return getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
-    await lock(tx, `topic:${topicId}`);
+    await lockTopicForChange(tx, topicId);
     const topic = await tx.topic.findUnique({ where: { id: topicId } });
     if (!topic) throw notFound();
     await authorizeSubject(topic.subjectId, actorId, tx);
@@ -439,7 +487,7 @@ export async function updateQuestion(
     await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
     if (!q || q.archivedAt) throw notFound();
-    await lock(tx, `topic:${q.topicId}`);
+    await lockTopicForChange(tx, q.topicId);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
     });
@@ -469,7 +517,7 @@ export async function deleteQuestion(
     await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
     if (!q || q.archivedAt) throw notFound();
-    await lock(tx, `topic:${q.topicId}`);
+    await lockTopicForChange(tx, q.topicId);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
     });
@@ -494,7 +542,7 @@ export async function deleteTopic(
 ) {
   const result = await getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
-    await lock(tx, `topic:${id}`);
+    await lockTopicForChange(tx, id);
     const topic = await tx.topic.findUnique({ where: { id } });
     if (!topic) throw notFound();
     await authorizeSubject(topic.subjectId, actorId, tx);
@@ -535,8 +583,20 @@ export async function publishTopic(
   return getDb().$transaction(
     async (tx) => {
       await contentWrite(tx, actorId, false);
-      await lock(tx, `topic:${id}`);
-      const topic = await getTopic(id, tx);
+      await lockTopicForChange(tx, id);
+      const currentTopic = await getTopic(id, tx);
+      const known = await tx.gap.findMany({
+        where: { topicId: id },
+        select: { gapKey: true, sentence: true, answer: true },
+      });
+      const topic = {
+        ...currentTopic,
+        ...stabilizeGapIds(
+          currentTopic.contentMd,
+          currentTopic.gapExercises,
+          existingGapIdentities(known),
+        ),
+      };
       await authorizeSubject(topic.subjectId, actorId, tx);
       checkRevision(topic.editRevision, revision);
       const parsed = parseTopic(topic.contentMd);
@@ -726,7 +786,10 @@ export async function publishTopic(
         const { gapKey, blockKey, order, answer, distractors, sentence } = gap;
         let definition;
         try {
-          definition = gapDefinition(gap, topic.gapExercises[gap.gapKey]);
+          definition = gapDefinition(
+            gap,
+            gapExerciseFor(topic.gapExercises, gap.gapKey),
+          );
         } catch (error) {
           throw new ContentError(
             `Пропуск ${gap.order + 1}: ${error instanceof Error ? error.message : "проверьте настройки"}`,
@@ -781,11 +844,27 @@ export async function publishTopic(
             where: { gapId: row.id },
             data: { suspended: false },
           });
+        if (previous && correctGapAnswersChanged(previous, row))
+          await tx.card.updateMany({
+            where: { gapId: row.id },
+            data: {
+              state: "NEW",
+              dueAt: new Date(),
+              intervalDays: 0,
+              firstShownAt: null,
+              suspended: false,
+              revision: { increment: 1 },
+              revealedAt: null,
+              revealedTopicVersion: null,
+            },
+          });
       }
       const published = await tx.topic.update({
         where: { id },
         data: {
           status: "PUBLISHED",
+          contentMd: topic.contentMd,
+          gapExercises: topic.gapExercises,
           publishedAt: new Date(),
           version: { increment: 1 },
           editRevision: { increment: 1 },

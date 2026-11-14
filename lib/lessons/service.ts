@@ -16,7 +16,7 @@ import type {
 } from "../generated/prisma/client";
 import { hasAccess, consumeLimit } from "../access";
 import { getSetting } from "../settings";
-import { lock } from "../auth/session";
+import { lockTopicForLearning } from "../content/locks";
 import { ContentError } from "../content/errors";
 import { actorKey, lockLearningActor } from "./actor";
 import {
@@ -182,8 +182,7 @@ export async function loadLesson(
   const threshold = await getSetting("lesson.passThreshold");
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
-    // Readers may share a topic; publication/deletion still require the exclusive lock.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtextextended(${`content:topic:${topicId}`},0))`;
+    await lockTopicForLearning(tx, topicId);
     const topic = await publishedTopic(topicId, tx);
     const allowed = await hasAccess(actor.userId ?? null, topic, tx);
     const base = {
@@ -261,7 +260,7 @@ export async function answerGap(
       select: { topicId: true },
     });
     if (!initial) throw new ContentError("Пропуск не найден.", 404);
-    await lock(tx, `content:topic:${initial.topicId}`);
+    await lockTopicForLearning(tx, initial.topicId);
     const topic = await accessibleTopic(initial.topicId, actor, tx);
     if (topic.version !== version)
       throw new ContentError("Тема обновлена. Перезагрузите страницу.", 409);
@@ -337,7 +336,7 @@ export async function startTest(
   await consumeLimit(actorKey(actor));
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
-    await lock(tx, `content:topic:${topicId}`);
+    await lockTopicForLearning(tx, topicId);
     const topic = await accessibleTopic(topicId, actor, tx);
     if (topic.version !== version)
       throw new ContentError("Тема обновлена. Перезагрузите страницу.", 409);
@@ -383,7 +382,7 @@ export async function answerQuestion(
   ]);
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
-    await lock(tx, `content:topic:${topicId}`);
+    await lockTopicForLearning(tx, topicId);
     const topic = await accessibleTopic(topicId, actor, tx);
     const run = await tx.testRun.findFirst({
       where: { id: runId, topicId, ...actor, mode: "TOPIC" },

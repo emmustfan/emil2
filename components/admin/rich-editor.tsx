@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { moveBlock, removeBlock, selectedBlock } from "@/lib/editor/blocks";
 import { lessonEditorExtensions } from "@/lib/editor/extensions";
+import { gapSourceId, randomGapId } from "@/lib/content/gap-id";
 import {
   createGapMarkdown,
   type Definition,
@@ -555,6 +556,11 @@ export function RichEditor({
                 const result = createGapMarkdown(
                   "____",
                   cleanDefinition(definition),
+                  gapSourceId(
+                    String(
+                      editor.state.doc.nodeAt(gapForm.from)?.attrs.source ?? "",
+                    ),
+                  ) ?? randomGapId(),
                 );
                 const source = result.markdown.trim();
                 const node = editor.schema.nodes.lessonGap.create(

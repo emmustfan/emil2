@@ -2,7 +2,7 @@ import type { ParsedTopic } from "./parse";
 import type { TopicInput } from "./validation";
 import { questionFields } from "./validation";
 import type { QuestionDTO } from "./types";
-import { gapDefinition } from "../exercises";
+import { gapDefinition, gapExerciseFor } from "../exercises";
 import { contentFieldIssues, contentFieldSummary } from "./field-errors";
 export function lessonReadiness(
   form: TopicInput,
@@ -19,7 +19,7 @@ export function lessonReadiness(
 ) {
   const gapProblems = parsed.gaps.flatMap((g) => {
     try {
-      gapDefinition(g, form.gapExercises?.[g.gapKey]);
+      gapDefinition(g, gapExerciseFor(form.gapExercises, g.gapKey));
       return [];
     } catch (e) {
       return [

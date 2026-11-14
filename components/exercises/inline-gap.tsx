@@ -22,11 +22,16 @@ export function InlineGap({
     [expanded, setExpanded] = useState(false);
   const feedback = gap.feedback,
     text = gap.answerType === "SHORT_TEXT";
+  const savedOption =
+    feedback?.chosenValues.length === 1
+      ? gap.options.find((option) =>
+          feedback.chosenValues.includes(option.text),
+        )
+      : undefined;
+  const historicalChoice =
+    feedback && !text && !savedOption ? feedback.chosenValues.join(", ") : "";
   const chosen = feedback
-    ? ((text
-        ? feedback.chosenValues[0]
-        : gap.options.find((o) => feedback.chosenValues.includes(o.text))
-            ?.id) ?? "")
+    ? ((text ? feedback.chosenValues[0] : savedOption?.id) ?? "")
     : value;
   const submit = () => {
     if (value.trim() && !pending && !feedback)
@@ -63,7 +68,7 @@ export function InlineGap({
           disabled={pending || !!feedback}
         >
           <option value="" disabled>
-            Выберите слово…
+            {historicalChoice || "Выберите слово…"}
           </option>
           {gap.options.map((o) => (
             <option key={o.id} value={o.id}>
