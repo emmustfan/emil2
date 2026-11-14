@@ -378,6 +378,9 @@ function LegalForm({ documents }: { documents: Config["documents"] }) {
     ),
     [confirm, setConfirm] = useState(false);
   const current = documents.find((d) => d.kind === kind);
+  // Controls stay disabled until hydration (state.busy includes !ready): React resets a
+  // controlled <select> to its state on hydrate, so an early choice would silently
+  // publish the text under the default document kind.
   return (
     <>
       <form
@@ -408,6 +411,7 @@ function LegalForm({ documents }: { documents: Config["documents"] }) {
           Документ
           <select
             className={field}
+            disabled={state.busy}
             value={kind}
             onChange={(e) => {
               setKind(e.target.value);
@@ -431,6 +435,7 @@ function LegalForm({ documents }: { documents: Config["documents"] }) {
           Номер новой версии
           <input
             className={field}
+            disabled={state.busy}
             required
             maxLength={80}
             value={version}
@@ -441,6 +446,7 @@ function LegalForm({ documents }: { documents: Config["documents"] }) {
           Текст документа
           <textarea
             className={field}
+            disabled={state.busy}
             rows={18}
             required
             minLength={10}
@@ -453,6 +459,7 @@ function LegalForm({ documents }: { documents: Config["documents"] }) {
           <input
             type="checkbox"
             className="mt-1"
+            disabled={state.busy}
             checked={confirm}
             onChange={(e) => setConfirm(e.target.checked)}
           />
