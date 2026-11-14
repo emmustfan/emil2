@@ -1,0 +1,18 @@
+# Managed cloud only: mount the session CA into networked build steps.
+# docker compose -f docker-compose.yml -f docker-compose.cloud.yml up --build -d
+services:
+  minio:
+    build:
+      secrets: [proxy_ca]
+  web:
+    build:
+      secrets: [proxy_ca]
+  worker:
+    build:
+      secrets: [proxy_ca]
+  migrate:
+    build:
+      secrets: [proxy_ca]
+secrets:
+  proxy_ca:
+    file: ${CODEX_PROXY_CERT:?Managed cloud proxy certificate path is required}

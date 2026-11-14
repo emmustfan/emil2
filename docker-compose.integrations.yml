@@ -1,0 +1,18 @@
+# Optional: explicitly selected live LLM/Telegram settings from the owner's .env.
+# Use after docker-compose.preview.yml. Payment/storage/mail preview modes stay unchanged.
+x-connected-services: &connected-services
+  APP_URL: ${APP_URL:-http://localhost:3000}
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-}
+  LLM_EMBEDDING_MODEL: ${LLM_EMBEDDING_MODEL:-}
+  LLM_EMBEDDING_BASE_URL: ${LLM_EMBEDDING_BASE_URL:-}
+  LLM_EMBEDDING_API_KEY: ${LLM_EMBEDDING_API_KEY:-}
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+services:
+  web:
+    environment: *connected-services
+  worker:
+    environment: *connected-services

@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-08",
+  "environment": {
+    "cpuCount": 5,
+    "framework": "Next.js 16.4.5 optimized build (next start)",
+    "runtime": "NODE_ENV=test for mock adapters; framework build is optimized",
+    "webProcesses": 3,
+    "proxy": "Caddy 2.10.2",
+    "providers": "mock; no real external calls"
+  },
+  "scenario": {
+    "maxVirtualUsers": 300,
+    "plateauSeconds": 45,
+    "readingPauseSeconds": 5,
+    "operations": ["landing GET", "synthetic free lesson GET", "health GET"]
+  },
+  "results": {
+    "httpRequests": 10699,
+    "requestsPerSecond": 113.1788054464284,
+    "failedRequestRate": 0,
+    "pageP95Ms": 794.3451556999999,
+    "healthP95Ms": 153.80066549999998
+  },
+  "limits": [
+    "Server HTTP reading benchmark; not browser LCP or 4G",
+    "Not a benchmark of real AI/payment services",
+    "Repeat on the selected production VPS before public launch"
+  ],
+  "thresholdEvaluation": {
+    "k6ProcessExitCode": 0,
+    "legacyExportBooleanMeaning": "false = threshold not failed; true = threshold failed",
+    "legacyFailedFlags": {
+      "pagesP95": false,
+      "healthP95": false,
+      "requestFailureRate": false
+    },
+    "criteria": {
+      "pageP95MsMustBeBelow": 2500,
+      "healthP95MsMustBeBelow": 300,
+      "failedRequestRateMustBeBelow": 0.01
+    },
+    "formatControlCases": [
+      {
+        "observedP95Ms": 794,
+        "criterion": "p(95)<2500",
+        "k6ExitCode": 0,
+        "legacyFlag": false
+      },
+      {
+        "observedP95Ms": 3000,
+        "criterion": "p(95)<2500",
+        "k6ExitCode": 99,
+        "legacyFlag": true
+      }
+    ]
+  }
+}
