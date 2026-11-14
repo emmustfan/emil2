@@ -279,7 +279,9 @@ describe("authentication with real PostgreSQL", () => {
       code: "invalid",
     });
     const other = await login();
-    const again = signed(telegramId, Math.floor(Date.now() / 1000) - 1);
+    // Derive from the first payload: "now - 1" equals it when a second boundary passes, and the
+    // identical hash is then (correctly) rejected as a replay before the conflict check runs.
+    const again = signed(telegramId, data.auth_date - 1);
     hashes.push(again.hash);
     await expect(loginTelegram(again, other.user.id)).rejects.toMatchObject({
       code: "conflict",
