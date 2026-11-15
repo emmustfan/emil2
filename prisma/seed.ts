@@ -1,3 +1,4 @@
+import { withTopicDraft } from "../lib/content/drafts";
 import { landingSchema } from "../lib/landing/defaults";
 import { upgradeBillingCopy } from "../lib/landing/upgrade-billing";
 import { BILLING_CONTENT } from "../lib/billing/config";
@@ -168,7 +169,7 @@ try {
           .parse(parse(frontmatter));
         const topic = await tx.topic.upsert({
           where: { subjectId_slug: { subjectId: subject.id, slug } },
-          create: {
+          create: withTopicDraft({
             ...meta,
             subjectId: subject.id,
             sectionId: section.id,
@@ -178,7 +179,7 @@ try {
             status: "DRAFT",
             referencesMd:
               "Учебный пример из ТЗ. Источники и формулировки подлежат проверке экспертом.",
-          },
+          }),
           update: {},
         });
         // Fixtures are initialized only until the first editorial change/publication.

@@ -43,7 +43,9 @@ export async function catalog(userId: string | null, course?: number) {
           _count: {
             select: {
               gap_topicId: { where: { archivedAt: null } },
-              question_topicId: { where: { archivedAt: null } },
+              question_topicId: {
+                where: { archivedAt: null, publishedAt: { not: null } },
+              },
             },
           },
           ...(userId

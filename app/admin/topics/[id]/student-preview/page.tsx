@@ -19,10 +19,7 @@ export default async function StudentPreview({
     <main className="student-lesson-preview">
       <div className="student-preview-banner">
         <div>
-          <strong>
-            Предпросмотр ученика ·{" "}
-            {topic.status === "PUBLISHED" ? "опубликованный урок" : "черновик"}
-          </strong>
+          <strong>Предпросмотр ученика · черновик</strong>
           <p>
             Задания можно проверять. Ответы не сохраняются в прогресс. Этот
             просмотр доступен только автору и администратору.

@@ -1,3 +1,4 @@
+import { withTopicDraft } from "../../lib/content/drafts";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
@@ -137,7 +138,7 @@ export async function ensureDentalDemo(scope?: {
       });
       if (found) return found;
       const topic = await tx.topic.create({
-        data: {
+        data: withTopicDraft({
           subjectId,
           sectionId,
           slug: DENTAL_DEMO_SLUG,
@@ -167,7 +168,7 @@ export async function ensureDentalDemo(scope?: {
             })),
           },
           question_topicId: { create: lesson.questions },
-        },
+        }),
       });
       created = true;
       return topic;

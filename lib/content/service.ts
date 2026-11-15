@@ -6,7 +6,7 @@ import {
 } from "../exercises";
 import { z } from "zod";
 import { getDb } from "../db";
-import type { Prisma } from "../generated/prisma/client";
+import { Prisma, type Question } from "../generated/prisma/client";
 import { getSetting } from "../settings";
 import { ContentError } from "./errors";
 import {
@@ -33,6 +33,7 @@ import {
   correctGapAnswersChanged,
   existingGapIdentities,
 } from "./gap-identity";
+import { initialTopicDraft } from "./drafts";
 type Db = Prisma.TransactionClient;
 const optionsSchema = z.array(z.object({ id: z.string(), text: z.string() }));
 const notFound = () => new ContentError("Материал не найден.", 404);
@@ -48,6 +49,24 @@ async function lock(tx: Db, key: string) {
 }
 function checkRevision(actual: number, expected: number) {
   if (actual !== expected) throw conflict();
+}
+function questionDTO(q: Question, working = true): QuestionDTO {
+  const source = working && q.draft ? questionFields.parse(q.draft) : q;
+  return {
+    id: q.id,
+    topicId: q.topicId,
+    answerType: source.answerType,
+    acceptedAnswers: source.acceptedAnswers ?? [],
+    stem: source.stem,
+    options: optionsSchema.parse(source.options),
+    correctOptionIds: source.correctOptionIds,
+    explanation: source.explanation,
+    sourceBlockKey: source.sourceBlockKey,
+    isDiagnostic: source.isDiagnostic,
+    order: source.order,
+    publishedAt: q.publishedAt?.toISOString() ?? null,
+    hasDraft: working && !!q.draft,
+  };
 }
 export async function listSubjects(q = "", page = 1, actorId?: string) {
   const actor = await contentActor(actorId);
@@ -108,7 +127,7 @@ export async function listTopics(
     ...(q
       ? {
           OR: [
-            { title: { contains: q, mode: "insensitive" as const } },
+            { draftTitle: { contains: q, mode: "insensitive" as const } },
             { slug: { contains: q, mode: "insensitive" as const } },
           ],
         }
@@ -123,13 +142,22 @@ export async function listTopics(
       include: {
         section: { select: { title: true } },
         _count: {
-          select: { question_topicId: { where: { archivedAt: null } } },
+          select: {
+            question_topicId: {
+              where: { archivedAt: null, draftDeleted: false },
+            },
+          },
         },
       },
     }),
     getDb().topic.count({ where }),
   ]);
-  return { items, total, page, pages: Math.max(1, Math.ceil(total / size)) };
+  return {
+    items: items.map((item) => ({ ...item, title: item.draftTitle })),
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / size)),
+  };
 }
 export async function getTopic(
   id: string,
@@ -155,35 +183,56 @@ export async function getTopic(
     gapExercisesSchema.parse(row.gapExercises),
     existingGapIdentities(row.gap_topicId),
   );
-  const questions: QuestionDTO[] = row.question_topicId.map((q) => ({
-    id: q.id,
-    topicId: q.topicId,
-    answerType: q.answerType,
-    acceptedAnswers: q.acceptedAnswers,
-    stem: q.stem,
-    options: optionsSchema.parse(q.options),
-    correctOptionIds: q.correctOptionIds,
-    explanation: q.explanation,
-    sourceBlockKey: q.sourceBlockKey,
-    isDiagnostic: q.isDiagnostic,
-    order: q.order,
-  }));
+  const questions = row.question_topicId
+    .filter((q) => !q.draftDeleted)
+    .map((q) => questionDTO(q))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const draft = pinLegacyGapIds(
+    row.draftContentMd,
+    gapExercisesSchema.parse(row.draftGapExercises),
+    existingGapIdentities(row.gap_topicId),
+  );
+  const editor = row.draftUpdatedById
+    ? await db.user.findUnique({
+        where: { id: row.draftUpdatedById },
+        select: { id: true, name: true },
+      })
+    : null;
   return {
     imageIds: row.images.map((i) => i.id),
     id: row.id,
     subjectId: row.subjectId,
     sectionId: row.sectionId,
-    title: row.title,
+    title: row.draftTitle,
     slug: row.slug,
     order: row.order,
     isFree: row.isFree,
-    ...stable,
-    readingMinutes: row.readingMinutes,
-    authorName: row.authorName,
-    reviewerName: row.reviewerName,
-    referencesMd: row.referencesMd,
-    needsExpertReview: row.needsExpertReview,
-    reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    ...draft,
+    readingMinutes: row.draftReadingMinutes,
+    authorName: row.draftAuthorName,
+    reviewerName: row.draftReviewerName,
+    referencesMd: row.draftReferencesMd,
+    needsExpertReview: !row.draftReviewed,
+    reviewedAt: row.draftReviewed
+      ? ((row.draftUpdatedAt ?? row.reviewedAt)?.toISOString() ?? null)
+      : null,
+    draftState: row.draftState,
+    draftUpdatedAt: row.draftUpdatedAt?.toISOString() ?? null,
+    draftUpdatedBy: editor,
+    published:
+      row.version > 0
+        ? {
+            title: row.title,
+            ...stable,
+            readingMinutes: row.readingMinutes,
+            authorName: row.authorName,
+            reviewerName: row.reviewerName,
+            referencesMd: row.referencesMd,
+            questions: row.question_topicId
+              .filter((q) => q.publishedAt)
+              .map((q) => questionDTO(q, false)),
+          }
+        : null,
     status: row.status,
     version: row.version,
     editRevision: row.editRevision,
@@ -329,10 +378,18 @@ export async function createTopic(
     if (!(await tx.subject.findUnique({ where: { id: subjectId } })))
       throw notFound();
     await validSection(tx, subjectId, data.fields.sectionId);
+    const stable = stabilizeGapIds(
+      data.fields.contentMd,
+      data.fields.gapExercises,
+    );
     const row = await tx.topic.create({
       data: {
         ...data.fields,
-        ...stabilizeGapIds(data.fields.contentMd, data.fields.gapExercises),
+        ...stable,
+        ...initialTopicDraft(
+          { ...data.fields, ...stable, needsExpertReview: !data.reviewed },
+          actorId,
+        ),
         subjectId,
         needsExpertReview: !data.reviewed,
         reviewedAt: data.reviewed ? new Date() : null,
@@ -356,6 +413,19 @@ export async function updateTopic(
     if (!row) throw notFound();
     await authorizeSubject(row.subjectId, actorId, tx);
     checkRevision(row.editRevision, revision);
+    if (row.version > 0 && input.slug !== row.slug)
+      throw new ContentError(
+        "Адрес уже опубликованного урока менять нельзя: он используется в ссылках студентов.",
+        422,
+        [],
+        "validation",
+        [
+          fieldIssue(
+            "slug",
+            "После первой публикации адрес урока сохраняется. Создайте новый урок, если нужен другой адрес.",
+          ),
+        ],
+      );
     await validSection(tx, row.subjectId, data.fields.sectionId);
     const known = existingGapIdentities(
       await tx.gap.findMany({
@@ -363,46 +433,47 @@ export async function updateTopic(
         select: { gapKey: true, sentence: true, answer: true },
       }),
     );
-    const oldExercises = gapExercisesSchema.parse(row.gapExercises);
     const fields = {
       ...data.fields,
       ...stabilizeGapIds(
         data.fields.contentMd,
-        data.fields.gapExercises ?? oldExercises,
+        data.fields.gapExercises ??
+          gapExercisesSchema.parse(row.draftGapExercises),
         known,
       ),
     };
-    const before = {
-      ...row,
-      ...pinLegacyGapIds(row.contentMd, oldExercises, known),
-    };
+    const before = await getTopic(id, tx);
     const unchanged =
       Object.entries(fields).every(
         ([key, value]) =>
-          JSON.stringify(before[key as keyof typeof before]) ===
+          JSON.stringify(before[key as keyof TopicDTO]) ===
           JSON.stringify(value),
-      ) && data.reviewed === !row.needsExpertReview;
+      ) && data.reviewed === row.draftReviewed;
     if (!unchanged)
       await tx.topic.update({
         where: { id },
         data: {
-          ...fields,
-          needsExpertReview: !data.reviewed,
-          reviewedAt: data.reviewed ? new Date() : null,
-          status: row.status === "PUBLISHED" ? "DRAFT" : row.status,
+          slug: fields.slug,
+          sectionId: fields.sectionId,
+          order: fields.order,
+          isFree: fields.isFree,
+          ...initialTopicDraft(
+            { ...fields, needsExpertReview: !data.reviewed },
+            actorId,
+          ),
           editRevision: { increment: 1 },
         },
       });
     else if (
-      row.contentMd !== fields.contentMd ||
-      JSON.stringify(row.gapExercises) !== JSON.stringify(fields.gapExercises)
+      row.draftContentMd !== fields.contentMd ||
+      JSON.stringify(row.draftGapExercises) !==
+        JSON.stringify(fields.gapExercises)
     )
-      // A lazy identity migration alone is not a content edit or a new publication.
       await tx.topic.update({
         where: { id },
         data: {
-          contentMd: fields.contentMd,
-          gapExercises: fields.gapExercises,
+          draftContentMd: fields.contentMd,
+          draftGapExercises: fields.gapExercises,
         },
       });
     return getTopic(id, tx);
@@ -415,27 +486,28 @@ export async function setTopicStatus(
   actorId?: string,
 ) {
   return getDb().$transaction(async (tx) => {
-    await contentWrite(tx, actorId, false);
+    await contentWrite(tx, actorId);
     await lockTopicForChange(tx, id);
     const row = await tx.topic.findUnique({ where: { id } });
     if (!row) throw notFound();
     await authorizeSubject(row.subjectId, actorId, tx);
     checkRevision(row.editRevision, revision);
-    if (row.status !== status)
+    if (row.draftState !== status)
       await tx.topic.update({
         where: { id },
-        data: { status, editRevision: { increment: 1 } },
+        data: { draftState: status, editRevision: { increment: 1 } },
       });
     return getTopic(id, tx);
   });
 }
-async function changedTopic(tx: Db, id: string) {
+async function changedTopic(tx: Db, id: string, actorId?: string) {
   await tx.topic.update({
     where: { id },
     data: {
-      needsExpertReview: true,
-      reviewedAt: null,
-      status: "DRAFT",
+      draftReviewed: false,
+      draftState: "DRAFT",
+      draftUpdatedAt: new Date(),
+      draftUpdatedById: actorId ?? null,
       editRevision: { increment: 1 },
     },
   });
@@ -448,7 +520,7 @@ async function validQuestionSource(
   const row = await tx.topic.findUniqueOrThrow({ where: { id: topicId } });
   if (
     input.sourceBlockKey &&
-    !parseTopic(row.contentMd).blocks.some(
+    !parseTopic(row.draftContentMd).blocks.some(
       (b) => b.blockKey === input.sourceBlockKey,
     )
   )
@@ -472,7 +544,7 @@ export async function createQuestion(
     checkRevision(topic.editRevision, revision);
     await validQuestionSource(tx, topicId, data);
     await tx.question.create({ data: { ...data, topicId } });
-    await changedTopic(tx, topicId);
+    await changedTopic(tx, topicId, actorId);
     return getTopic(topicId, tx);
   });
 }
@@ -486,7 +558,7 @@ export async function updateQuestion(
   return getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
-    if (!q || q.archivedAt) throw notFound();
+    if (!q || q.archivedAt || q.draftDeleted) throw notFound();
     await lockTopicForChange(tx, q.topicId);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
@@ -495,15 +567,27 @@ export async function updateQuestion(
     checkRevision(topic.editRevision, revision);
     await validQuestionSource(tx, q.topicId, data);
     const current = await tx.question.findUniqueOrThrow({ where: { id } });
+    const working = questionDTO(current);
     if (
       Object.entries(data).some(
         ([key, value]) =>
-          JSON.stringify(current[key as keyof typeof current]) !==
+          JSON.stringify(working[key as keyof typeof working]) !==
           JSON.stringify(value),
       )
     ) {
-      await tx.question.update({ where: { id }, data });
-      await changedTopic(tx, q.topicId);
+      const live = questionDTO(current, false);
+      const sameAsLive = Object.entries(data).every(
+        ([key, value]) =>
+          JSON.stringify(live[key as keyof typeof live]) ===
+          JSON.stringify(value),
+      );
+      await tx.question.update({
+        where: { id },
+        data: current.publishedAt
+          ? { draft: sameAsLive ? Prisma.DbNull : data }
+          : data,
+      });
+      await changedTopic(tx, q.topicId, actorId);
     }
     return getTopic(q.topicId, tx);
   });
@@ -516,7 +600,7 @@ export async function deleteQuestion(
   return getDb().$transaction(async (tx) => {
     await contentWrite(tx, actorId, false);
     const q = await tx.question.findUnique({ where: { id } });
-    if (!q || q.archivedAt) throw notFound();
+    if (!q || q.archivedAt || q.draftDeleted) throw notFound();
     await lockTopicForChange(tx, q.topicId);
     const topic = await tx.topic.findUniqueOrThrow({
       where: { id: q.topicId },
@@ -525,13 +609,15 @@ export async function deleteQuestion(
     checkRevision(topic.editRevision, revision);
     await tx.question.update({
       where: { id },
-      data: { archivedAt: new Date() },
+      data:
+        topic.version > 0 ? { draftDeleted: true } : { archivedAt: new Date() },
     });
-    await tx.card.updateMany({
-      where: { questionId: id },
-      data: { suspended: true },
-    });
-    await changedTopic(tx, q.topicId);
+    if (!topic.version)
+      await tx.card.updateMany({
+        where: { questionId: id },
+        data: { suspended: true },
+      });
+    await changedTopic(tx, q.topicId, actorId);
     return getTopic(q.topicId, tx);
   });
 }
@@ -548,7 +634,12 @@ export async function deleteTopic(
     await authorizeSubject(topic.subjectId, actorId, tx);
     checkRevision(topic.editRevision, revision);
     if (topic.status === "PUBLISHED")
-      throw new ContentError("Сначала переведите тему в черновик.", 409);
+      throw new ContentError("Сначала снимите тему с публикации.", 409);
+    if (await tx.topicRevision.count({ where: { topicId: id } }))
+      throw new ContentError(
+        "Урок с историей публикаций нельзя удалить. Снимите его с публикации, чтобы скрыть от студентов.",
+        409,
+      );
     const images = await tx.topicImage.findMany({
       where: { topicId: id },
       select: { storageKey: true },
@@ -752,8 +843,12 @@ export async function publishTopic(
           fields,
         );
       }
-      if (topic.status === "PUBLISHED") return topic;
-      if (topic.status !== "REVIEW")
+      if (topic.status === "PUBLISHED" && topic.draftState === "CLEAN")
+        return topic;
+      if (
+        topic.draftState !== "REVIEW" &&
+        !(topic.draftState === "CLEAN" && topic.version > 0)
+      )
         throw new ContentError(
           "Сначала отправьте тему на проверку.",
           422,
@@ -766,6 +861,39 @@ export async function publishTopic(
             ),
           ],
         );
+      const publicationTime = new Date();
+      const pending = await tx.question.findMany({
+        where: { topicId: id, archivedAt: null },
+      });
+      for (const question of pending) {
+        if (question.draftDeleted) {
+          await tx.question.update({
+            where: { id: question.id },
+            data: {
+              archivedAt: publicationTime,
+              draft: Prisma.DbNull,
+              draftDeleted: false,
+            },
+          });
+          await tx.card.updateMany({
+            where: { questionId: question.id },
+            data: { suspended: true },
+          });
+        } else {
+          const changes = question.draft
+            ? questionFields.parse(question.draft)
+            : {};
+          await tx.question.update({
+            where: { id: question.id },
+            data: {
+              ...changes,
+              publishedAt: question.publishedAt ?? publicationTime,
+              draft: Prisma.DbNull,
+              draftDeleted: false,
+            },
+          });
+        }
+      }
       const activeKeys = parsed.gaps.map((g) => g.gapKey);
       const removed = await tx.gap.findMany({
         where: { topicId: id, archivedAt: null, gapKey: { notIn: activeKeys } },
@@ -863,11 +991,33 @@ export async function publishTopic(
         where: { id },
         data: {
           status: "PUBLISHED",
+          draftState: "CLEAN",
+          title: topic.title,
           contentMd: topic.contentMd,
           gapExercises: topic.gapExercises,
-          publishedAt: new Date(),
+          draftContentMd: topic.contentMd,
+          draftGapExercises: topic.gapExercises,
+          readingMinutes: topic.readingMinutes,
+          referencesMd: topic.referencesMd,
+          authorName: topic.authorName,
+          reviewerName: topic.reviewerName,
+          needsExpertReview: false,
+          reviewedAt: publicationTime,
+          publishedAt: publicationTime,
           version: { increment: 1 },
           editRevision: { increment: 1 },
+        },
+      });
+      await tx.topicRevision.create({
+        data: {
+          topicId: id,
+          version: published.version,
+          title: published.title,
+          contentMd: published.contentMd,
+          gapExercises: topic.gapExercises,
+          questions: topic.questions.map(questionSnapshot),
+          publishedAt: publicationTime,
+          publishedById: actorId ?? null,
         },
       });
       await enqueuePublication(tx, published);
@@ -875,6 +1025,153 @@ export async function publishTopic(
     },
     { timeout: 30000 },
   );
+}
+function questionSnapshot(q: QuestionDTO) {
+  const {
+    id,
+    topicId,
+    answerType,
+    acceptedAnswers,
+    stem,
+    options,
+    correctOptionIds,
+    explanation,
+    sourceBlockKey,
+    isDiagnostic,
+    order,
+  } = q;
+  return {
+    id,
+    topicId,
+    answerType,
+    acceptedAnswers,
+    stem,
+    options,
+    correctOptionIds,
+    explanation,
+    sourceBlockKey,
+    isDiagnostic,
+    order,
+  };
+}
+
+export async function discardTopicChanges(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId);
+    await lockTopicForChange(tx, id);
+    const row = await tx.topic.findUnique({ where: { id } });
+    if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
+    checkRevision(row.editRevision, revision);
+    if (!row.version)
+      throw new ContentError(
+        "У урока ещё нет опубликованной версии, к которой можно вернуться.",
+      );
+    await tx.question.deleteMany({ where: { topicId: id, publishedAt: null } });
+    await tx.question.updateMany({
+      where: { topicId: id, publishedAt: { not: null } },
+      data: { draft: Prisma.DbNull, draftDeleted: false },
+    });
+    await tx.topic.update({
+      where: { id },
+      data: {
+        ...initialTopicDraft(
+          {
+            ...row,
+            gapExercises: gapExercisesSchema.parse(row.gapExercises),
+            status: "PUBLISHED",
+          },
+          actorId,
+        ),
+        editRevision: { increment: 1 },
+      },
+    });
+    return getTopic(id, tx);
+  });
+}
+
+export async function unpublishTopic(
+  id: string,
+  revision: number,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await contentWrite(tx, actorId);
+    await lockTopicForChange(tx, id);
+    const row = await tx.topic.findUnique({ where: { id } });
+    if (!row) throw notFound();
+    await authorizeSubject(row.subjectId, actorId, tx);
+    checkRevision(row.editRevision, revision);
+    if (row.status === "PUBLISHED")
+      await tx.topic.update({
+        where: { id },
+        data: { status: "DRAFT", editRevision: { increment: 1 } },
+      });
+    return getTopic(id, tx);
+  });
+}
+
+export async function listTopicRevisions(id: string, actorId?: string) {
+  const topic = await getDb().topic.findUnique({
+    where: { id },
+    select: { subjectId: true },
+  });
+  if (!topic) throw notFound();
+  await authorizeSubject(topic.subjectId, actorId);
+  const rows = await getDb().topicRevision.findMany({
+    where: { topicId: id },
+    orderBy: { version: "desc" },
+    select: { id: true, version: true, publishedAt: true, publishedById: true },
+  });
+  const users = await getDb().user.findMany({
+    where: {
+      id: {
+        in: rows.flatMap((row) =>
+          row.publishedById ? [row.publishedById] : [],
+        ),
+      },
+    },
+    select: { id: true, name: true },
+  });
+  const names = new Map(users.map((user) => [user.id, user]));
+  return rows.map((row) => ({
+    id: row.id,
+    version: row.version,
+    publishedAt: row.publishedAt.toISOString(),
+    publishedBy: row.publishedById
+      ? (names.get(row.publishedById) ?? { id: row.publishedById, name: null })
+      : null,
+  }));
+}
+
+export async function getTopicRevision(id: string, actorId?: string) {
+  const row = await getDb().topicRevision.findUnique({
+    where: { id },
+    include: { topic: { select: { subjectId: true } } },
+  });
+  if (!row) throw notFound();
+  await authorizeSubject(row.topic.subjectId, actorId);
+  const publisher = row.publishedById
+    ? await getDb().user.findUnique({
+        where: { id: row.publishedById },
+        select: { id: true, name: true },
+      })
+    : null;
+  return {
+    parsed: parseTopic(row.contentMd),
+    id: row.id,
+    version: row.version,
+    title: row.title,
+    contentMd: row.contentMd,
+    gapExercises: gapExercisesSchema.parse(row.gapExercises),
+    questions: row.questions as unknown as QuestionDTO[],
+    publishedAt: row.publishedAt.toISOString(),
+    publishedBy: publisher,
+  };
 }
 export function subjectDTO(row: SubjectDTO): SubjectDTO {
   const {
@@ -913,12 +1210,10 @@ export async function getSection(id: string, actorId: string) {
 }
 export async function getQuestion(id: string, actorId: string) {
   const row = await getDb().question.findFirst({
-    where: { id, archivedAt: null },
+    where: { id, archivedAt: null, draftDeleted: false },
     include: { topic: { select: { subjectId: true } } },
   });
   if (!row) throw notFound();
   await authorizeSubject(row.topic.subjectId, actorId);
-  const { topic, ...question } = row;
-  void topic;
-  return question;
+  return questionDTO(row);
 }

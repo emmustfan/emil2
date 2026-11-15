@@ -27,6 +27,7 @@ import {
 import { QuestionForm } from "./question-form";
 import { RichEditor, type RichEditorHandle } from "./rich-editor";
 import { ImageUpload } from "./image-upload";
+import { PublicationTools } from "./publication-tools";
 import { LessonReview } from "./lesson-review";
 import { lessonReadiness } from "@/lib/content/readiness";
 import { lessonReviewPrompt } from "@/lib/content/review-prompt";
@@ -57,6 +58,7 @@ export function TopicEditor({
   minQuestions,
   maxQuestions,
   imageMaxBytes,
+  timeZone,
   tree,
   ref,
   onTopicChange,
@@ -68,6 +70,7 @@ export function TopicEditor({
   minQuestions: number;
   maxQuestions: number;
   imageMaxBytes: number;
+  timeZone: string;
   tree?: ReactNode;
   ref?: Ref<TopicEditorHandle>;
   onTopicChange?: (topic: TopicDTO) => void;
@@ -223,7 +226,7 @@ export function TopicEditor({
       await saveDraft();
       const next = await action(rowRef.current);
       accept(next);
-      const synced = { ...formRef.current, reviewed: !next.needsExpertReview };
+      const synced = fields(next);
       formRef.current = synced;
       setForm(synced);
       return next;
@@ -268,6 +271,30 @@ export function TopicEditor({
         }),
       );
       setMessage(t.published);
+    } catch {}
+  }
+  async function publicationAction(action: "discard" | "unpublish") {
+    if (
+      !confirm(
+        action === "discard"
+          ? "Отменить неопубликованные изменения текста и вопросов? Структура урока сохранится."
+          : "Снять урок с публикации? Ученики временно потеряют доступ к нему и его карточкам.",
+      )
+    )
+      return;
+    try {
+      await foreground((current) =>
+        requestContent<TopicDTO>(`topics/${initial.id}/${action}`, "POST", {
+          revision: current.editRevision,
+        }),
+      );
+      setSelected(undefined);
+      setQuestionNonce((n) => n + 1);
+      setMessage(
+        action === "discard"
+          ? "Неопубликованные изменения отменены."
+          : "Урок снят с публикации.",
+      );
     } catch {}
   }
   async function question(input: QuestionInput, id?: string) {
@@ -382,7 +409,7 @@ export function TopicEditor({
     minQuestions,
     maxQuestions,
     subjectPublished: row.subject.status === "PUBLISHED",
-    status: row.status,
+    status: row.draftState,
     imageIds: [...new Set([...imageIds, ...(row.imageIds ?? [])])],
     previewCurrent: previewSource === form.contentMd,
   });
@@ -512,6 +539,29 @@ export function TopicEditor({
           {t.statuses[row.status]} · {t.version} {row.version}
         </span>
       </div>
+      {row.draftState !== "CLEAN" && (
+        <div
+          role="note"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7"
+        >
+          <strong>Есть неопубликованные изменения</strong> ·{" "}
+          {row.draftState === "REVIEW" ? "На проверке" : "Черновик"}
+          <br />
+          {row.draftUpdatedAt && (
+            <>
+              Последняя правка:{" "}
+              {new Date(row.draftUpdatedAt).toLocaleString("ru-RU", {
+                timeZone,
+              })}{" "}
+              · {row.draftUpdatedBy?.name ?? "Автор не указан"}
+              <br />
+            </>
+          )}
+          {row.status === "PUBLISHED"
+            ? "Ученики продолжают видеть опубликованную версию."
+            : "Урок пока скрыт от учеников."}
+        </div>
+      )}
       {error && (
         <div
           role="alert"
@@ -940,8 +990,9 @@ export function TopicEditor({
           <p className="text-sm leading-7 text-stone-600">
             Проверьте содержание, эталоны и объяснения. После этого заполните
             автора, рецензента и источники, отметьте экспертную проверку.
-            Изменение текста или вопроса снимает отметку и возвращает
-            опубликованный урок в черновик.
+            Изменение текста или вопроса снимает отметку проверки рабочей копии.
+            Опубликованная версия остаётся доступной ученикам до новой
+            публикации.
           </p>
           <fieldset
             disabled={busy || conflict}
@@ -971,10 +1022,16 @@ export function TopicEditor({
               {inputError("reviewed")}
             </label>
             <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
-              {t.reviewNote} {t.publicationNote}
+              {t.reviewNote} Правки станут видны ученикам после публикации.
             </p>
           </fieldset>
           <LessonReview checks={checks} prompt={reviewPrompt} />
+          <PublicationTools
+            key={`${row.id}-${row.version}`}
+            row={row}
+            form={form}
+            timeZone={timeZone}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
@@ -991,22 +1048,36 @@ export function TopicEditor({
             >
               {t.publish}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy || conflict}
-              onClick={() => void status("DRAFT")}
-            >
-              {t.draft}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy || conflict}
-              onClick={() => void removeTopic()}
-            >
-              {t.remove}
-            </Button>
+            {row.version > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || conflict || row.draftState === "CLEAN"}
+                onClick={() => void publicationAction("discard")}
+              >
+                Отменить изменения
+              </Button>
+            )}
+            {row.status === "PUBLISHED" && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || conflict}
+                onClick={() => void publicationAction("unpublish")}
+              >
+                Снять с публикации
+              </Button>
+            )}
+            {row.version === 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || conflict}
+                onClick={() => void removeTopic()}
+              >
+                {t.remove}
+              </Button>
+            )}
           </div>
           <p className="text-sm leading-7 text-emerald-800">
             Состояние урока: {t.statuses[row.status]} · версия {row.version}.{" "}

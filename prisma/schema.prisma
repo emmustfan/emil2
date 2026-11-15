@@ -26,6 +26,12 @@ enum ContentStatus {
   PUBLISHED
 }
 
+enum DraftState {
+  CLEAN
+  DRAFT
+  REVIEW
+}
+
 enum CardSource {
   GAP
   QUESTION
@@ -267,6 +273,18 @@ model Topic {
   publishedAt               DateTime?
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
+  draftState                DraftState          @default(DRAFT)
+  draftTitle                String
+  draftContentMd            String              @db.Text
+  draftGapExercises         Json                @default("{}")
+  draftReadingMinutes       Int?
+  draftReferencesMd         String?
+  draftAuthorName           String?
+  draftReviewerName         String?
+  draftReviewed             Boolean             @default(false)
+  draftUpdatedAt            DateTime?
+  draftUpdatedById          String?
+  revisions                 TopicRevision[]
   subject                   Subject             @relation("Topic_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   section                   Section?            @relation("Topic_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
   gap_topicId               Gap[]               @relation("Gap_topicId")
@@ -278,6 +296,21 @@ model Topic {
   tutorConversation_topicId TutorConversation[] @relation("TutorConversation_topicId")
 
   @@unique([subjectId, slug])
+}
+
+model TopicRevision {
+  id            String   @id @default(cuid())
+  topicId       String
+  version       Int
+  title         String
+  contentMd     String   @db.Text
+  gapExercises  Json
+  questions     Json
+  publishedAt   DateTime @default(now())
+  publishedById String?
+  topic         Topic    @relation(fields: [topicId], references: [id], onDelete: Restrict)
+
+  @@unique([topicId, version])
 }
 
 model TopicImage {
@@ -326,6 +359,9 @@ model Question {
   isDiagnostic               Boolean           @default(false)
   order                      Int               @default(0)
   archivedAt                 DateTime?
+  publishedAt                DateTime?
+  draft                      Json?
+  draftDeleted               Boolean           @default(false)
   topic                      Topic             @relation("Question_topicId", fields: [topicId], references: [id], onDelete: Restrict)
   questionAttempt_questionId QuestionAttempt[] @relation("QuestionAttempt_questionId")
   card_questionId            Card[]            @relation("Card_questionId")

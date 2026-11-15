@@ -153,7 +153,7 @@ it("serves an image in a published free lesson but hides drafts and detached ass
   );
   expect((await readTopicImage(image.id, null)).body.length).toBeGreaterThan(0);
   const row = await content.getTopic(f.free.id);
-  await content.setTopicStatus(f.free.id, row.editRevision, "DRAFT", admin);
+  await content.unpublishTopic(f.free.id, row.editRevision, admin);
   await expect(readTopicImage(image.id, student)).rejects.toMatchObject({
     status: 404,
   });

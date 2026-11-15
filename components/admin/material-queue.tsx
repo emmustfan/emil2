@@ -8,7 +8,7 @@ export async function MaterialQueue({
 }) {
   const topics = await getDb().topic.findMany({
     where: {
-      status: { in: ["DRAFT", "REVIEW"] },
+      draftState: { in: ["DRAFT", "REVIEW"] },
       ...(actor.role === "ADMIN"
         ? {}
         : {
@@ -17,8 +17,8 @@ export async function MaterialQueue({
     },
     select: {
       id: true,
-      title: true,
-      status: true,
+      draftTitle: true,
+      draftState: true,
       subject: { select: { title: true } },
     },
     orderBy: { updatedAt: "desc" },
@@ -48,13 +48,15 @@ export async function MaterialQueue({
             <tbody>
               {topics.map((topic) => (
                 <tr key={topic.id}>
-                  <td>{topic.title}</td>
+                  <td>{topic.draftTitle}</td>
                   <td>{topic.subject.title}</td>
                   <td>
                     <span
-                      className={`material-status ${topic.status === "REVIEW" ? "is-review" : ""}`}
+                      className={`material-status ${topic.draftState === "REVIEW" ? "is-review" : ""}`}
                     >
-                      {contentRu.statuses[topic.status]}
+                      {topic.draftState === "REVIEW"
+                        ? contentRu.statuses.REVIEW
+                        : contentRu.statuses.DRAFT}
                     </span>
                   </td>
                   <td>

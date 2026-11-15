@@ -1,3 +1,4 @@
+import { withTopicDraft } from "../../lib/content/drafts";
 import { createLessonFixture } from "./lesson-fixture";
 import { getDb } from "../../lib/db";
 export async function createDemoFixture(prefix: string) {
@@ -5,7 +6,7 @@ export async function createDemoFixture(prefix: string) {
     db = getDb();
   await db.topic.update({ where: { id: f.paid.id }, data: { isFree: true } });
   const third = await db.topic.create({
-    data: {
+    data: withTopicDraft({
       subjectId: f.subject.id,
       sectionId: f.free.sectionId,
       slug: "diagnostic-third",
@@ -13,12 +14,14 @@ export async function createDemoFixture(prefix: string) {
       order: 3,
       isFree: true,
       status: "PUBLISHED",
+      publishedAt: new Date(),
       needsExpertReview: false,
       reviewedAt: new Date(),
       version: 1,
       contentMd: "## Пример\n\nНемедицинская третья тема.",
       question_topicId: {
         create: {
+          publishedAt: new Date(),
           stem: "Третий диагностический вопрос",
           options: [
             { id: "a", text: "Вариант А" },
@@ -29,7 +32,7 @@ export async function createDemoFixture(prefix: string) {
           isDiagnostic: true,
         },
       },
-    },
+    }),
   });
   for (const topicId of [f.free.id, f.paid.id])
     await db.question.update({

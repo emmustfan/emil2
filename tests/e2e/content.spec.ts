@@ -201,6 +201,7 @@ test.afterEach(async ({ context }) => {
   await db.contentChunk.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.question.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.gap.deleteMany({ where: { topicId: { in: topicIds } } });
+  await db.topicRevision.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.topic.deleteMany({ where: { id: { in: topicIds } } });
   await db.section.deleteMany({ where: { subjectId: { in: ids } } });
   await db.subject.deleteMany({ where: { id: { in: ids } } });
@@ -281,7 +282,7 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
     .poll(async () =>
       legacyView(
         (await db.topic.findUniqueOrThrow({ where: { id: topicId } }))
-          .contentMd,
+          .draftContentMd,
       ),
     )
     .toEqual({
@@ -292,7 +293,8 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
       uniqueIds: 10,
     });
   await expect(textarea).toHaveValue(
-    (await db.topic.findUniqueOrThrow({ where: { id: topicId } })).contentMd,
+    (await db.topic.findUniqueOrThrow({ where: { id: topicId } }))
+      .draftContentMd,
   );
   const preview = page.getByRole("region", {
     name: "Предпросмотр",
@@ -327,16 +329,17 @@ test("administrator creates a subject, section, ten gaps, five questions and pub
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: topicId } }))
-          .needsExpertReview,
+          .draftReviewed,
     )
-    .toBe(false);
+    .toBe(true);
   await page
     .getByRole("button", { name: "Отправить на проверку", exact: true })
     .click();
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: topicId } })).status,
+        (await db.topic.findUniqueOrThrow({ where: { id: topicId } }))
+          .draftState,
     )
     .toBe("REVIEW");
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
@@ -406,7 +409,7 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
     .poll(async () =>
       legacyView(
         (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
-          .contentMd,
+          .draftContentMd,
       ),
     )
     .toEqual({
@@ -418,7 +421,7 @@ test("invalid gap reports its line, survives autosave and blocks publication unt
     });
   const correctedSource = (
     await db.topic.findUniqueOrThrow({ where: { id: topic.id } })
-  ).contentMd;
+  ).draftContentMd;
   await page.reload();
   await page
     .getByText("Исходный текст — для переноса материалов", { exact: true })
@@ -448,7 +451,8 @@ test("parallel editor changes produce a conflict without overwriting the local d
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).title,
+        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
+          .draftTitle,
     )
     .toBe("Сохранено другим редактором");
   await page.bringToFront();
@@ -466,7 +470,8 @@ test("parallel editor changes produce a conflict without overwriting the local d
     }),
   ).toHaveText(unsafe, { useInnerText: true });
   expect(
-    (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).contentMd,
+    (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
+      .draftContentMd,
   ).toBe(topic.contentMd);
   const preview = page.getByRole("region", {
     name: "Предпросмотр",
@@ -734,7 +739,7 @@ test("editor configures multi and text questions, inserts a typed gap and publis
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
-          .contentMd,
+          .draftContentMd,
     )
     .toMatch(/\[\[#[a-z0-9]{6,12} =ёлка\]\]/);
   await page.reload();
@@ -756,7 +761,8 @@ test("editor configures multi and text questions, inserts a typed gap and publis
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } })).status,
+        (await db.topic.findUniqueOrThrow({ where: { id: topic.id } }))
+          .draftState,
     )
     .toBe("REVIEW");
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();

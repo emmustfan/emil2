@@ -20,7 +20,7 @@ export default async function Admin({
   const data = await listSubjects(q, page, user.id);
   const [users, review, paid] = await Promise.all([
     getDb().user.count({ where: { deletedAt: null } }),
-    getDb().topic.count({ where: { status: "REVIEW" } }),
+    getDb().topic.count({ where: { draftState: "REVIEW" } }),
     getDb().payment.count({ where: { status: "SUCCEEDED" } }),
   ]);
   return (

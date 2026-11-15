@@ -142,7 +142,7 @@ export function lessonReadiness(
       id: "status",
       target: "lesson-review",
       label: "Тема отправлена на проверку",
-      ok: ["REVIEW", "PUBLISHED"].includes(options.status),
+      ok: ["REVIEW", "PUBLISHED", "CLEAN"].includes(options.status),
       note: "Нажмите «Отправить на проверку» перед публикацией",
     },
   ];

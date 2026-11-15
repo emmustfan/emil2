@@ -147,7 +147,7 @@ async function testFor(
   db: Db,
 ): Promise<LessonTest> {
   const questions = await db.question.findMany({
-    where: { topicId, archivedAt: null },
+    where: { topicId, archivedAt: null, publishedAt: { not: null } },
     orderBy: order,
   });
   const run = await db.testRun.findFirst({
@@ -351,7 +351,7 @@ export async function startTest(
     });
     if (!open) {
       const total = await tx.question.count({
-        where: { topicId, archivedAt: null },
+        where: { topicId, archivedAt: null, publishedAt: { not: null } },
       });
       if (!total) throw new ContentError("Тест пока недоступен.", 409);
       await tx.testRun.create({
@@ -391,7 +391,12 @@ export async function answerQuestion(
     if (run.topicVersion !== topic.version)
       throw new ContentError("Тема обновлена. Начните тест заново.", 409);
     const q = await tx.question.findFirst({
-      where: { id: questionId, topicId, archivedAt: null },
+      where: {
+        id: questionId,
+        topicId,
+        archivedAt: null,
+        publishedAt: { not: null },
+      },
     });
     if (!q) throw new ContentError("Вопрос или вариант ответа не найден.", 422);
     const input =
