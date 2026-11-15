@@ -288,7 +288,10 @@ export async function answerGap(
       },
       typeof submission === "string" ? { optionIds: [submission] } : submission,
     );
-    if (actor.userId)
+    const existing = await tx.gapAnswer.findFirst({
+      where: { ...actor, gapId },
+    });
+    if (actor.userId && (!existing || practice))
       await tx.gapAttempt.create({
         data: {
           gapId,
@@ -300,7 +303,7 @@ export async function answerGap(
               ? (checked.chosenValues[0] ?? null)
               : null,
           isCorrect: checked.isCorrect,
-          practice,
+          practice: !!existing,
         },
       });
     const chosen = checked.chosenValues.join("; ");
@@ -311,9 +314,6 @@ export async function answerGap(
       correctValues: checked.correctValues,
       explanation: gap.explanation,
     };
-    const existing = await tx.gapAnswer.findFirst({
-      where: { ...actor, gapId },
-    });
     const answer =
       existing ??
       (await tx.gapAnswer.create({

@@ -98,13 +98,15 @@ async function complete() {
     );
   return test;
 }
-it("records every accepted authenticated submission including practice, preserving the first answer and excluding guests and rejected submissions", async () => {
-  await answer(student, false);
+it("records the first answer and explicit practice, ignoring first-answer replays, guests and rejected submissions", async () => {
+  const initial = await answer(student, false);
   const first = await db.gapAnswer.findFirstOrThrow({
     where: { userId: student },
   });
-  await answer(student, true, true);
-  await answer(student, false);
+  const practice = await answer(student, true, true);
+  expect(practice.feedback.correct).toBe(true);
+  const replay = await answer(student, true);
+  expect(replay.feedback).toEqual(initial.feedback);
   const attempts = await db.gapAttempt.findMany({
     where: { userId: student },
     orderBy: { createdAt: "asc" },
@@ -112,7 +114,6 @@ it("records every accepted authenticated submission including practice, preservi
   expect(attempts.map((a) => [a.isCorrect, a.practice])).toEqual([
     [false, false],
     [true, true],
-    [false, false],
   ]);
   expect(await db.gapAnswer.findUnique({ where: { id: first.id } })).toEqual(
     first,
@@ -129,10 +130,9 @@ it("records every accepted authenticated submission including practice, preservi
     1,
     guest,
   );
-  expect(await db.gapAttempt.count()).toBeGreaterThanOrEqual(3);
   expect(
     await db.gapAttempt.count({ where: { gapId: lesson.gaps[0].id } }),
-  ).toBe(3);
+  ).toBe(2);
   await expect(
     lessons.answerGap(lesson.gaps[0].id, "not-an-option", 1, {
       userId: student,
@@ -143,7 +143,77 @@ it("records every accepted authenticated submission including practice, preservi
       userId: student,
     }),
   ).rejects.toMatchObject({ status: 409 });
-  expect(await db.gapAttempt.count({ where: { userId: student } })).toBe(3);
+  expect(await db.gapAttempt.count({ where: { userId: student } })).toBe(2);
+});
+it("records the first answer as non-practice even when the request sets practice=true", async () => {
+  const initial = await answer(student, true, true);
+  const first = await db.gapAnswer.findFirstOrThrow({
+    where: { userId: student },
+  });
+  const attempts = await db.gapAttempt.findMany({
+    where: { userId: student },
+  });
+  expect(attempts).toHaveLength(1);
+  expect(attempts[0]).toMatchObject({
+    gapId: first.gapId,
+    userId: student,
+    topicVersion: f.free.version,
+    chosenValues: first.chosenValues,
+    chosenText: null,
+    isCorrect: first.isCorrect,
+    practice: false,
+  });
+  expect(initial.feedback).toMatchObject({
+    chosen: first.chosen,
+    chosenValues: first.chosenValues,
+    correct: true,
+  });
+  const replay = await answer(student, false);
+  expect(replay.feedback).toEqual(initial.feedback);
+  expect(await db.gapAttempt.count({ where: { userId: student } })).toBe(1);
+  expect(await db.gapAnswer.findUnique({ where: { id: first.id } })).toEqual(
+    first,
+  );
+});
+it("records a single non-practice attempt for concurrent double submissions and returns the same first result to both", async () => {
+  const actor = { userId: student },
+    lesson = await lessons.loadLesson(f.free.id, actor),
+    gap = lesson.gaps[0],
+    wrong = gap.options.find((o) => o.text.startsWith("неверный"))!,
+    right = gap.options.find((o) => o.text.startsWith("верный"))!;
+  const responses = await Promise.all([
+    lessons.answerGap(gap.id, wrong.id, lesson.version, actor),
+    lessons.answerGap(gap.id, right.id, lesson.version, actor),
+  ]);
+  const firsts = await db.gapAnswer.findMany({
+    where: { userId: student, gapId: gap.id },
+  });
+  const attempts = await db.gapAttempt.findMany({
+    where: { userId: student, gapId: gap.id },
+  });
+  expect(firsts).toHaveLength(1);
+  expect(attempts).toHaveLength(1);
+  const first = firsts[0];
+  expect(attempts[0]).toMatchObject({
+    gapId: first.gapId,
+    userId: student,
+    topicVersion: lesson.version,
+    chosenValues: first.chosenValues,
+    isCorrect: first.isCorrect,
+    practice: false,
+  });
+  expect(responses[0].feedback).toEqual(responses[1].feedback);
+  for (const response of responses) {
+    expect(response.feedback).toMatchObject({
+      chosen: first.chosen,
+      chosenValues: first.chosenValues,
+      correct: first.isCorrect,
+    });
+    expect(response.progress).toMatchObject({
+      answered: 1,
+      correct: first.isCorrect ? 1 : 0,
+    });
+  }
 });
 it("returns admin summaries/cards and audits each card request; totals match the student's cabinet and review summary", async () => {
   await complete();
