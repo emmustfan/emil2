@@ -3,6 +3,7 @@ import {
   recordInitialTopicRevision,
 } from "../../lib/content/drafts";
 import { ensureFunnelDemo } from "./demo-funnel";
+import { ensureDemoStudents } from "./students-demo";
 import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
 import { ensureDentalDemo } from "./dental-demo";
@@ -134,6 +135,7 @@ await ensureFunnelDemo();
 await ensureExerciseDemo();
 await ensureDentalDemo();
 await ensureRoleDemo();
+await ensureDemoStudents();
 await db.$disconnect();
 console.log(
   "Preview lessons are ready: /subjects/platform-demo and /learn/platform-demo/first-lesson",

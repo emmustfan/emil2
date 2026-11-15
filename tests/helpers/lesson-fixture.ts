@@ -123,6 +123,28 @@ export async function cleanupLessonFixture(
   await db.topicProgress.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.contentChunk.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.question.deleteMany({ where: { topicId: { in: topicIds } } });
+  await db.gapAttempt.deleteMany({
+    where: {
+      OR: [
+        { userId: { in: userIds } },
+        {
+          gapId: {
+            in: (
+              await db.gap.findMany({
+                where: { topicId: { in: topicIds } },
+                select: { id: true },
+              })
+            ).map((g) => g.id),
+          },
+        },
+      ],
+    },
+  });
+  await db.studentDataAccess.deleteMany({
+    where: {
+      OR: [{ viewerId: { in: userIds } }, { studentId: { in: userIds } }],
+    },
+  });
   await db.gap.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.topicRevision.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.topic.deleteMany({ where: { id: { in: topicIds } } });

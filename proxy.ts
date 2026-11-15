@@ -1,3 +1,6 @@
+import { ContentError } from "./lib/content/errors";
+import { isStudentProgressPath } from "./lib/progress/routes";
+import { assertCanViewStudent } from "./lib/progress/access";
 import { BILLING_RETURN_COOKIE } from "./lib/billing/http";
 import { safePricingReturn } from "./lib/billing/policy";
 import { NextRequest, NextResponse } from "next/server";
@@ -85,6 +88,20 @@ export async function proxy(request: NextRequest) {
     if (session?.renewed && token)
       response.cookies.set(SID, token, cookieOptions(session.expiresAt));
     return response;
+  }
+  if (isStudentProgressPath(path)) {
+    try {
+      await assertCanViewStudent(session?.user.id);
+    } catch (error) {
+      if (!(error instanceof ContentError) || error.status !== 404) throw error;
+      return new NextResponse("Данные не найдены.", {
+        status: 404,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
   }
   if (!session)
     return NextResponse.redirect(new URL("/login", getEnv().APP_URL));

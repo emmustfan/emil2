@@ -288,6 +288,21 @@ export async function answerGap(
       },
       typeof submission === "string" ? { optionIds: [submission] } : submission,
     );
+    if (actor.userId)
+      await tx.gapAttempt.create({
+        data: {
+          gapId,
+          userId: actor.userId,
+          topicVersion: version,
+          chosenValues: checked.chosenValues,
+          chosenText:
+            gap.answerType === "SHORT_TEXT"
+              ? (checked.chosenValues[0] ?? null)
+              : null,
+          isCorrect: checked.isCorrect,
+          practice,
+        },
+      });
     const chosen = checked.chosenValues.join("; ");
     const snapshot = {
       chosen,

@@ -84,6 +84,15 @@ export default async function Users({
             >
               {u.blockedAt ? t.blocked : t.active}
             </span>
+            {u.role === "USER" && (
+              <Link
+                prefetch={false}
+                href={`/admin/users/${u.id}/progress`}
+                className="text-sm text-emerald-800 underline"
+              >
+                Прогресс и ответы
+              </Link>
+            )}
             <Link
               href={`/admin/users/${u.id}`}
               className="inline-flex min-h-11 items-center text-sm text-emerald-800 underline"
