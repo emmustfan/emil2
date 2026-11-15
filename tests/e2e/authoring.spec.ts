@@ -8,6 +8,8 @@ import { createStorageDriver } from "../../lib/storage";
 import { currentLegal } from "../../lib/auth/legal";
 import { newToken, hashToken } from "../../lib/auth/crypto";
 import { ensureDentalDemo } from "../../scripts/preview/dental-demo";
+import { parseTopic } from "../../lib/content/parse";
+import { gapSourceId } from "../../lib/content/gap-id";
 import {
   createLessonFixture,
   cleanupLessonFixture,
@@ -206,6 +208,88 @@ test("publication identifies an invalid saved question and opens its editor for 
     page.getByText("Материал опубликован", { exact: true }),
   ).toBeVisible();
 });
+test("copied gaps receive unique persistent IDs and the editor accepts the canonical server response", async ({
+  page,
+}) => {
+  await page.goto(`/admin/topics/${f.free.id}`);
+  const editor = page.getByRole("textbox", {
+    name: "Текст методички",
+    exact: true,
+  });
+  await editor
+    .getByRole("button", {
+      name: "Изменить пропуск «верный-один»",
+      exact: true,
+    })
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Настройка пропуска",
+    exact: true,
+  });
+  await dialog
+    .getByRole("textbox", { name: "Объяснение после проверки", exact: true })
+    .fill("Настройки копируются вместе с заданием.");
+  await dialog
+    .getByRole("button", { name: "Сохранить пропуск", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Исходный текст — для переноса материалов",
+      exact: true,
+    })
+    .click();
+  const source = page.getByRole("textbox", {
+    name: "Текст методички (Markdown)",
+    exact: true,
+  });
+  const before = await source.inputValue(),
+    first = parseTopic(before).gaps[0];
+  expect(first.gapKey).toBe(
+    f.free.gap_topicId.find((gap) => gap.order === 0)!.gapKey,
+  );
+  await source.fill(
+    `${before}\n\nКопия ${before.slice(first.start, first.end)}.`,
+  );
+  await page
+    .getByRole("button", { name: "Сохранить черновик", exact: true })
+    .click();
+  await expect
+    .poll(async () => {
+      const row = await db.topic.findUniqueOrThrow({
+        where: { id: f.free.id },
+      });
+      const gaps = parseTopic(row.contentMd).gaps;
+      return {
+        total: gaps.length,
+        unique: new Set(gaps.map((gap) => gap.gapKey)).size,
+      };
+    })
+    .toEqual({ total: 3, unique: 3 });
+  const saved = await db.topic.findUniqueOrThrow({ where: { id: f.free.id } });
+  await expect(source).toHaveValue(saved.contentMd);
+  const gaps = parseTopic(saved.contentMd).gaps,
+    copy = gaps[2];
+  expect(gaps[0].gapKey).toBe(first.gapKey);
+  expect(copy.gapKey).toMatch(/^[a-z0-9]{6,12}$/);
+  expect(saved.gapExercises).toMatchObject({
+    [copy.gapKey]: { explanation: "Настройки копируются вместе с заданием." },
+  });
+  await page
+    .getByRole("button", {
+      name: "Исходный текст — для переноса материалов",
+      exact: true,
+    })
+    .click();
+  await expect(editor.locator(".rich-gap-token")).toHaveCount(3);
+  await expect(editor).not.toContainText(copy.gapKey);
+  await page.reload();
+  await expect(editor.locator(".rich-gap-token")).toHaveCount(3);
+  expect(
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).contentMd,
+  ).toBe(saved.contentMd);
+});
+
 test("table controls expand, merge, split and preserve spans after reload and student preview", async ({
   page,
 }, info) => {
@@ -677,7 +761,12 @@ test("visual author formats a selection and creates a dropdown gap without Markd
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
           .contentMd,
     )
-    .toContain("[[слово|другое]]");
+    .toMatch(/\[\[#[a-z0-9]{6,12} слово\|другое\]\]/);
+  const stableId = gapSourceId(
+    (await editor.locator(".rich-gap-token").getAttribute("data-lesson-gap"))!,
+  );
+  expect(stableId).toMatch(/^[a-z0-9]{6,12}$/);
+  await expect(editor).not.toContainText(stableId!);
   await page.screenshot({
     path: `tmp/screenshots/visual-editor-${page.viewportSize()!.width}.png`,
     fullPage: true,
@@ -700,7 +789,7 @@ test("visual author formats a selection and creates a dropdown gap without Markd
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
           .contentMd,
     )
-    .toContain("[[слово|иной]]");
+    .toContain(`[[#${stableId} слово|иной]]`);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -782,7 +871,9 @@ test("gap buttons open the matching saved choices by click or keyboard and cance
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
           .contentMd,
     )
-    .toContain("[[верный-два|Ещё вариант]]");
+    .toContain(
+      `[[#${f.free.gap_topicId.find((gap) => gap.order === 1)!.gapKey} верный-два|Ещё вариант]]`,
+    );
   await page.reload();
   await first.click();
   await expect(

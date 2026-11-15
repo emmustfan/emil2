@@ -6,7 +6,7 @@ import { getSetting } from "../settings";
 import { createStorageDriver } from "../storage";
 import { contentActor, contentWrite, authorizeSubject } from "./permissions";
 import { ContentError } from "./errors";
-import { lock } from "../auth/session";
+import { lockTopicForChange } from "./locks";
 import { consumeLimit, hasAccess } from "../access";
 import { hasCurrentConsent } from "../auth/legal";
 import { parseTopic } from "./parse";
@@ -99,7 +99,7 @@ export async function uploadTopicImage(
   try {
     return await getDb().$transaction(async (tx) => {
       await contentWrite(tx, actorId);
-      await lock(tx, `content:topic:${topicId}`);
+      await lockTopicForChange(tx, topicId);
       const current = await tx.topic.findUniqueOrThrow({
         where: { id: topicId },
       });

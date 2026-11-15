@@ -20,6 +20,7 @@ import { requestContent, EditorRequestError, fieldClass } from "./helpers";
 import type { ContentFieldIssue } from "@/lib/content/field-errors";
 import {
   gapDefinition,
+  gapExerciseFor,
   type Definition,
   type GapExercise,
 } from "@/lib/exercises";
@@ -137,6 +138,13 @@ export function TopicEditor({
           setRow(next);
           onTopicChange?.(next);
           if (sequence.current === at) {
+            const canonical = {
+              ...formRef.current,
+              contentMd: next.contentMd,
+              gapExercises: next.gapExercises,
+            };
+            formRef.current = canonical;
+            setForm(canonical);
             dirty.current = false;
             setMessage(t.saved);
             setError("");
@@ -311,7 +319,10 @@ export function TopicEditor({
         : await requestContent<ParsedTopic>("preview", "POST", { contentMd });
     const gap = result.gaps[order];
     if (!gap) throw new Error("Пропуск не найден. Проверьте текст задания.");
-    return gapDefinition(gap, formRef.current.gapExercises?.[gap.gapKey]);
+    return gapDefinition(
+      gap,
+      gapExerciseFor(formRef.current.gapExercises, gap.gapKey),
+    );
   }
   function insertText(markdown: string) {
     richEditor.current?.insertMarkdown(markdown);

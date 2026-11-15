@@ -5,6 +5,7 @@ import type { AnswerFeedback } from "@/components/exercises/answer-card";
 import { AnswerPreview } from "@/components/exercises/preview";
 import {
   gapDefinition,
+  gapExerciseFor,
   gradeAnswer,
   type GapExercise,
   type GapExercises,
@@ -128,14 +129,16 @@ export function MarkdownPreview({
       .filter(
         (g) =>
           g.blockKey === key &&
-          gapDefinition(g, exercises[g.gapKey]).answerType ===
+          gapDefinition(g, gapExerciseFor(exercises, g.gapKey)).answerType ===
             "MULTIPLE_CHOICE",
       )
       .map((gap) => (
         <PreviewGap
-          key={gap.gapKey + JSON.stringify(exercises[gap.gapKey])}
+          key={
+            gap.gapKey + JSON.stringify(gapExerciseFor(exercises, gap.gapKey))
+          }
           gap={gap}
-          config={exercises[gap.gapKey]}
+          config={gapExerciseFor(exercises, gap.gapKey)}
         />
       ));
   }
@@ -201,12 +204,15 @@ export function MarkdownPreview({
                 ? undefined
                 : parsed.gaps.find((g) => g.order === Number(order));
             return gap &&
-              gapDefinition(gap, exercises[gap.gapKey]).answerType !==
-                "MULTIPLE_CHOICE" ? (
+              gapDefinition(gap, gapExerciseFor(exercises, gap.gapKey))
+                .answerType !== "MULTIPLE_CHOICE" ? (
               <InlinePreview
-                key={gap.gapKey + JSON.stringify(exercises[gap.gapKey])}
+                key={
+                  gap.gapKey +
+                  JSON.stringify(gapExerciseFor(exercises, gap.gapKey))
+                }
                 gap={gap}
-                config={exercises[gap.gapKey]}
+                config={gapExerciseFor(exercises, gap.gapKey)}
               />
             ) : gap ? (
               <a

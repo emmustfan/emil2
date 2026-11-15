@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GAP_ID_PATTERN, gapSourceWithId } from "../content/gap-id";
 export const ANSWER_TYPES = [
   "SINGLE_CHOICE",
   "MULTIPLE_CHOICE",
@@ -44,11 +45,19 @@ export const gapExerciseSchema = z
   })
   .strict();
 export const gapExercisesSchema = z.record(
-  z.string().regex(/^[a-f0-9]{40}$/),
+  z.string().regex(GAP_ID_PATTERN),
   gapExerciseSchema,
 );
 export type GapExercise = z.infer<typeof gapExerciseSchema>;
 export type GapExercises = Record<string, GapExercise>;
+export function gapExerciseFor(
+  exercises: GapExercises | undefined,
+  key: string,
+) {
+  return exercises && Object.hasOwn(exercises, key)
+    ? exercises[key]
+    : undefined;
+}
 export function definitionErrors(d: Definition) {
   const errors: string[] = [];
   if (d.answerType === "SHORT_TEXT") {
@@ -169,7 +178,11 @@ export function gapDefinition(
   return result;
 }
 
-export function createGapMarkdown(prompt: string, definition: Definition) {
+export function createGapMarkdown(
+  prompt: string,
+  definition: Definition,
+  gapId?: string,
+) {
   const errors = definitionErrors(definition);
   if (errors.length) throw new Error(errors.join(" "));
   if (prompt.split("____").length !== 2)
@@ -197,7 +210,10 @@ export function createGapMarkdown(prompt: string, definition: Definition) {
       ? `[[=${primary}]]`
       : `[[${values.join("|")}]]`;
   return {
-    markdown: prompt.replace("____", markup),
+    markdown: prompt.replace(
+      "____",
+      gapId ? gapSourceWithId(markup, gapId) : markup,
+    ),
     config: {
       answerType: definition.answerType,
       correctAnswers:

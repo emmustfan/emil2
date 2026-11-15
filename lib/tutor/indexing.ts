@@ -4,7 +4,7 @@ import { getEnv } from "../env";
 import { createLLMProvider } from "../llm";
 import { validateEmbeddings } from "../llm/http";
 import type { LLMProvider } from "../llm/provider";
-import { lock } from "../auth/session";
+import { lockTopicForChange } from "../content/locks";
 import { tutorSettings } from "./settings";
 import { publishedBlocks, chunkBlocks } from "./chunks";
 export function embeddingIdentity() {
@@ -74,7 +74,7 @@ export async function indexTopic(
     );
   }
   return db.$transaction(async (tx) => {
-    await lock(tx, `content:topic:${topic.id}`);
+    await lockTopicForChange(tx, topic.id);
     const current = await tx.topic.findUnique({
       where: { id: topic.id },
       select: {

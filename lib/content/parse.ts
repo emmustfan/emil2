@@ -11,6 +11,7 @@ import {
   tableDimensions,
 } from "./table-spans";
 import { imageId } from "./image-reference";
+import { readGapBody } from "./gap-id";
 export type ParseError = {
   code: string;
   message: string;
@@ -29,6 +30,7 @@ export type ParsedBlock = {
   rootIndex: number;
 };
 export type ParsedGap = {
+  explicitId?: string;
   beforeGap: string;
   afterGap: string;
   answerType: AnswerType;
@@ -126,6 +128,7 @@ export function parseTopic(md: string): ParsedTopic {
     heading: string | null = null,
     ordinal = 0;
   type Candidate = {
+    explicitId?: string;
     answerType: AnswerType;
     start: number;
     end: number;
@@ -233,8 +236,8 @@ export function parseTopic(md: string): ParsedTopic {
           error("nested", "Вложенные пропуски не допускаются.", from + nested);
           continue;
         }
-        const inner = source.slice(local + 2, close).replace(/\\\|/g, "|");
-        if (inner.includes("\n")) {
+        const rawInner = source.slice(local + 2, close).replace(/\\\|/g, "|");
+        if (rawInner.includes("\n")) {
           error(
             "multiline",
             "Запишите варианты пропуска в одной строке.",
@@ -242,6 +245,8 @@ export function parseTopic(md: string): ParsedTopic {
           );
           continue;
         }
+        const identity = readGapBody(rawInner);
+        const inner = identity.body;
         const shortText = inner.startsWith("=") && !inner.includes("|");
         const options = shortText
           ? [inner.slice(1).trim()]
@@ -275,6 +280,7 @@ export function parseTopic(md: string): ParsedTopic {
           continue;
         }
         candidates.push({
+          ...(identity.id ? { explicitId: identity.id } : {}),
           answerType: shortText ? "SHORT_TEXT" : "SINGLE_CHOICE",
           start: index,
           end: finish,
@@ -338,14 +344,15 @@ export function parseTopic(md: string): ParsedTopic {
         .slice(left, right)
         .replace(/\uE000\d+\uE001/g, "____")
         .trim();
-      const gapKey = makeGapKey(sentence, gap.answer);
+      const gapKey = gap.explicitId ?? makeGapKey(sentence, gap.answer);
       if (keys.has(gapKey)) {
         error(
           "duplicate_gap",
-          "Одинаковый пропуск повторяется в одинаковом контексте. Измените формулировку.",
+          gap.explicitId
+            ? "ID пропуска повторяется. При сохранении копия получит новый ID."
+            : "Одинаковый пропуск повторяется в одинаковом контексте. Измените формулировку.",
           gap.start,
         );
-        continue;
       }
       keys.add(gapKey);
       result.gaps.push({

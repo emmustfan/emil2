@@ -1,7 +1,7 @@
 import type { QuestionDTO } from "./types";
 import { redactPersonalData } from "../tutor/privacy";
 import type { ParsedTopic } from "./parse";
-import { gapDefinition, type GapExercises } from "../exercises";
+import { gapDefinition, gapExerciseFor, type GapExercises } from "../exercises";
 export function lessonReviewPrompt(
   markdown: string,
   questions: QuestionDTO[],
@@ -29,7 +29,7 @@ export function lessonReviewPrompt(
   const gaps =
     parsed?.gaps.map((g, i) => {
       try {
-        const d = gapDefinition(g, configs?.[g.gapKey]);
+        const d = gapDefinition(g, gapExerciseFor(configs, g.gapKey));
         return {
           номер: i + 1,
           задание: g.sentence,

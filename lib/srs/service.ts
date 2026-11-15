@@ -4,6 +4,8 @@ import { hasAccess } from "../access";
 import { AuthError } from "../auth/errors";
 import { ContentError } from "../content/errors";
 import { lock } from "../auth/session";
+import { lockTopicForLearning } from "../content/locks";
+import { lockLearningActor } from "../lessons/actor";
 import { optionsFromJSON } from "../lessons/public";
 import { lessonHref } from "../lessons/catalog";
 import { dayWindow } from "./day";
@@ -190,7 +192,7 @@ async function ownedCard(tx: Db, userId: string, id: string) {
     select: { topicId: true },
   });
   if (!card) throw new ContentError("Карточка не найдена.", 404);
-  await lock(tx, `content:topic:${card.topicId}`);
+  await lockTopicForLearning(tx, card.topicId);
   const row = await tx.card.findFirst({
     where: { id, userId },
     include: {
@@ -238,6 +240,7 @@ export async function revealCard(
 ): Promise<ReviewBack> {
   const settings = await reviewSettings();
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, { userId });
     await lock(tx, `srs:user:${userId}`);
     const user = await validUser(userId, tx),
       row = await ownedCard(tx, userId, id);
@@ -328,6 +331,7 @@ export async function rateCard(
 ) {
   const settings = await reviewSettings();
   return getDb().$transaction(async (tx) => {
+    await lockLearningActor(tx, { userId });
     await lock(tx, `srs:user:${userId}`);
     await validUser(userId, tx);
     const row = await ownedCard(tx, userId, id);

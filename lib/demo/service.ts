@@ -2,6 +2,7 @@ import { getSetting } from "../settings";
 import { randomInt } from "node:crypto";
 import { getDb } from "../db";
 import { lock } from "../auth/session";
+import { lockTopicForLearning } from "../content/locks";
 import { ContentError } from "../content/errors";
 import { lockLearningActor } from "../lessons/actor";
 import { optionsFromJSON } from "../lessons/public";
@@ -11,7 +12,12 @@ import { hasAccess, consumeLimit } from "../access";
 import { track } from "../analytics/events";
 import { reviewSettings } from "../srs/settings";
 import { schedule, intervalLabel } from "../srs/schedule";
-import { readFlow, diagnosticSummary, type DemoAction } from "./flow";
+import {
+  readFlow,
+  diagnosticSummary,
+  type DemoAction,
+  type Flow,
+} from "./flow";
 import type { Prisma } from "../generated/prisma/client";
 type Db = Prisma.TransactionClient;
 const published = {
@@ -56,12 +62,19 @@ async function getSession(db: Db, id: string) {
   await lockLearningActor(db, { demoSessionId: id });
   return db.demoSession.findUniqueOrThrow({ where: { id } });
 }
+async function lockFlowTopics(tx: Db, flow: Flow) {
+  const ids = new Set(flow.questions.map((q) => q.topicId));
+  if (flow.topicId) ids.add(flow.topicId);
+  for (const topicId of [...ids].sort())
+    await lockTopicForLearning(tx, topicId);
+}
 export async function demoAction(id: string, input: DemoAction) {
   await consumeLimit(`demo:${id}`);
   const settings = await reviewSettings();
   await getDb().$transaction(async (tx) => {
     const row = await getSession(tx, id),
       flow = readFlow(row.flow);
+    await lockFlowTopics(tx, flow);
     let step = row.step;
     const completed = new Set(row.stepsCompleted);
     const event = async (
@@ -122,6 +135,7 @@ export async function demoAction(id: string, input: DemoAction) {
           });
           flow.runId = run.id;
         }
+        await lockFlowTopics(tx, flow);
         await tx.demoSession.update({
           where: { id },
           data: { subjectId: subject.id },
@@ -152,7 +166,6 @@ export async function demoAction(id: string, input: DemoAction) {
         if (duplicate) break;
         const pinned = flow.questions[attempts.length];
         if (!pinned || pinned.id !== input.questionId) throw conflict();
-        await lock(tx, `content:topic:${pinned.topicId}`);
         const q = await tx.question.findFirst({
           where: {
             id: pinned.id,
@@ -260,7 +273,6 @@ export async function demoAction(id: string, input: DemoAction) {
           throw conflict();
         if (flow.rated.includes(input.cardId)) break;
         if (!flow.topicId) throw conflict();
-        await lock(tx, `content:topic:${flow.topicId}`);
         const card = await tx.card.findFirst({
           where: {
             id: input.cardId,
@@ -353,6 +365,7 @@ export async function demoView(
   const view = await getDb().$transaction(async (tx) => {
     const row = await getSession(tx, id),
       flow = readFlow(row.flow);
+    await lockFlowTopics(tx, flow);
     await track(
       "demo_started",
       { source },

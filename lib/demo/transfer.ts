@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
 import { isToken, hashToken } from "../auth/crypto";
 import { lock } from "../auth/session";
+import { lockTopicForLearning } from "../content/locks";
 import { AuthError } from "../auth/errors";
 import { getSetting } from "../settings";
 import { progressFor } from "../lessons/service";
@@ -65,13 +66,26 @@ export async function transferGuest(
       const answers = await tx.gapAnswer.findMany({
         where: { demoSessionId: demo.id },
       });
-      const topicIds = new Set<string>();
+      const cards = await tx.card.findMany({
+        where: { demoSessionId: demo.id },
+      });
+      const runs = await tx.testRun.findMany({
+        where: { demoSessionId: demo.id },
+        select: { topicId: true },
+      });
+      const gaps = await tx.gap.findMany({
+        where: { id: { in: answers.map((answer) => answer.gapId) } },
+        select: { topicId: true },
+      });
+      const topicIds = new Set([
+        ...gaps.map((gap) => gap.topicId),
+        ...cards.map((card) => card.topicId),
+        ...runs.flatMap((run) => (run.topicId ? [run.topicId] : [])),
+      ]);
+      // Protect all sources before moving answers/cards, including question-only cards.
+      for (const topicId of [...topicIds].sort())
+        await lockTopicForLearning(tx, topicId);
       for (const answer of answers) {
-        const gap = await tx.gap.findUniqueOrThrow({
-          where: { id: answer.gapId },
-          select: { topicId: true },
-        });
-        topicIds.add(gap.topicId);
         const existing = await tx.gapAnswer.findUnique({
           where: { userId_gapId: { userId, gapId: answer.gapId } },
         });
@@ -82,9 +96,6 @@ export async function transferGuest(
             data: { userId, demoSessionId: null },
           });
       }
-      const cards = await tx.card.findMany({
-        where: { demoSessionId: demo.id },
-      });
       for (const card of cards) {
         const existing = await tx.card.findFirst({
           where: {
@@ -112,13 +123,6 @@ export async function transferGuest(
             },
           });
       }
-      const runs = await tx.testRun.findMany({
-        where: { demoSessionId: demo.id },
-        select: { topicId: true },
-      });
-      runs.forEach((r) => {
-        if (r.topicId) topicIds.add(r.topicId);
-      });
       await tx.testRun.updateMany({
         where: { demoSessionId: demo.id },
         data: { userId, demoSessionId: null },
@@ -129,7 +133,6 @@ export async function transferGuest(
       });
       await tx.demoSession.update({ where: { id: demo.id }, data: { userId } });
       for (const topicId of [...topicIds].sort()) {
-        await lock(tx, `content:topic:${topicId}`);
         await progressFor(topicId, { userId }, threshold, tx);
       }
     }

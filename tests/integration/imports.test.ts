@@ -119,6 +119,11 @@ it("imports a real five-page PDF exactly once, persists diagnostics and keeps ex
     sectionId: f.free.sectionId!,
   });
   expect(parseTopic(topic.contentMd).gaps.length).toBeGreaterThanOrEqual(15);
+  expect(
+    parseTopic(topic.contentMd).gaps.every((gap) =>
+      /^[a-z0-9]{6,12}$/.test(gap.explicitId ?? ""),
+    ),
+  ).toBe(true);
   expect(topic.questions).toHaveLength(10);
   expect(topic.questions.filter((q) => q.isDiagnostic)).toHaveLength(3);
   await expect(
