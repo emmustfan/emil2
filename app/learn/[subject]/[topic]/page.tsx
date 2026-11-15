@@ -117,6 +117,15 @@ export default async function Learn({
         {topic.readingMinutes ? `${topic.readingMinutes} мин чтения · ` : ""}
         Методичка и тест
       </p>
+      {topic.needsExpertReview && (
+        <p
+          role="note"
+          className="my-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          Демонстрационный медицинский материал не проверен специалистом и
+          предназначен для проверки интерфейса.
+        </p>
+      )}
       {data.locked ? (
         <div className="max-w-3xl">
           <LessonMarkdown blocks={data.blocks} />

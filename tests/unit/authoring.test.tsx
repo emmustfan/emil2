@@ -1,3 +1,4 @@
+import { isStudentDentalPreview } from "../../lib/content/preview-access";
 import { it, expect } from "vitest";
 import sharp from "sharp";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -148,4 +149,34 @@ it("reports configuration modes without exposing integration secrets or assertin
   expect(wire).not.toContain("PRIVATE_");
   expect(wire).toContain("Тестовая модель");
   expect(wire).toContain("Настройки бота заданы");
+});
+
+it("permits unreviewed demo images only for the dedicated topic on a non-production preview database", () => {
+  const env = {
+    NODE_ENV: "development",
+    DATABASE_URL: "postgresql://app:app@localhost/dental_preview_a12000000001",
+  };
+  expect(
+    isStudentDentalPreview(env, "progress-dental-demo", "fdi-visual-demo"),
+  ).toBe(true);
+  expect(
+    isStudentDentalPreview(
+      { ...env, NODE_ENV: "production" },
+      "progress-dental-demo",
+      "fdi-visual-demo",
+    ),
+  ).toBe(false);
+  expect(
+    isStudentDentalPreview(
+      { ...env, DATABASE_URL: "postgresql://app:app@localhost/app" },
+      "progress-dental-demo",
+      "fdi-visual-demo",
+    ),
+  ).toBe(false);
+  expect(isStudentDentalPreview(env, "propaedeutics", "fdi-visual-demo")).toBe(
+    false,
+  );
+  expect(
+    isStudentDentalPreview(env, "progress-dental-demo", "another-topic"),
+  ).toBe(false);
 });

@@ -834,3 +834,31 @@ model LlmUsage {
   createdAt DateTime @default(now())
   @@index([createdAt])
 }
+
+// All authenticated gap submissions, including practice. GapAnswer remains the first answer.
+model GapAttempt {
+  id           String   @id @default(cuid())
+  gapId        String
+  userId       String
+  topicVersion Int
+  chosenValues String[]
+  chosenText   String?
+  isCorrect    Boolean
+  practice     Boolean
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([gapId, createdAt])
+}
+
+model StudentDataAccess {
+  id        String   @id @default(cuid())
+  viewerId  String
+  studentId String
+  groupId   String?
+  subjectId String?
+  view      String
+  createdAt DateTime @default(now())
+
+  @@index([studentId, createdAt])
+}

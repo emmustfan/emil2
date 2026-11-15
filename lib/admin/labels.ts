@@ -1,4 +1,7 @@
 export const settingLabels: Record<string, string> = {
+  "progress.pageSize": "Студентов на странице прогресса",
+  "progress.minCompletionPercent": "Отстающие: завершено меньше, %",
+  "progress.inactiveDays": "Отстающие: нет активности больше, дней",
   "analytics.requestsPerMinute": "События аналитики: запросов в минуту",
   "demo.exampleRequestsPerMinute": "Пример на главной: запросов в минуту",
   "srs.hardMinutes": "Повтор «Сложно»: минут",

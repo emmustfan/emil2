@@ -122,6 +122,7 @@ export async function anonymizeAccount(id: string, now = new Date()) {
       await tx.questionAttempt.deleteMany({ where: { testRun: owner } });
       await tx.testRun.deleteMany({ where: owner });
       await tx.gapAnswer.deleteMany({ where: owner });
+      await tx.gapAttempt.deleteMany({ where: { userId: id } });
       await tx.topicProgress.deleteMany({ where: { userId: id } });
       await tx.demoSession.deleteMany({ where: { id: { in: demoIds } } });
       await tx.usageCounter.deleteMany({

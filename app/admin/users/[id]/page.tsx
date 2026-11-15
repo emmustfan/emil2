@@ -63,6 +63,15 @@ export default async function UserPage({
       <h1 className="mt-4 text-3xl font-semibold break-words">
         {data.user.name || data.user.email || t.identity}
       </h1>
+      {data.user.role === "USER" && (
+        <Link
+          prefetch={false}
+          className="my-4 inline-block text-emerald-800 underline"
+          href={`/admin/users/${id}/progress`}
+        >
+          Прогресс и ответы
+        </Link>
+      )}
       <UserAccessForm
         timeZone={dayWindow(new Date(), actor.timezone).timeZone}
         key={data.user.id}

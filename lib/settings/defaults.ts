@@ -76,6 +76,9 @@ export const DEFAULT_SETTINGS = {
   "llm.outputRubPerMillion": 0,
   "llm.embeddingRubPerMillion": 0,
   "admin.usersPageSize": 20,
+  "progress.pageSize": 20,
+  "progress.minCompletionPercent": 50,
+  "progress.inactiveDays": 7,
   "admin.maxTeacherSubjects": 200,
   "admin.maxGrantDays": 3650,
   "admin.defaultGrantDays": 30,
@@ -86,7 +89,7 @@ export function decodeSetting<K extends SettingKey>(
   value: unknown,
 ): (typeof DEFAULT_SETTINGS)[K] {
   const fallback = DEFAULT_SETTINGS[key];
-  const schema = key.startsWith("llm.")
+  let schema = key.startsWith("llm.")
     ? z.number().nonnegative().max(1000000)
     : Array.isArray(fallback)
       ? z.array(z.number().positive()).min(1).max(10)
@@ -106,6 +109,11 @@ export function decodeSetting<K extends SettingKey>(
                     ? 40000000
                     : 100000,
             );
+  if (key === "progress.minCompletionPercent")
+    schema = z.number().int().min(0).max(100);
+  if (key === "progress.pageSize") schema = z.number().int().min(1).max(100);
+  if (key === "progress.inactiveDays")
+    schema = z.number().int().min(1).max(3650);
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (

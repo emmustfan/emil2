@@ -128,6 +128,7 @@ afterAll(async () => {
     await db.reviewLog.deleteMany({ where: { card: { userId } } });
     await db.card.deleteMany({ where: { userId } });
     await db.gapAnswer.deleteMany({ where: { userId } });
+    await db.gapAttempt.deleteMany({ where: { userId } });
     await db.questionAttempt.deleteMany({ where: { testRun: { userId } } });
     await db.testRun.deleteMany({ where: { userId } });
     await db.topicProgress.deleteMany({ where: { userId } });

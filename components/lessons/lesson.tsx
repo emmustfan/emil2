@@ -1,4 +1,5 @@
 "use client";
+import { GapAnswerHistory } from "./gap-history";
 import { InlineGap } from "@/components/exercises/inline-gap";
 import type { ExplainInput } from "@/lib/tutor/types";
 import { AnswerCard } from "@/components/exercises/answer-card";
@@ -46,6 +47,7 @@ export function Lesson({
   const [error, setError] = useState("");
   const [practice, setPractice] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const requestInFlight = useRef(false);
   const tutor = useRef<TutorHandle>(null);
   useEffect(() => {
@@ -93,6 +95,7 @@ export function Lesson({
           g.id === gapId ? { ...g, feedback: data.feedback } : g,
         ),
       );
+      setHistoryRevision((n) => n + 1);
       setProgress(data.progress);
       setReview(data.review);
       window.dispatchEvent(new Event("srs:changed"));
@@ -227,6 +230,12 @@ export function Lesson({
               </div>
             )}
           />
+          {initial.review?.signedIn && (
+            <GapAnswerHistory
+              topicId={initial.topicId}
+              revision={historyRevision}
+            />
+          )}
           <section
             id="lesson-test"
             className="mt-12 border-t border-stone-200 pt-8"

@@ -19,6 +19,7 @@ import {
   X,
   ArrowUpRight,
 } from "lucide-react";
+import { isStudentProgressPath } from "@/lib/progress/routes";
 import { Brand } from "./brand";
 type Area = "admin" | "teacher" | "student" | "learn";
 export function WorkspaceFrame({
@@ -92,6 +93,11 @@ export function WorkspaceFrame({
           ? [
               { href: "/admin", label: "Предметы и уроки", icon: BookOpen },
               { href: "/admin/users", label: "Пользователи", icon: Users },
+              {
+                href: "/admin/progress",
+                label: "Прогресс студентов",
+                icon: ChartNoAxesCombined,
+              },
               { href: "/admin/payments", label: "Платежи", icon: CreditCard },
               { href: "/admin/subscriptions", label: "Подписки", icon: Layers },
               { href: "/admin/settings", label: "Настройки", icon: Settings },
@@ -134,6 +140,11 @@ export function WorkspaceFrame({
       ? "Личный кабинет"
       : "Учебное пространство";
   function active(href: string) {
+    if (
+      isStudentProgressPath(path) &&
+      (href === "/admin/users" || href === "/admin/progress")
+    )
+      return href === "/admin/progress";
     if (href === "/admin")
       return (
         path === "/admin" ||

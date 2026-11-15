@@ -288,6 +288,24 @@ export async function answerGap(
       },
       typeof submission === "string" ? { optionIds: [submission] } : submission,
     );
+    const existing = await tx.gapAnswer.findFirst({
+      where: { ...actor, gapId },
+    });
+    if (actor.userId && (!existing || practice))
+      await tx.gapAttempt.create({
+        data: {
+          gapId,
+          userId: actor.userId,
+          topicVersion: version,
+          chosenValues: checked.chosenValues,
+          chosenText:
+            gap.answerType === "SHORT_TEXT"
+              ? (checked.chosenValues[0] ?? null)
+              : null,
+          isCorrect: checked.isCorrect,
+          practice: !!existing,
+        },
+      });
     const chosen = checked.chosenValues.join("; ");
     const snapshot = {
       chosen,
@@ -296,9 +314,6 @@ export async function answerGap(
       correctValues: checked.correctValues,
       explanation: gap.explanation,
     };
-    const existing = await tx.gapAnswer.findFirst({
-      where: { ...actor, gapId },
-    });
     const answer =
       existing ??
       (await tx.gapAnswer.create({

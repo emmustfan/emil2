@@ -1,3 +1,4 @@
+import { isStudentDentalPreview } from "./preview-access";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db";
@@ -145,7 +146,8 @@ export async function readTopicImage(id: string, userId: string | null) {
           isFree: true,
           needsExpertReview: true,
           contentMd: true,
-          subject: { select: { status: true } },
+          slug: true,
+          subject: { select: { status: true, slug: true } },
         },
       },
     },
@@ -169,7 +171,12 @@ export async function readTopicImage(id: string, userId: string | null) {
     (!(!user || (await hasCurrentConsent(user))) ||
       image.topic.status !== "PUBLISHED" ||
       image.topic.subject.status !== "PUBLISHED" ||
-      image.topic.needsExpertReview ||
+      (image.topic.needsExpertReview &&
+        !isStudentDentalPreview(
+          getEnv(),
+          image.topic.subject.slug,
+          image.topic.slug,
+        )) ||
       !parseTopic(image.topic.contentMd).images.some((a) => a.id === id) ||
       !(await hasAccess(userId, image.topic)))
   )
