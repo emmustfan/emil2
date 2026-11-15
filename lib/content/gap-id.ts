@@ -2,18 +2,16 @@
 export const GAP_ID_PATTERN = /^(?:[a-z0-9]{6,12}|[a-f0-9]{40})$/;
 
 export function readGapBody(body: string) {
-  const header = /^#([^\s]+)(?:[ \t]+|$)/.exec(body);
-  if (!header) return { body, id: undefined, valid: true };
+  const header = /^#([a-z0-9]{6,12}|[a-f0-9]{40})[ \t]+/.exec(body);
+  if (!header) return { body, id: undefined };
   return {
     body: body.slice(header[0].length),
     id: header[1],
-    valid: GAP_ID_PATTERN.test(header[1]),
   };
 }
 
 export function gapSourceId(source: string) {
-  const result = readGapBody(source.slice(2, -2));
-  return result.valid ? result.id : undefined;
+  return readGapBody(source.slice(2, -2)).id;
 }
 
 export function gapSourceLabel(source: string) {

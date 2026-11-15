@@ -246,14 +246,6 @@ export function parseTopic(md: string): ParsedTopic {
           continue;
         }
         const identity = readGapBody(rawInner);
-        if (!identity.valid) {
-          error(
-            "gap_id",
-            "ID пропуска: 6–12 строчных латинских букв/цифр или прежний ключ из 40 hex-символов.",
-            index,
-          );
-          continue;
-        }
         const inner = identity.body;
         const shortText = inner.startsWith("=") && !inner.includes("|");
         const options = shortText

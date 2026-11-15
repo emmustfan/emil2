@@ -1,14 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownManager } from "@tiptap/markdown";
 import { lessonEditorExtensions } from "../../lib/editor/extensions";
-import { parseTopic } from "../../lib/content/parse";
+import { parseTopic, makeGapKey } from "../../lib/content/parse";
 import {
   stabilizeGapIds,
   pinLegacyGapIds,
   correctGapAnswersChanged,
   existingGapIdentities,
 } from "../../lib/content/gap-identity";
-import { gapSourceId, gapSourceLabel } from "../../lib/content/gap-id";
+import {
+  gapSourceId,
+  gapSourceLabel,
+  readGapBody,
+} from "../../lib/content/gap-id";
 import {
   createGapMarkdown,
   gapExercisesSchema,
@@ -17,6 +23,7 @@ import {
   type Definition,
 } from "../../lib/exercises";
 import { publicBlocks } from "../../lib/lessons/public";
+import { LessonMarkdown } from "../../components/lessons/markdown";
 import {
   lockTopicForLearning,
   lockTopicForChange,
@@ -114,17 +121,109 @@ describe("stable gap identities", () => {
   });
 
   it.each(["ABC123", "abc_12", "tiny", "a".repeat(13), "z".repeat(40)])(
-    "rejects invalid explicit ID %s",
+    "keeps a non-ID # prefix literal while rejecting it as an exercise settings key: %s",
     (id) => {
-      expect(parseTopic(`[[#${id} ответ|нет]]`).errors).toEqual([
-        expect.objectContaining({ code: "gap_id" }),
-      ]);
+      const parsed = parseTopic(`[[#${id} ответ|нет]]`);
+      expect(parsed.errors).toEqual([]);
+      expect(parsed.gaps[0]).toMatchObject({
+        answer: `#${id} ответ`,
+        distractors: ["нет"],
+        gapKey: makeGapKey("____", `#${id} ответ`),
+      });
+      expect(parsed.gaps[0].explicitId).toBeUndefined();
       expect(
         gapExercisesSchema.safeParse({ [id]: { answerType: "SHORT_TEXT" } })
           .success,
       ).toBe(false);
     },
   );
+
+  it.each([
+    {
+      source: "[[#36|#46]]",
+      answer: "#36",
+      distractor: "#46",
+      mainKey: "36144417455f002346fe49f400b104dade9c85fd",
+    },
+    {
+      source: "[[#1 верхний|#2 нижний]]",
+      answer: "#1 верхний",
+      distractor: "#2 нижний",
+      mainKey: "fb88c861322fff8636fe508250b4284471f97113",
+    },
+  ])(
+    "preserves legacy # choices, migration and published rendering: $source",
+    ({ source, answer, distractor, mainKey }) => {
+      // Snapshots from main (826e67a), before the stage-11 ID syntax.
+      const parsed = parseTopic(source);
+      expect(parsed.errors).toEqual([]);
+      expect(parsed.gaps).toHaveLength(1);
+      expect(parsed.gaps[0]).toMatchObject({
+        gapKey: mainKey,
+        answer,
+        distractors: [distractor],
+      });
+      expect(parsed.gaps[0].explicitId).toBeUndefined();
+      const stable = stabilizeGapIds(source, {}, new Set(), () => "new001");
+      expect(stable.contentMd).toBe(`[[#new001 ${source.slice(2, -2)}]]`);
+      const restored = parseTopic(stable.contentMd);
+      expect(restored.errors).toEqual([]);
+      expect(restored.gaps[0]).toMatchObject({
+        gapKey: "new001",
+        answer,
+        distractors: [distractor],
+      });
+      const migrated = stabilizeGapIds(source, {}, new Set([mainKey]));
+      expect(parseTopic(migrated.contentMd).gaps[0]).toMatchObject({
+        gapKey: mainKey,
+        answer,
+        distractors: [distractor],
+      });
+      for (const [markdown, key] of [
+        [source, mainKey],
+        [stable.contentMd, "new001"],
+        [migrated.contentMd, mainKey],
+      ]) {
+        const blocks = publicBlocks(
+          markdown,
+          new Map([[key, "persisted-gap"]]),
+        );
+        expect(blocks[0].markdown).toBe("[____](#lesson-gap-persisted-gap)");
+        const html = renderToStaticMarkup(
+          createElement(LessonMarkdown, {
+            blocks,
+            gap: (id) =>
+              createElement("span", { "data-gap-id": id }, "Пропуск"),
+          }),
+        );
+        expect(html).toContain('data-gap-id="persisted-gap"');
+        expect(html).toContain("Пропуск");
+        expect(html).not.toContain(answer);
+      }
+    },
+  );
+
+  it("recognizes an ID only with its exact alphabet, length and an ASCII space or tab", () => {
+    for (const body of [
+      "#abc123|нет",
+      "#abc123",
+      "#abc123\u00a0ответ|нет",
+      `#${"a".repeat(40)}|нет`,
+    ])
+      expect(readGapBody(body)).toEqual({ body, id: undefined });
+    expect(readGapBody("#abc123\t ответ|нет")).toEqual({
+      body: "ответ|нет",
+      id: "abc123",
+    });
+    const legacy = "a".repeat(40);
+    expect(readGapBody(`#${legacy} ответ|нет`)).toEqual({
+      body: "ответ|нет",
+      id: legacy,
+    });
+    expect(parseTopic("[[#outer1 #abcdef слово|нет]]").gaps[0].answer).toBe(
+      "#abcdef слово",
+    );
+  });
 
   it("round-trips through TipTap and keeps identity when the gap dialog changes options", () => {
     const manager = new MarkdownManager({
