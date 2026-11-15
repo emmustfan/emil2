@@ -1,3 +1,7 @@
+import {
+  withTopicDraft,
+  recordInitialTopicRevision,
+} from "../../lib/content/drafts";
 import { getDb } from "../../lib/db";
 import { parseTopic } from "../../lib/content/parse";
 // A separate, non-medical demo fixture. Never overwrite editorial changes.
@@ -43,8 +47,8 @@ export async function ensureFunnelDemo() {
       const contentMd = `## ${row.title}\n\nЭто немедицинский пример для знакомства с интерфейсом.\n\nПроверить понимание помогает [[тест|меню]].\n\nВернуться к материалу помогают [[карточки|баннеры]].\n\nОтветы тьютора нужно проверять [[в источниках|в рекламе]].\n\nЭти формулировки описывают только работу учебного сервиса.`;
       const parsed = parseTopic(contentMd);
       if (parsed.errors.length) throw new Error("Invalid demo fixture");
-      await tx.topic.create({
-        data: {
+      const topic = await tx.topic.create({
+        data: withTopicDraft({
           subjectId: subject.id,
           slug: row.slug,
           title: row.title,
@@ -72,6 +76,7 @@ export async function ensureFunnelDemo() {
           },
           question_topicId: {
             create: Array.from({ length: 5 }, (_, i) => ({
+              publishedAt: new Date(),
               stem: i === 0 ? row.stem : `${row.stem} (${i + 1})`,
               options: [
                 { id: "first", text: row.wrong },
@@ -84,8 +89,9 @@ export async function ensureFunnelDemo() {
               sourceBlockKey: parsed.blocks[0].blockKey,
             })),
           },
-        },
+        }),
       });
+      await recordInitialTopicRevision(tx, topic.id);
     }
   });
 }

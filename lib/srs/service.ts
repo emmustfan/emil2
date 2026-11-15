@@ -58,7 +58,10 @@ async function eligible(userId: string): Promise<Prisma.CardWhereInput> {
     },
     OR: [
       { source: "GAP", gap: { is: { archivedAt: null } } },
-      { source: "QUESTION", question: { is: { archivedAt: null } } },
+      {
+        source: "QUESTION",
+        question: { is: { archivedAt: null, publishedAt: { not: null } } },
+      },
     ],
   };
 }
@@ -227,6 +230,8 @@ async function available(
     );
   const source = row.source === "GAP" ? row.gap : row.question;
   if (!source || source.archivedAt || source.topicId !== row.topicId)
+    throw new ContentError("Материал карточки больше не доступен.", 409);
+  if (row.source === "QUESTION" && !row.question?.publishedAt)
     throw new ContentError("Материал карточки больше не доступен.", 409);
   if (!(await hasAccess(userId, row.topic, tx)))
     throw new ContentError("Для этой карточки нужен доступ к предмету.", 403);

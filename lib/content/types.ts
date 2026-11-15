@@ -1,5 +1,7 @@
+import type { ParsedTopic } from "./parse";
 import type { AnswerType, GapExercises } from "../exercises";
 export type ContentStatus = "DRAFT" | "REVIEW" | "PUBLISHED";
+export type DraftState = "CLEAN" | "DRAFT" | "REVIEW";
 export type SubjectDTO = {
   id: string;
   title: string;
@@ -21,6 +23,8 @@ export type SectionDTO = {
   editRevision: number;
 };
 export type QuestionDTO = {
+  publishedAt?: string | null;
+  hasDraft?: boolean;
   answerType: AnswerType;
   acceptedAnswers: string[];
   id: string;
@@ -34,6 +38,10 @@ export type QuestionDTO = {
   order: number;
 };
 export type TopicDTO = {
+  draftState: DraftState;
+  draftUpdatedAt: string | null;
+  draftUpdatedBy: { id: string; name: string | null } | null;
+  published: PublishedTopicDTO | null;
   imageIds?: string[];
   gapExercises: GapExercises;
   id: string;
@@ -55,5 +63,30 @@ export type TopicDTO = {
   editRevision: number;
   publishedAt: string | null;
   subject: { id: string; title: string; slug: string; status?: ContentStatus };
+  questions: QuestionDTO[];
+};
+
+export type PublishedTopicDTO = {
+  title: string;
+  contentMd: string;
+  gapExercises: GapExercises;
+  readingMinutes: number | null;
+  authorName: string | null;
+  reviewerName: string | null;
+  referencesMd: string | null;
+  questions: QuestionDTO[];
+};
+
+export type RevisionSummary = {
+  id: string;
+  version: number;
+  publishedAt: string;
+  publishedBy: { id: string; name: string | null } | null;
+};
+export type RevisionDTO = RevisionSummary & {
+  parsed: ParsedTopic;
+  title: string;
+  contentMd: string;
+  gapExercises: GapExercises;
   questions: QuestionDTO[];
 };

@@ -1,3 +1,7 @@
+import {
+  withTopicDraft,
+  recordInitialTopicRevision,
+} from "../../lib/content/drafts";
 import { ensureFunnelDemo } from "./demo-funnel";
 import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
@@ -78,8 +82,8 @@ if (!existing) {
       : "## Пример закрытой темы\n\nЭто демонстрация платного доступа. Здесь видны только первые блоки; полная методичка и тест доступны после открытия предмета. Настоящей оплаты в тестовом просмотре нет.\n\n## Закрытая часть\n\nЭтот текст не должен попадать в HTML без доступа. Проверочный ответ [[доступ|превью|описание]].";
     const parsed = parseTopic(contentMd);
     if (parsed.errors.length) throw new Error("Invalid preview fixture");
-    await db.topic.create({
-      data: {
+    const topic = await db.topic.create({
+      data: withTopicDraft({
         subjectId: subject.id,
         sectionId: section.id,
         slug: free ? "first-lesson" : "locked-lesson",
@@ -109,6 +113,7 @@ if (!existing) {
         },
         question_topicId: {
           create: rows.map(([stem, texts, correct, explanation], order) => ({
+            publishedAt: new Date(),
             stem,
             options: texts.map((text, i) => ({
               id: String.fromCharCode(97 + i),
@@ -120,8 +125,9 @@ if (!existing) {
             order,
           })),
         },
-      },
+      }),
     });
+    await recordInitialTopicRevision(db, topic.id);
   }
 }
 await ensureFunnelDemo();

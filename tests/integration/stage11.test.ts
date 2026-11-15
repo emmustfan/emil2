@@ -163,7 +163,7 @@ it("publication waits for the learner transaction; old-version answers then rece
     release = latch<void>();
   await db.topic.update({
     where: { id: f.free.id },
-    data: { status: "REVIEW" },
+    data: { draftState: "REVIEW" },
   });
   const reader = db.$transaction(
     async (tx) => {
@@ -243,7 +243,8 @@ it("migrates a populated legacy lesson and preserves gap, answer, card and progr
   const migrated = await db.topic.findUniqueOrThrow({
     where: { id: f.free.id },
   });
-  expect(migrated.contentMd).toContain("[[#");
+  expect(migrated.draftContentMd).toContain("[[#");
+  expect(migrated.contentMd).toBe(raw.contentMd);
   view = await publish(view, {
     contentMd: view.contentMd.replace(
       "Первый выбор",

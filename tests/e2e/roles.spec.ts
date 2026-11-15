@@ -207,7 +207,8 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .draftTitle,
     )
     .toBe("Тема учителя после изменения");
   expect(
@@ -252,7 +253,13 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
   expect(blocked.status()).toBe(404);
   expect(
     (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
+  ).toBe("PUBLISHED");
+  expect(
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).draftState,
   ).toBe("DRAFT");
+  expect(
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+  ).toBe(f.free.title);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

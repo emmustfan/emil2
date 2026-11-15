@@ -25,7 +25,8 @@ export async function ContentTree({
       topic_subjectId: {
         select: {
           id: true,
-          title: true,
+          draftTitle: true,
+          draftState: true,
           sectionId: true,
           status: true,
           isFree: true,
@@ -109,12 +110,15 @@ export async function ContentTree({
                             <FileText size={16} />
                             <span className="content-level">Урок</span>
                             <Link href={`/admin/topics/${topic.id}`}>
-                              {topic.title}
+                              {topic.draftTitle}
                             </Link>
                             <span
                               className={`material-status ${topic.status === "REVIEW" ? "is-review" : ""}`}
                             >
                               {contentRu.statuses[topic.status]}
+                              {topic.draftState !== "CLEAN"
+                                ? " · есть правки"
+                                : ""}
                             </span>
                             {topic.isFree && <small>Бесплатный</small>}
                           </li>

@@ -105,7 +105,7 @@ export async function resolveScope(
         },
         include: { question: true },
       });
-      if (!a || a.isCorrect || a.question.archivedAt)
+      if (!a || a.isCorrect || a.question.archivedAt || !a.question.publishedAt)
         throw new ContentError(
           "Объяснение доступно после неверного ответа в вашей текущей попытке.",
           409,

@@ -1,3 +1,7 @@
+import {
+  withTopicDraft,
+  recordInitialTopicRevision,
+} from "../../lib/content/drafts";
 import { getDb } from "../../lib/db";
 import { parseTopic } from "../../lib/content/parse";
 import { gapDefinition, type GapExercises } from "../../lib/exercises";
@@ -37,8 +41,8 @@ export async function ensureExerciseDemo() {
   const sourceBlockKey = parsed.blocks[1].blockKey;
   const choice = (texts: string[]) =>
     texts.map((text, i) => ({ id: String.fromCharCode(97 + i), text }));
-  await db.topic.create({
-    data: {
+  const topic = await db.topic.create({
+    data: withTopicDraft({
       subjectId: subject.id,
       slug: "answer-types",
       title: "Три типа ответа: попробуйте сами",
@@ -76,6 +80,7 @@ export async function ensureExerciseDemo() {
       question_topicId: {
         create: [
           {
+            publishedAt: new Date(),
             stem: "Какой элемент позволяет выбрать ровно один вариант?",
             answerType: "SINGLE_CHOICE",
             options: choice(["Кружок", "Несколько чекбоксов", "Поле текста"]),
@@ -87,6 +92,7 @@ export async function ensureExerciseDemo() {
             sourceBlockKey,
           },
           {
+            publishedAt: new Date(),
             stem: "Выберите чётные числа.",
             answerType: "MULTIPLE_CHOICE",
             options: choice(["2", "3", "4"]),
@@ -98,6 +104,7 @@ export async function ensureExerciseDemo() {
             sourceBlockKey,
           },
           {
+            publishedAt: new Date(),
             stem: "Как называется хвойное дерево, которое часто украшают к Новому году?",
             answerType: "SHORT_TEXT",
             options: [],
@@ -109,6 +116,7 @@ export async function ensureExerciseDemo() {
             sourceBlockKey,
           },
           {
+            publishedAt: new Date(),
             stem: "Что нужно нажать после выбора или ввода ответа?",
             answerType: "SINGLE_CHOICE",
             options: choice(["Проверить", "Выйти", "Удалить"]),
@@ -119,6 +127,7 @@ export async function ensureExerciseDemo() {
             sourceBlockKey,
           },
           {
+            publishedAt: new Date(),
             stem: "Что появляется после проверки задания?",
             answerType: "MULTIPLE_CHOICE",
             options: choice(["Результат", "Объяснение", "Настоящий платёж"]),
@@ -131,6 +140,7 @@ export async function ensureExerciseDemo() {
           },
         ],
       },
-    },
+    }),
   });
+  await recordInitialTopicRevision(db, topic.id);
 }

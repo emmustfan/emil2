@@ -1,3 +1,4 @@
+import { withTopicDraft } from "../../lib/content/drafts";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../../lib/db";
 import { parseTopic } from "../../lib/content/parse";
@@ -29,13 +30,14 @@ export async function createLessonFixture(prefix = "lesson") {
       : contentMd;
     const parsed = parseTopic(lessonMd);
     return db.topic.create({
-      data: {
+      data: withTopicDraft({
         subjectId: subject.id,
         sectionId: section.id,
         slug: isFree ? "free" : "paid",
         title: isFree ? "Бесплатный учебный пример" : "Закрытый учебный пример",
         isFree,
         status: "PUBLISHED",
+        publishedAt: new Date(),
         contentMd: lessonMd,
         version: 1,
         order,
@@ -57,6 +59,7 @@ export async function createLessonFixture(prefix = "lesson") {
         },
         question_topicId: {
           create: Array.from({ length: 5 }, (_, i) => ({
+            publishedAt: new Date(),
             stem: `Вопрос ${i + 1}: какой вариант выбрать?`,
             options: [
               { id: "a", text: "Вариант А" },
@@ -69,7 +72,7 @@ export async function createLessonFixture(prefix = "lesson") {
             order: i,
           })),
         },
-      },
+      }),
       include: { gap_topicId: true, question_topicId: true },
     });
   }
@@ -121,6 +124,7 @@ export async function cleanupLessonFixture(
   await db.contentChunk.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.question.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.gap.deleteMany({ where: { topicId: { in: topicIds } } });
+  await db.topicRevision.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.topic.deleteMany({ where: { id: { in: topicIds } } });
   await db.accessGrant.deleteMany({ where: { subjectId: f.subject.id } });
   await db.subscription.deleteMany({ where: { subjectId: f.subject.id } });
@@ -185,7 +189,12 @@ export async function addMixedExercises(f: LessonFixture) {
   };
   await db.topic.update({
     where: { id: f.free.id },
-    data: { contentMd, gapExercises: configs },
+    data: {
+      contentMd,
+      gapExercises: configs,
+      draftContentMd: contentMd,
+      draftGapExercises: configs,
+    },
   });
   await db.gap.update({
     where: { id: f.free.gap_topicId.find((g) => g.order === 1)!.id },

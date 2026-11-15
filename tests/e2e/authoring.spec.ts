@@ -124,7 +124,7 @@ test("publication names invalid fields, focuses them and succeeds after correcti
     path: `tmp/screenshots/publication-field-errors-${info.project.name}.png`,
   });
   await title.fill("Исправленный урок");
-  await slug.fill("corrected-lesson");
+  await slug.fill(f.free.slug);
   await minutes.fill("5");
   await page
     .getByRole("button", { name: "Сохранить черновик", exact: true })
@@ -132,7 +132,8 @@ test("publication names invalid fields, focuses them and succeeds after correcti
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .draftTitle,
     )
     .toBe("Исправленный урок");
   await expect(title).not.toHaveAttribute("aria-invalid", "true");
@@ -146,7 +147,8 @@ test("publication names invalid fields, focuses them and succeeds after correcti
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .draftState,
     )
     .toBe("REVIEW");
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
@@ -161,7 +163,7 @@ test("publication identifies an invalid saved question and opens its editor for 
   await db.question.update({ where: { id: q.id }, data: { explanation: "" } });
   await db.topic.update({
     where: { id: f.free.id },
-    data: { status: "REVIEW" },
+    data: { draftState: "REVIEW" },
   });
   await page.goto(`/admin/topics/${f.free.id}`);
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
@@ -187,8 +189,10 @@ test("publication identifies an invalid saved question and opens its editor for 
   await expect
     .poll(
       async () =>
-        (await db.question.findUniqueOrThrow({ where: { id: q.id } }))
-          .explanation,
+        (
+          (await db.question.findUniqueOrThrow({ where: { id: q.id } }))
+            .draft as { explanation: string } | null
+        )?.explanation,
     )
     .toBe("Исправленное объяснение синтетического задания.");
   await page
@@ -200,7 +204,8 @@ test("publication identifies an invalid saved question and opens its editor for 
   await expect
     .poll(
       async () =>
-        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
+        (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+          .draftState,
     )
     .toBe("REVIEW");
   await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
@@ -259,7 +264,7 @@ test("copied gaps receive unique persistent IDs and the editor accepts the canon
       const row = await db.topic.findUniqueOrThrow({
         where: { id: f.free.id },
       });
-      const gaps = parseTopic(row.contentMd).gaps;
+      const gaps = parseTopic(row.draftContentMd).gaps;
       return {
         total: gaps.length,
         unique: new Set(gaps.map((gap) => gap.gapKey)).size,
@@ -267,12 +272,12 @@ test("copied gaps receive unique persistent IDs and the editor accepts the canon
     })
     .toEqual({ total: 3, unique: 3 });
   const saved = await db.topic.findUniqueOrThrow({ where: { id: f.free.id } });
-  await expect(source).toHaveValue(saved.contentMd);
-  const gaps = parseTopic(saved.contentMd).gaps,
+  await expect(source).toHaveValue(saved.draftContentMd);
+  const gaps = parseTopic(saved.draftContentMd).gaps,
     copy = gaps[2];
   expect(gaps[0].gapKey).toBe(first.gapKey);
   expect(copy.gapKey).toMatch(/^[a-z0-9]{6,12}$/);
-  expect(saved.gapExercises).toMatchObject({
+  expect(saved.draftGapExercises).toMatchObject({
     [copy.gapKey]: { explanation: "Настройки копируются вместе с заданием." },
   });
   await page
@@ -286,8 +291,9 @@ test("copied gaps receive unique persistent IDs and the editor accepts the canon
   await page.reload();
   await expect(editor.locator(".rich-gap-token")).toHaveCount(3);
   expect(
-    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).contentMd,
-  ).toBe(saved.contentMd);
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+      .draftContentMd,
+  ).toBe(saved.draftContentMd);
 });
 
 test("table controls expand, merge, split and preserve spans after reload and student preview", async ({
@@ -331,7 +337,7 @@ test("table controls expand, merge, split and preserve spans after reload and st
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
-          .contentMd,
+          .draftContentMd,
     )
     .toContain("<!-- emal-table:v1");
   await page.reload();
@@ -456,8 +462,8 @@ test("images insert between text blocks, move in both directions and can be remo
         where: { id: f.free.id },
       });
       return (
-        saved.contentMd.includes("Добавленный абзац после схемы.") &&
-        saved.contentMd.includes("/api/content-images/")
+        saved.draftContentMd.includes("Добавленный абзац после схемы.") &&
+        saved.draftContentMd.includes("/api/content-images/")
       );
     })
     .toBe(true);
@@ -550,14 +556,14 @@ test("content tree exposes the dental draft and interactive student preview with
   ).toBe(404);
   await db.topic.update({
     where: { id: demo.id },
-    data: { title: "Сохранённая правка автора" },
+    data: { draftTitle: "Сохранённая правка автора" },
   });
   const again = await ensureDentalDemo({
     subjectId: f.subject.id,
     sectionId: f.free.sectionId!,
   });
   expect(again.id).toBe(demo.id);
-  expect(again.title).toBe("Сохранённая правка автора");
+  expect(again.draftTitle).toBe("Сохранённая правка автора");
   expect(await db.topicImage.count({ where: { topicId: demo.id } })).toBe(2);
 });
 test("author follows editor steps, uploads an image, reviews and publishes a lesson visible to a guest", async ({
@@ -759,7 +765,7 @@ test("visual author formats a selection and creates a dropdown gap without Markd
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
-          .contentMd,
+          .draftContentMd,
     )
     .toMatch(/\[\[#[a-z0-9]{6,12} слово\|другое\]\]/);
   const stableId = gapSourceId(
@@ -787,7 +793,7 @@ test("visual author formats a selection and creates a dropdown gap without Markd
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
-          .contentMd,
+          .draftContentMd,
     )
     .toContain(`[[#${stableId} слово|иной]]`);
   expect(
@@ -831,7 +837,7 @@ test("gap buttons open the matching saved choices by click or keyboard and cance
   const afterCancel = await db.topic.findUniqueOrThrow({
     where: { id: f.free.id },
   });
-  expect(afterCancel.contentMd).toBe(initialRow.contentMd);
+  expect(afterCancel.draftContentMd).toBe(initialRow.draftContentMd);
   expect(afterCancel.editRevision).toBe(initialRow.editRevision);
   expect(afterCancel.status).toBe("PUBLISHED");
   expect(afterCancel.needsExpertReview).toBe(false);
@@ -869,7 +875,7 @@ test("gap buttons open the matching saved choices by click or keyboard and cance
     .poll(
       async () =>
         (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
-          .contentMd,
+          .draftContentMd,
     )
     .toContain(
       `[[#${f.free.gap_topicId.find((gap) => gap.order === 1)!.gapKey} верный-два|Ещё вариант]]`,
@@ -889,14 +895,15 @@ test("gap buttons open the matching saved choices by click or keyboard and cance
     }),
   ).toHaveValue("Проверка первого задания.");
   const saved = (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
-    .contentMd;
+    .draftContentMd;
   await dialog
     .getByRole("textbox", { name: "Вариант 1", exact: true })
     .fill("Несохранённое значение");
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   expect(
-    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).contentMd,
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } }))
+      .draftContentMd,
   ).toBe(saved);
   await second.focus();
   await second.press("Space");
@@ -940,7 +947,7 @@ test("teacher creates sections and lessons inside the book and switching flushes
     f.paid.title,
   );
   expect(
-    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).title,
+    (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).draftTitle,
   ).toBe("Черновик перед переключением");
   await tree
     .getByRole("link", { name: /Черновик перед переключением/ })

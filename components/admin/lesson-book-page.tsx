@@ -35,7 +35,8 @@ export async function LessonBookPage({
       where: { subjectId: subject.id },
       select: {
         id: true,
-        title: true,
+        draftTitle: true,
+        draftState: true,
         sectionId: true,
         status: true,
         isFree: true,
@@ -58,9 +59,18 @@ export async function LessonBookPage({
       subject={subject}
       initial={topic ? { topic, parsed: parseTopic(topic.contentMd) } : null}
       initialSections={sections}
-      initialTopics={topics}
+      initialTopics={topics.map((topic) => ({
+        ...topic,
+        title: topic.draftTitle,
+      }))}
       startCreating={create}
-      settings={{ autosaveMs, minQuestions, maxQuestions, imageMaxBytes }}
+      settings={{
+        autosaveMs,
+        minQuestions,
+        maxQuestions,
+        imageMaxBytes,
+        timeZone: user.timezone,
+      }}
       upload={
         <SubjectImport
           actorId={user.id}

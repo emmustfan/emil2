@@ -38,6 +38,10 @@ async function handle(request: NextRequest, context: Context, method: string) {
         result = await service.getSubject(id, actor.id);
       else if (entity === "topics" && id && !action)
         result = await service.getTopic(id, undefined, actor.id);
+      else if (entity === "topics" && id && action === "revisions")
+        result = await service.listTopicRevisions(id, actor.id);
+      else if (entity === "revisions" && id && !action)
+        result = await service.getTopicRevision(id, actor.id);
       else if (entity === "topics" && !id) {
         const subjectId = z
           .string()
@@ -145,6 +149,20 @@ async function handle(request: NextRequest, context: Context, method: string) {
         .strict()
         .parse(input);
       result = await service.publishTopic(id, revision, actor.id);
+    } else if (
+      entity === "topics" &&
+      id &&
+      ["discard", "unpublish"].includes(action) &&
+      method === "POST"
+    ) {
+      const { revision } = z
+        .object({ revision: revisionSchema })
+        .strict()
+        .parse(input);
+      result =
+        action === "discard"
+          ? await service.discardTopicChanges(id, revision, actor.id)
+          : await service.unpublishTopic(id, revision, actor.id);
     } else if (
       entity === "topics" &&
       id &&

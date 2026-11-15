@@ -12,6 +12,7 @@ export type BookTopic = {
   title: string;
   sectionId: string | null;
   status: ContentStatus;
+  draftState?: TopicDTO["draftState"];
   isFree: boolean;
   order: number;
 };
@@ -34,6 +35,7 @@ export function LessonBook({
     minQuestions: number;
     maxQuestions: number;
     imageMaxBytes: number;
+    timeZone: string;
   };
   upload: ReactNode;
   startCreating?: boolean;
@@ -97,6 +99,7 @@ export function LessonBook({
               title: topic.title,
               sectionId: topic.sectionId,
               status: topic.status,
+              draftState: topic.draftState,
               isFree: topic.isFree,
               order: topic.order,
             }
@@ -154,6 +157,9 @@ export function LessonBook({
                         className={`book-status is-${topic.status.toLowerCase()}`}
                       />
                       {contentRu.statuses[topic.status]}
+                      {topic.draftState && topic.draftState !== "CLEAN"
+                        ? " · есть правки"
+                        : ""}
                       {topic.isFree ? " · бесплатно" : ""}
                     </small>
                   </a>
@@ -243,6 +249,7 @@ export function LessonBook({
                     title: topic.title,
                     sectionId: topic.sectionId,
                     status: topic.status,
+                    draftState: topic.draftState,
                     isFree: topic.isFree,
                     order: topic.order,
                   },

@@ -135,6 +135,7 @@ afterAll(async () => {
   await db.contentChunk.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.question.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.gap.deleteMany({ where: { topicId: { in: topicIds } } });
+  await db.topicRevision.deleteMany({ where: { topicId: { in: topicIds } } });
   await db.topic.deleteMany({ where: { id: { in: topicIds } } });
   await db.section.deleteMany({ where: { subjectId: { in: subjectIds } } });
   await db.subject.deleteMany({ where: { id: { in: subjectIds } } });
@@ -261,7 +262,8 @@ describe("content publication with PostgreSQL and pg-boss", () => {
     row = await reviewed(row, {
       contentMd: markdown().replace("ошибка-0", "другой-дистрактор"),
     });
-    expect(row.status).toBe("REVIEW");
+    expect(row.status).toBe("PUBLISHED");
+    expect(row.draftState).toBe("REVIEW");
     row = await service.publishTopic(row.id, row.editRevision);
     expect(
       (
@@ -328,8 +330,23 @@ describe("content publication with PostgreSQL and pg-boss", () => {
       },
     });
     row = await service.deleteQuestion(q.id, row.editRevision);
-    expect(row.status).toBe("DRAFT");
+    expect(row.status).toBe("PUBLISHED");
+    expect(row.draftState).toBe("DRAFT");
     expect(row.needsExpertReview).toBe(true);
+    expect(
+      (await db.question.findUniqueOrThrow({ where: { id: q.id } })).archivedAt,
+    ).toBeNull();
+    expect(
+      (await db.card.findUniqueOrThrow({ where: { id: card.id } })).suspended,
+    ).toBe(false);
+    // Preserve the original archival/history assertions, now at the publication boundary.
+    row = await service.createQuestion(
+      row.id,
+      row.editRevision,
+      question(row, 5),
+    );
+    row = await reviewed(row);
+    row = await service.publishTopic(row.id, row.editRevision);
     expect(
       (await db.question.findUniqueOrThrow({ where: { id: q.id } })).archivedAt,
     ).not.toBeNull();
@@ -379,8 +396,16 @@ describe("content publication with PostgreSQL and pg-boss", () => {
       service.publishTopic(row.id, row.editRevision),
     ).rejects.toThrow("Synthetic queue failure");
     mock.mockRestore();
-    expect((await service.getTopic(row.id)).status).toBe("REVIEW");
+    expect((await service.getTopic(row.id)).draftState).toBe("REVIEW");
     expect(await db.gap.count({ where: { topicId: row.id } })).toBe(0);
+    expect(await db.topicRevision.count({ where: { topicId: row.id } })).toBe(
+      0,
+    );
+    expect(
+      await db.question.count({
+        where: { topicId: row.id, publishedAt: { not: null } },
+      }),
+    ).toBe(0);
     row = await service.publishTopic(row.id, row.editRevision);
     expect(row.version).toBe(1);
   });

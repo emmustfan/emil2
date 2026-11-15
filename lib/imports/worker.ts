@@ -1,3 +1,4 @@
+import { withTopicDraft } from "../content/drafts";
 import { reportFault } from "../monitoring";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db";
@@ -137,24 +138,28 @@ export async function processImport(id: string, provider?: LLMProvider) {
           throw new ContentError("Раздел исходного импорта больше недоступен.");
         const topicIds: string[] = [];
         for (const [i, draft] of drafts.entries()) {
+          const stable = stabilizeGapIds(draft.contentMd);
           const topic = await tx.topic.create({
-            data: {
-              subjectId: job.subjectId,
-              sectionId: job.sectionId,
-              title: draft.title,
-              slug: `${headingSlug(draft.title).slice(0, 40)}-${id}-${i + 1}`,
-              order: 0,
-              isFree: false,
-              ...stabilizeGapIds(draft.contentMd),
-              status: "DRAFT",
-              aiGenerated: true,
-              needsExpertReview: true,
-              reviewedAt: null,
-              authorName: null,
-              reviewerName: null,
-              referencesMd: null,
-              question_topicId: { create: draft.questions },
-            },
+            data: withTopicDraft(
+              {
+                subjectId: job.subjectId,
+                sectionId: job.sectionId,
+                title: draft.title,
+                slug: `${headingSlug(draft.title).slice(0, 40)}-${id}-${i + 1}`,
+                order: 0,
+                isFree: false,
+                ...stable,
+                status: "DRAFT",
+                aiGenerated: true,
+                needsExpertReview: true,
+                reviewedAt: null,
+                authorName: null,
+                reviewerName: null,
+                referencesMd: null,
+                question_topicId: { create: draft.questions },
+              },
+              job.createdById,
+            ),
           });
           topicIds.push(topic.id);
         }

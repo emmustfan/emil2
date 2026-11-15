@@ -41,7 +41,11 @@ async function subjects(db: Db) {
           isFree: true,
           version: true,
           question_topicId: {
-            where: { archivedAt: null, isDiagnostic: true },
+            where: {
+              archivedAt: null,
+              isDiagnostic: true,
+              publishedAt: { not: null },
+            },
             select: { id: true },
           },
         },
@@ -170,6 +174,7 @@ export async function demoAction(id: string, input: DemoAction) {
           where: {
             id: pinned.id,
             archivedAt: null,
+            publishedAt: { not: null },
             isDiagnostic: true,
             topic: {
               ...published,
@@ -392,6 +397,7 @@ export async function demoView(
           where: {
             id: pinned.id,
             archivedAt: null,
+            publishedAt: { not: null },
             isDiagnostic: true,
             topic: {
               ...published,
