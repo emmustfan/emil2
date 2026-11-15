@@ -134,7 +134,11 @@ export async function uploadTopicImage(
     throw e;
   }
 }
-export async function readTopicImage(id: string, userId: string | null) {
+export async function readTopicImage(
+  id: string,
+  userId: string | null,
+  readOnly = false,
+) {
   const image = await getDb().topicImage.findUnique({
     where: { id },
     include: {
@@ -156,7 +160,7 @@ export async function readTopicImage(id: string, userId: string | null) {
   const user = userId
     ? await getDb().user.findUnique({ where: { id: userId } })
     : null;
-  if (userId && (!user || user.blockedAt || user.deletedAt))
+  if (userId && (!user || (user.blockedAt && !readOnly) || user.deletedAt))
     throw new ContentError("Изображение недоступно.", 404);
   let editor = false;
   if (user && (await hasCurrentConsent(user)))

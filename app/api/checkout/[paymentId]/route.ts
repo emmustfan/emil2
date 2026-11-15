@@ -9,8 +9,10 @@ export async function GET(
 ) {
   try {
     const user = await requireBuyer();
-    await consumeLimit(`billing-status:${user.id}`);
-    return contentJSON(await paymentStatus(user.id, (await params).paymentId));
+    await consumeLimit(`billing-status:${user.id}`, undefined, user.readOnly);
+    return contentJSON(
+      await paymentStatus(user.id, (await params).paymentId, !user.readOnly),
+    );
   } catch (e) {
     return contentFailure(e);
   }

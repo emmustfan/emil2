@@ -17,11 +17,10 @@ export async function LessonBookPage({
 }) {
   const user = await requireEditor();
   const chosen = topicId
-    ? await contentPage(() => getTopic(topicId, undefined, user.id))
+    ? await contentPage(() => getTopic(topicId, undefined, user))
     : null;
   const subject =
-    chosen?.subject ??
-    (await contentPage(() => getSubject(subjectId!, user.id)));
+    chosen?.subject ?? (await contentPage(() => getSubject(subjectId!, user)));
   const [
     sections,
     topics,
@@ -30,7 +29,7 @@ export async function LessonBookPage({
     maxQuestions,
     imageMaxBytes,
   ] = await Promise.all([
-    listSections(subject.id, user.id),
+    listSections(subject.id, user),
     getDb().topic.findMany({
       where: { subjectId: subject.id },
       select: {
@@ -52,7 +51,7 @@ export async function LessonBookPage({
   const topic =
     chosen ??
     (!create && topics.length
-      ? await contentPage(() => getTopic(topics[0].id, undefined, user.id))
+      ? await contentPage(() => getTopic(topics[0].id, undefined, user))
       : null);
   return (
     <LessonBook
@@ -73,7 +72,7 @@ export async function LessonBookPage({
       }}
       upload={
         <SubjectImport
-          actorId={user.id}
+          actor={user}
           subject={subject}
           sections={sections}
           timeZone={user.timezone}

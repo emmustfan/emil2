@@ -14,7 +14,7 @@ export default async function StudentPreview({
 }) {
   const user = await requireEditor(),
     { id } = await params;
-  const topic = await contentPage(() => getTopic(id, undefined, user.id));
+  const topic = await contentPage(() => getTopic(id, undefined, user));
   return (
     <main className="student-lesson-preview">
       <div className="student-preview-banner">

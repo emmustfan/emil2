@@ -6,7 +6,7 @@ import { ReviewBadge } from "./badge";
 export const currentReviewSummary = cache(async () => {
   const session = await getCurrentSession();
   if (!session || !(await hasCurrentConsent(session.user))) return null;
-  return getReviewSummary(session.userId);
+  return getReviewSummary(session.userId, undefined, session.readOnly);
 });
 export async function ReviewLink() {
   const summary = await currentReviewSummary();

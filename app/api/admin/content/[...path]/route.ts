@@ -33,15 +33,15 @@ async function handle(request: NextRequest, context: Context, method: string) {
         Object.fromEntries(request.nextUrl.searchParams),
       );
       if (entity === "subjects" && !id)
-        result = await service.listSubjects(query.q, query.page, actor.id);
+        result = await service.listSubjects(query.q, query.page, actor);
       else if (entity === "subjects" && id && !action)
-        result = await service.getSubject(id, actor.id);
+        result = await service.getSubject(id, actor);
       else if (entity === "topics" && id && !action)
-        result = await service.getTopic(id, undefined, actor.id);
+        result = await service.getTopic(id, undefined, actor);
       else if (entity === "topics" && id && action === "revisions")
-        result = await service.listTopicRevisions(id, actor.id);
+        result = await service.listTopicRevisions(id, actor);
       else if (entity === "revisions" && id && !action)
-        result = await service.getTopicRevision(id, actor.id);
+        result = await service.getTopicRevision(id, actor);
       else if (entity === "topics" && !id) {
         const subjectId = z
           .string()
@@ -52,7 +52,7 @@ async function handle(request: NextRequest, context: Context, method: string) {
           subjectId,
           query.q,
           query.page,
-          actor.id,
+          actor,
         );
       } else if (entity === "sections" && !id) {
         const subjectId = z
@@ -60,11 +60,11 @@ async function handle(request: NextRequest, context: Context, method: string) {
           .min(1)
           .max(100)
           .parse(request.nextUrl.searchParams.get("subjectId"));
-        result = await service.listSections(subjectId, actor.id);
+        result = await service.listSections(subjectId, actor);
       } else if (entity === "sections" && id && !action)
-        result = await service.getSection(id, actor.id);
+        result = await service.getSection(id, actor);
       else if (entity === "questions" && id && !action) {
-        result = await service.getQuestion(id, actor.id);
+        result = await service.getQuestion(id, actor);
       } else throw new ContentError("Маршрут не найден.", 404);
       return contentJSON(result);
     }

@@ -64,6 +64,7 @@ export async function track(
   db: Prisma.TransactionClient = getDb(),
   dedupeKey?: string,
 ) {
+  if ("readOnly" in actor && actor.readOnly) return;
   const validated = eventSchemas[name].parse(props);
   let userId: string | undefined, anonId: string | undefined;
   if ("anonId" in actor) anonId = actor.anonId;

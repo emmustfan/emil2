@@ -1,4 +1,7 @@
 export const settingLabels: Record<string, string> = {
+  "admin.impersonationMinutes": "Просмотр под пользователем: срок в минутах",
+  "admin.impersonationHistoryLimit":
+    "Просмотры администратором: записей в карточке",
   "progress.pageSize": "Студентов на странице прогресса",
   "progress.minCompletionPercent": "Отстающие: завершено меньше, %",
   "progress.inactiveDays": "Отстающие: нет активности больше, дней",

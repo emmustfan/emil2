@@ -4,9 +4,13 @@ import { lockTopicForLearning } from "../content/locks";
 import { lockLearningActor } from "./actor";
 import { publishedTopic } from "./service";
 import { ContentError } from "../content/errors";
-export async function gapHistory(topicId: string, userId: string) {
+export async function gapHistory(
+  topicId: string,
+  userId: string,
+  readOnly = false,
+) {
   return getDb().$transaction(async (db) => {
-    await lockLearningActor(db, { userId });
+    await lockLearningActor(db, { userId, readOnly });
     await lockTopicForLearning(db, topicId);
     const topic = await publishedTopic(topicId, db);
     if (!(await hasAccess(userId, topic, db)))

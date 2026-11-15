@@ -14,7 +14,7 @@ export async function requireContentEditor() {
     !(await hasCurrentConsent(session.user))
   )
     throw new AuthError("forbidden", 403);
-  return session.user;
+  return { ...session.user, readOnly: session.readOnly };
 }
 export function contentJSON(value: unknown, status = 200) {
   return NextResponse.json(value, {

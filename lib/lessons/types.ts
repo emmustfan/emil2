@@ -1,8 +1,9 @@
 import type { AnswerType } from "../exercises";
 // Public DTOs: never import editor DTOs into the lesson UI.
-export type Actor =
+export type Actor = (
   | { userId: string; demoSessionId?: never }
-  | { userId?: never; demoSessionId: string };
+  | { userId?: never; demoSessionId: string }
+) & { readOnly?: boolean };
 export type Option = { id: string; text: string };
 export type GapFeedback = {
   chosen: string;

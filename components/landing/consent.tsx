@@ -31,6 +31,11 @@ declare global {
   }
 }
 export function metrikaGoal(goal: Goal) {
+  if (
+    typeof document !== "undefined" &&
+    document.body?.dataset.impersonation === "true"
+  )
+    return;
   if (consentSnapshot() !== "yes") return;
   if (window.dentalMetrikaId)
     window.ym?.(window.dentalMetrikaId, "reachGoal", goal);

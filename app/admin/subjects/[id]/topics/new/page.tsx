@@ -12,8 +12,8 @@ export default async function NewTopic({
 }) {
   const user = await requireEditor();
   const { id } = await params;
-  const subject = await contentPage(() => getSubject(id, user.id));
-  const sections = await listSections(id, user.id);
+  const subject = await contentPage(() => getSubject(id, user));
+  const sections = await listSections(id, user);
   return (
     <main className="lesson-creation">
       <h1 className="mb-3 text-3xl font-semibold">{t.newTopic}</h1>
@@ -22,7 +22,7 @@ export default async function NewTopic({
         manual={<NewTopicForm subjectId={id} sections={sections} />}
         upload={
           <SubjectImport
-            actorId={user.id}
+            actor={user}
             subject={subject}
             sections={sections}
             timeZone={user.timezone}

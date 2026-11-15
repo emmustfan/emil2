@@ -76,6 +76,8 @@ export const DEFAULT_SETTINGS = {
   "llm.outputRubPerMillion": 0,
   "llm.embeddingRubPerMillion": 0,
   "admin.usersPageSize": 20,
+  "admin.impersonationMinutes": 30,
+  "admin.impersonationHistoryLimit": 50,
   "progress.pageSize": 20,
   "progress.minCompletionPercent": 50,
   "progress.inactiveDays": 7,
@@ -158,7 +160,10 @@ export function decodeSetting<K extends SettingKey>(
     (key === "srs.queuePageSize" &&
       typeof result.data === "number" &&
       result.data > 100) ||
-    (key === "admin.usersPageSize" &&
+    (key === "admin.impersonationMinutes" &&
+      typeof result.data === "number" &&
+      result.data > 1440) ||
+    (["admin.usersPageSize", "admin.impersonationHistoryLimit"].includes(key) &&
       typeof result.data === "number" &&
       result.data > 100) ||
     (key === "admin.maxTeacherSubjects" &&

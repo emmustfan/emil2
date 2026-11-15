@@ -13,8 +13,8 @@ export default async function SubjectPage({
 }) {
   const user = await requireEditor();
   const { id } = await params;
-  const subject = await contentPage(() => getSubject(id, user.id));
-  const sections = await listSections(id, user.id);
+  const subject = await contentPage(() => getSubject(id, user));
+  const sections = await listSections(id, user);
   return (
     <main className="space-y-8">
       <h1 className="text-3xl font-semibold">{subject.title}</h1>

@@ -1,3 +1,4 @@
+import { actorIdentity } from "../lessons/identity";
 import { getSetting } from "../settings";
 import type { Prisma } from "../generated/prisma/client";
 import type { Actor } from "../lessons/types";
@@ -22,7 +23,7 @@ export async function refund(
       id: messageId,
       status: "RUNNING",
       runToken: token,
-      conversation: { ...actor },
+      conversation: { ...actorIdentity(actor) },
     },
   });
   if (!message?.quotaPeriodStart) return false;
@@ -47,7 +48,7 @@ export async function recoverExpired(tx: Db, actor: Actor, now: Date) {
       role: "USER",
       status: "RUNNING",
       leaseUntil: { lte: now },
-      conversation: { ...actor },
+      conversation: { ...actorIdentity(actor) },
     },
     select: { id: true, runToken: true },
   });
@@ -123,7 +124,7 @@ export async function getTutorQuota(actor: Actor, now = new Date()) {
   const settings = await tutorSettings();
   return getDb().$transaction(async (tx) => {
     await lock(tx, `usage:tutor:${actorKey(actor)}`);
-    await recoverExpired(tx, actor, now);
+    if (!actor.readOnly) await recoverExpired(tx, actor, now);
     return (await quotaState(tx, actor, settings, now)).quota;
   });
 }

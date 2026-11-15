@@ -1,3 +1,4 @@
+import type { ContentReader } from "./permissions";
 import { contentActor, authorizeSubject, contentWrite } from "./permissions";
 import {
   gapDefinition,
@@ -68,7 +69,7 @@ function questionDTO(q: Question, working = true): QuestionDTO {
     hasDraft: working && !!q.draft,
   };
 }
-export async function listSubjects(q = "", page = 1, actorId?: string) {
+export async function listSubjects(q = "", page = 1, actorId?: ContentReader) {
   const actor = await contentActor(actorId);
   const size = await getSetting("content.pageSize");
   const where = q
@@ -101,13 +102,13 @@ export async function listSubjects(q = "", page = 1, actorId?: string) {
   ]);
   return { items, total, page, pages: Math.max(1, Math.ceil(total / size)) };
 }
-export async function getSubject(id: string, actorId?: string) {
+export async function getSubject(id: string, actorId?: ContentReader) {
   await authorizeSubject(id, actorId);
   const row = await getDb().subject.findUnique({ where: { id } });
   if (!row) throw notFound();
   return row;
 }
-export async function listSections(subjectId: string, actorId?: string) {
+export async function listSections(subjectId: string, actorId?: ContentReader) {
   await authorizeSubject(subjectId, actorId);
   return getDb().section.findMany({
     where: { subjectId },
@@ -118,7 +119,7 @@ export async function listTopics(
   subjectId: string,
   q = "",
   page = 1,
-  actorId?: string,
+  actorId?: ContentReader,
 ) {
   await authorizeSubject(subjectId, actorId);
   const size = await getSetting("content.pageSize");
@@ -162,7 +163,7 @@ export async function listTopics(
 export async function getTopic(
   id: string,
   db: Db = getDb(),
-  actorId?: string,
+  actorId?: ContentReader,
 ): Promise<TopicDTO> {
   const row = await db.topic.findUnique({
     where: { id },
@@ -1115,7 +1116,7 @@ export async function unpublishTopic(
   });
 }
 
-export async function listTopicRevisions(id: string, actorId?: string) {
+export async function listTopicRevisions(id: string, actorId?: ContentReader) {
   const topic = await getDb().topic.findUnique({
     where: { id },
     select: { subjectId: true },
@@ -1148,7 +1149,7 @@ export async function listTopicRevisions(id: string, actorId?: string) {
   }));
 }
 
-export async function getTopicRevision(id: string, actorId?: string) {
+export async function getTopicRevision(id: string, actorId?: ContentReader) {
   const row = await getDb().topicRevision.findUnique({
     where: { id },
     include: { topic: { select: { subjectId: true } } },
@@ -1202,13 +1203,13 @@ export function subjectDTO(row: SubjectDTO): SubjectDTO {
   };
 }
 
-export async function getSection(id: string, actorId: string) {
+export async function getSection(id: string, actorId: ContentReader) {
   const row = await getDb().section.findUnique({ where: { id } });
   if (!row) throw notFound();
   await authorizeSubject(row.subjectId, actorId);
   return row;
 }
-export async function getQuestion(id: string, actorId: string) {
+export async function getQuestion(id: string, actorId: ContentReader) {
   const row = await getDb().question.findFirst({
     where: { id, archivedAt: null, draftDeleted: false },
     include: { topic: { select: { subjectId: true } } },

@@ -31,10 +31,7 @@ export default async function ImportsPage({
     },
     orderBy: [{ order: "asc" }, { id: "asc" }],
   });
-  const [jobs, limits] = await Promise.all([
-    listImports(user.id),
-    importLimits(),
-  ]);
+  const [jobs, limits] = await Promise.all([listImports(user), importLimits()]);
   return (
     <main>
       <h1 className="text-3xl font-semibold">Импорт материалов</h1>

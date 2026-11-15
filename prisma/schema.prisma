@@ -862,3 +862,18 @@ model StudentDataAccess {
 
   @@index([studentId, createdAt])
 }
+
+model ImpersonationSession {
+  id           String    @id @default(cuid())
+  tokenHash    String    @unique
+  adminId      String
+  targetUserId String
+  reason       String
+  startedAt    DateTime  @default(now())
+  expiresAt    DateTime
+  endedAt      DateTime?
+  endedReason  String?
+
+  @@index([adminId, startedAt])
+  @@index([targetUserId, startedAt])
+}

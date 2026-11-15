@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 export default async function Review() {
   const user = await requireUser(),
-    queue = await getReviewQueue(user.id);
+    queue = await getReviewQueue(user.id, undefined, user.readOnly);
   return (
     <LearningShell>
       <div className="mx-auto mb-8 max-w-3xl">

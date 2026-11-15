@@ -6,8 +6,8 @@ export async function GET(request: Request) {
     const user = await reviewUser();
     return contentJSON(
       new URL(request.url).searchParams.get("summary") === "1"
-        ? await getReviewSummary(user.id)
-        : await getReviewQueue(user.id),
+        ? await getReviewSummary(user.id, undefined, user.readOnly)
+        : await getReviewQueue(user.id, undefined, user.readOnly),
     );
   } catch (error) {
     return contentFailure(error);
