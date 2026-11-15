@@ -186,6 +186,7 @@ it("seeds twelve consistent preview learners through domain services, preserves 
     ]);
     expect(bench.status, bench.stdout + bench.stderr).toBe(0);
     const report = JSON.parse(bench.stdout.trim().split("\n").at(-1)!);
+    expect(report.demoImageBytes).toBeGreaterThan(0);
     expect(report.syntheticStudents).toBe(300);
     expect(report.totalStudents).toBeGreaterThanOrEqual(312);
     expect(report.p95Ms).toBeLessThanOrEqual(700);

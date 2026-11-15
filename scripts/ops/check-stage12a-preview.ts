@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks";
 import { getDb } from "../../lib/db";
 import { withSettingsSnapshot } from "../../lib/settings";
 import { assertStudentPreview } from "../preview/student-profiles";
+import { readTopicImage } from "../../lib/content/images";
 import { progressSummary } from "../../lib/progress/summary";
 export async function benchmarkProgress() {
   assertStudentPreview(process.env.DATABASE_URL, process.env.NODE_ENV);
@@ -14,6 +15,12 @@ export async function benchmarkProgress() {
   const admin = { id: `${prefix}-admin` };
   const { currentLegal } = await import("../../lib/auth/legal"),
     legal = await currentLegal();
+  const demoImage = await db.topicImage.findFirstOrThrow({
+    where: { topic: { subject: { slug: "progress-dental-demo" } } },
+    select: { id: true },
+  });
+  const image = await readTopicImage(demoImage.id, null);
+  if (!image.body.length) throw new Error("Preview learner image is empty");
   const topics = await db.topic.findMany({
     where: {
       status: "PUBLISHED",
@@ -100,6 +107,7 @@ export async function benchmarkProgress() {
       times.sort((a, b) => a - b);
       return {
         demoStudents: 12,
+        demoImageBytes: image.body.length,
         syntheticStudents: 300,
         totalStudents: total,
         samples: times.length,
