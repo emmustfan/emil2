@@ -12,7 +12,7 @@ export async function StudentHome() {
   const user = await requireUser(),
     [review, overview, topics, recent] = await Promise.all([
       currentReviewSummary(),
-      studentOverview(user.id),
+      studentOverview(user.id, undefined, user.readOnly),
       courseMapTopics(user.id),
       getDb().topicProgress.findMany({
         where: {

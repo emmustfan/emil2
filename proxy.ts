@@ -4,7 +4,17 @@ import { assertCanViewStudent } from "./lib/progress/access";
 import { BILLING_RETURN_COOKIE } from "./lib/billing/http";
 import { safePricingReturn } from "./lib/billing/policy";
 import { NextRequest, NextResponse } from "next/server";
-import { findSession, SID, cookieOptions } from "./lib/auth/session";
+import { SID, cookieOptions } from "./lib/auth/session";
+import {
+  resolveCurrentSession,
+  auditImpersonationWrite,
+  type CurrentSession,
+} from "./lib/auth/impersonation";
+import {
+  IMPERSONATION_COOKIE,
+  IMPERSONATION_WRITE_MESSAGE,
+  isImpersonationWrite,
+} from "./lib/auth/impersonation-policy";
 import { hasCurrentConsent } from "./lib/auth/legal";
 import { getEnv } from "./lib/env";
 import { newToken, isToken } from "./lib/auth/crypto";
@@ -19,8 +29,45 @@ import {
 import { authRu } from "./lib/i18n/ru";
 export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SID)?.value;
-  const session = await findSession(token, true);
+  const modeToken = request.cookies.get(IMPERSONATION_COOKIE)?.value;
+  const session = await resolveCurrentSession(
+    token,
+    modeToken,
+    !request.nextUrl.pathname.startsWith("/api/"),
+  );
+  if (
+    session?.readOnly &&
+    isImpersonationWrite(request.method, request.nextUrl.pathname)
+  ) {
+    await auditImpersonationWrite(
+      session,
+      request.method,
+      request.nextUrl.pathname,
+    );
+    return NextResponse.json(
+      { error: IMPERSONATION_WRITE_MESSAGE },
+      {
+        status: 403,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
+  }
+  const response = await routeRequest(request, session);
+  if (modeToken && !session?.impersonation)
+    response.cookies.delete(IMPERSONATION_COOKIE);
+  return response;
+}
+async function routeRequest(
+  request: NextRequest,
+  session: CurrentSession | null,
+) {
+  const token = request.cookies.get(SID)?.value;
   const path = request.nextUrl.pathname;
+  if (path.startsWith("/api/")) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
   if (
     ["/", "/demo", "/login", "/pricing"].includes(path) ||
     path.startsWith("/subjects") ||
@@ -148,6 +195,7 @@ export async function proxy(request: NextRequest) {
 }
 export const config = {
   matcher: [
+    "/api/:path*",
     "/",
     "/demo",
     "/login",

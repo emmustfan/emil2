@@ -1,3 +1,4 @@
+import { actorIdentity } from "../lessons/identity";
 import type { Prisma } from "../generated/prisma/client";
 import type { Actor } from "../lessons/types";
 import { getSetting } from "../settings";
@@ -29,7 +30,7 @@ export async function cardFromGap(
   await tx.card.upsert({
     where,
     create: {
-      ...actor,
+      ...actorIdentity(actor),
       source: "GAP",
       gapId: source.id,
       topicId: source.topicId,
@@ -72,7 +73,7 @@ export async function cardFromWrongQuestion(
   }
   await tx.card.create({
     data: {
-      ...actor,
+      ...actorIdentity(actor),
       source: "QUESTION",
       questionId: source.id,
       topicId: source.topicId,
@@ -89,7 +90,7 @@ export async function lessonReview(
 ) {
   return {
     cards: await tx.card.count({
-      where: { ...actor, topicId, suspended: false },
+      where: { ...actorIdentity(actor), topicId, suspended: false },
     }),
     signedIn: !!actor.userId,
   };

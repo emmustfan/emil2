@@ -12,7 +12,9 @@ export async function GET(
     if (!session || !(await hasCurrentConsent(session.user)))
       throw new ContentError("Данные не найдены.", 404);
     const { topicId } = await params;
-    return contentJSON(await gapHistory(topicId, session.user.id));
+    return contentJSON(
+      await gapHistory(topicId, session.user.id, session.readOnly),
+    );
   } catch (e) {
     return contentFailure(e);
   }

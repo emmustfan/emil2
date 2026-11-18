@@ -1,3 +1,4 @@
+import { actorIdentity, assertWritableActor } from "./identity";
 import { track } from "../analytics/events";
 import {
   creationSettings,
@@ -109,19 +110,28 @@ export async function progressFor(
   const [total, answered, correct, best] = await Promise.all([
     db.gap.count({ where: { topicId, archivedAt: null } }),
     db.gapAnswer.count({
-      where: { ...actor, gap: { topicId, archivedAt: null } },
+      where: { ...actorIdentity(actor), gap: { topicId, archivedAt: null } },
     }),
     db.gapAnswer.count({
-      where: { ...actor, isCorrect: true, gap: { topicId, archivedAt: null } },
+      where: {
+        ...actorIdentity(actor),
+        isCorrect: true,
+        gap: { topicId, archivedAt: null },
+      },
     }),
     db.testRun.aggregate({
-      where: { ...actor, topicId, mode: "TOPIC", finishedAt: { not: null } },
+      where: {
+        ...actorIdentity(actor),
+        topicId,
+        mode: "TOPIC",
+        finishedAt: { not: null },
+      },
       _max: { score: true },
     }),
   ]);
   const bestScore = best._max.score;
   const completed = completedLesson(answered, total, bestScore, threshold);
-  if (actor.userId) {
+  if (actor.userId && !actor.readOnly) {
     const existing = await db.topicProgress.findUnique({
       where: { userId_topicId: { userId: actor.userId, topicId } },
     });
@@ -151,7 +161,12 @@ async function testFor(
     orderBy: order,
   });
   const run = await db.testRun.findFirst({
-    where: { ...actor, topicId, mode: "TOPIC", topicVersion: version },
+    where: {
+      ...actorIdentity(actor),
+      topicId,
+      mode: "TOPIC",
+      topicVersion: version,
+    },
     orderBy: [{ startedAt: "desc" }, { id: "desc" }],
     include: { questionAttempt_testRunId: true },
   });
@@ -178,7 +193,7 @@ export async function loadLesson(
   topicId: string,
   actor: Actor,
 ): Promise<LessonData> {
-  await consumeLimit(actorKey(actor));
+  await consumeLimit(actorKey(actor), undefined, actor.readOnly);
   const threshold = await getSetting("lesson.passThreshold");
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
@@ -215,7 +230,7 @@ export async function loadLesson(
       orderBy: order,
     });
     const answers = await tx.gapAnswer.findMany({
-      where: { ...actor, gap: { topicId, archivedAt: null } },
+      where: { ...actorIdentity(actor), gap: { topicId, archivedAt: null } },
     });
     const publicGaps: LessonGap[] = gaps.map((g) => {
       const answer = answers.find((a) => a.gapId === g.id);
@@ -248,6 +263,7 @@ export async function answerGap(
   actor: Actor,
   practice = false,
 ) {
+  assertWritableActor(actor);
   await consumeLimit(actorKey(actor));
   const [threshold, cardSettings] = await Promise.all([
     getSetting("lesson.passThreshold"),
@@ -289,7 +305,7 @@ export async function answerGap(
       typeof submission === "string" ? { optionIds: [submission] } : submission,
     );
     const existing = await tx.gapAnswer.findFirst({
-      where: { ...actor, gapId },
+      where: { ...actorIdentity(actor), gapId },
     });
     if (actor.userId && (!existing || practice))
       await tx.gapAttempt.create({
@@ -317,7 +333,7 @@ export async function answerGap(
     const answer =
       existing ??
       (await tx.gapAnswer.create({
-        data: { ...actor, gapId, ...snapshot },
+        data: { ...actorIdentity(actor), gapId, ...snapshot },
       }));
     if (!existing)
       await track(
@@ -348,6 +364,7 @@ export async function startTest(
   version: number,
   actor: Actor,
 ) {
+  assertWritableActor(actor);
   await consumeLimit(actorKey(actor));
   return getDb().$transaction(async (tx) => {
     await lockLearningActor(tx, actor);
@@ -357,7 +374,7 @@ export async function startTest(
       throw new ContentError("Тема обновлена. Перезагрузите страницу.", 409);
     const open = await tx.testRun.findFirst({
       where: {
-        ...actor,
+        ...actorIdentity(actor),
         topicId,
         topicVersion: version,
         mode: "TOPIC",
@@ -371,7 +388,7 @@ export async function startTest(
       if (!total) throw new ContentError("Тест пока недоступен.", 409);
       await tx.testRun.create({
         data: {
-          ...actor,
+          ...actorIdentity(actor),
           topicId,
           subjectId: topic.subjectId,
           mode: "TOPIC",
@@ -390,6 +407,7 @@ export async function answerQuestion(
   submission: string | Submission,
   actor: Actor,
 ) {
+  assertWritableActor(actor);
   await consumeLimit(actorKey(actor));
   const [threshold, cardSettings] = await Promise.all([
     getSetting("lesson.passThreshold"),
@@ -400,7 +418,7 @@ export async function answerQuestion(
     await lockTopicForLearning(tx, topicId);
     const topic = await accessibleTopic(topicId, actor, tx);
     const run = await tx.testRun.findFirst({
-      where: { id: runId, topicId, ...actor, mode: "TOPIC" },
+      where: { id: runId, topicId, ...actorIdentity(actor), mode: "TOPIC" },
     });
     if (!run) throw new ContentError("Попытка теста не найдена.", 404);
     if (run.topicVersion !== topic.version)

@@ -17,7 +17,7 @@ export default async function Admin({
   const user = await requireEditor();
   if (user.role === "EDITOR") redirect("/teacher");
   const { q, page } = searchState(await searchParams);
-  const data = await listSubjects(q, page, user.id);
+  const data = await listSubjects(q, page, user);
   const [users, review, paid] = await Promise.all([
     getDb().user.count({ where: { deletedAt: null } }),
     getDb().topic.count({ where: { draftState: "REVIEW" } }),

@@ -2,7 +2,11 @@ import { getDb } from "../db";
 import { allowsAccess } from "../access/policy";
 import { getSetting } from "../settings";
 import { getTutorQuota } from "../tutor/quota";
-export async function studentOverview(userId: string, now = new Date()) {
+export async function studentOverview(
+  userId: string,
+  now = new Date(),
+  readOnly = false,
+) {
   const [progress, subs, grants, grace, quota] = await Promise.all([
     getDb().topicProgress.findMany({
       where: {
@@ -34,7 +38,7 @@ export async function studentOverview(userId: string, now = new Date()) {
     }),
     getDb().accessGrant.findMany({ where: { userId, expiresAt: { gt: now } } }),
     getSetting("billing.graceDays"),
-    getTutorQuota({ userId }),
+    getTutorQuota({ userId, readOnly }),
   ]);
   const ids = new Set([
     ...progress.map((p) => p.topic.subjectId),

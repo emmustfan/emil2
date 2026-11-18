@@ -5,17 +5,20 @@ import { ContentError } from "./errors";
 import { canEditSubject, isStaff } from "../auth/roles";
 import { lockRoleAccess } from "../auth/role-lock";
 // Undefined is reserved for trusted internal callers (seed/tests). HTTP and pages pass userId.
+export type ContentReader = string | { id: string; readOnly?: boolean };
 export async function contentActor(
-  actorId: string | undefined,
+  actorId: ContentReader | undefined,
   db: Prisma.TransactionClient = getDb(),
   adminOnly = false,
 ) {
   if (!actorId) return null;
+  const readOnly = typeof actorId === "object" && actorId.readOnly;
+  const id = typeof actorId === "string" ? actorId : actorId.id;
   const user = await db.user.findUnique({
-    where: { id: actorId },
+    where: { id },
     select: { id: true, role: true, blockedAt: true, deletedAt: true },
   });
-  if (!user || user.blockedAt || user.deletedAt)
+  if (!user || (user.blockedAt && !readOnly) || user.deletedAt)
     throw new AuthError("unauthorized", 401);
   if (!isStaff(user.role) || (adminOnly && user.role !== "ADMIN"))
     throw new AuthError("forbidden", 403);
@@ -23,7 +26,7 @@ export async function contentActor(
 }
 export async function authorizeSubject(
   subjectId: string,
-  actorId?: string,
+  actorId?: ContentReader,
   db: Prisma.TransactionClient = getDb(),
 ) {
   const user = await contentActor(actorId, db);

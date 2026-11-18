@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const actor = await requireContentEditor(),
       subjectId =
         new URL(request.url).searchParams.get("subjectId") ?? undefined;
-    return contentJSON(await listImports(actor.id, subjectId));
+    return contentJSON(await listImports(actor, subjectId));
   } catch (e) {
     return contentFailure(e);
   }

@@ -79,6 +79,7 @@ test("full demo resumes and transfers diagnostic, lesson, cards and attribution 
     const card = lessonGap(page, index + 1);
     await card.getByRole("combobox").selectOption({ label });
     await card.getByRole("button", { name: "Проверить", exact: true }).click();
+    await expect(card.getByRole("status")).toContainText("Верно");
   }
   await page
     .getByRole("button", { name: "Дальше — попробовать повторение" })

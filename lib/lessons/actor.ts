@@ -19,7 +19,9 @@ export async function lessonActor(): Promise<Actor> {
   if (session) {
     if (!(await hasCurrentConsent(session.user)))
       throw new AuthError("forbidden", 403);
-    return { userId: session.userId };
+    return session.readOnly
+      ? { userId: session.userId, readOnly: true }
+      : { userId: session.userId };
   }
   const jar = await cookies();
   const demo = await guestDemo(

@@ -24,7 +24,7 @@ export async function reviewUser() {
   if (!session) throw new AuthError("unauthorized", 401);
   if (!(await hasCurrentConsent(session.user)))
     throw new AuthError("forbidden", 403);
-  return session.user;
+  return { ...session.user, readOnly: session.readOnly };
 }
 
 export const cardIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);

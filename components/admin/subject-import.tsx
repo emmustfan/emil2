@@ -1,20 +1,21 @@
 import { importLimits } from "@/lib/imports/policy";
+import type { ContentReader } from "@/lib/content/permissions";
 import { listImports } from "@/lib/imports/service";
 import { ImportWorkspace } from "./import-workspace";
 export async function SubjectImport({
-  actorId,
+  actor,
   subject,
   sections,
   timeZone,
 }: {
-  actorId: string;
+  actor: ContentReader;
   subject: { id: string; title: string };
   sections: { id: string; title: string }[];
   timeZone: string;
 }) {
   const [limits, jobs] = await Promise.all([
     importLimits(),
-    listImports(actorId, subject.id),
+    listImports(actor, subject.id),
   ]);
   return (
     <ImportWorkspace

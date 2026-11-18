@@ -9,6 +9,6 @@ export async function requireBuyer(admin = false) {
     (admin && session.user.role !== "ADMIN")
   )
     throw new AuthError("forbidden", 403);
-  return session.user;
+  return { ...session.user, readOnly: session.readOnly };
 }
 export const BILLING_RETURN_COOKIE = "billing_return";

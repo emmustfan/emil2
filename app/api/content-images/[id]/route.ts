@@ -10,7 +10,11 @@ export async function GET(
     const { id } = await params;
     z.uuid().parse(id);
     const session = await getCurrentSession(),
-      image = await readTopicImage(id, session?.userId ?? null);
+      image = await readTopicImage(
+        id,
+        session?.userId ?? null,
+        session?.readOnly,
+      );
     return new Response(new Uint8Array(image.body), {
       headers: {
         "Content-Type": "image/webp",

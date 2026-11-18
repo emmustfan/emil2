@@ -19,7 +19,7 @@ export default async function Teacher({
 }) {
   const user = await requireEditor(),
     { q, page } = searchState(await searchParams),
-    data = await listSubjects(q, page, user.id);
+    data = await listSubjects(q, page, user);
   return (
     <WorkspaceShell area="teacher">
       <main className="teacher-home">

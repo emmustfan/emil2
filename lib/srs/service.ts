@@ -24,12 +24,12 @@ const introduced: Prisma.CardWhereInput = {
   OR: [{ state: { not: "NEW" } }, { firstShownAt: { not: null } }],
 };
 const fresh: Prisma.CardWhereInput = { state: "NEW", firstShownAt: null };
-async function validUser(userId: string, db: Db = getDb()) {
+async function validUser(userId: string, db: Db = getDb(), readOnly = false) {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { id: true, timezone: true, blockedAt: true, deletedAt: true },
   });
-  if (!user || user.blockedAt || user.deletedAt)
+  if (!user || (user.blockedAt && !readOnly) || user.deletedAt)
     throw new AuthError("unauthorized", 401);
   return user;
 }
@@ -65,8 +65,8 @@ async function eligible(userId: string): Promise<Prisma.CardWhereInput> {
     ],
   };
 }
-async function queueState(userId: string, now: Date) {
-  const user = await validUser(userId),
+async function queueState(userId: string, now: Date, readOnly = false) {
+  const user = await validUser(userId, undefined, readOnly),
     settings = await reviewSettings(),
     window = dayWindow(now, user.timezone),
     where = await eligible(userId),
@@ -124,8 +124,12 @@ async function queueState(userId: string, now: Date) {
   };
   return { where, settings, summary, remaining };
 }
-export async function getReviewSummary(userId: string, now = new Date()) {
-  return (await queueState(userId, now)).summary;
+export async function getReviewSummary(
+  userId: string,
+  now = new Date(),
+  readOnly = false,
+) {
+  return (await queueState(userId, now, readOnly)).summary;
 }
 const frontSelect = {
   id: true,
@@ -146,8 +150,13 @@ const frontSelect = {
 export async function getReviewQueue(
   userId: string,
   now = new Date(),
+  readOnly = false,
 ): Promise<ReviewQueue> {
-  const { where, settings, summary, remaining } = await queueState(userId, now);
+  const { where, settings, summary, remaining } = await queueState(
+    userId,
+    now,
+    readOnly,
+  );
   const [older, newer] = await Promise.all([
     getDb().card.findMany({
       where: { AND: [where, introduced, { dueAt: { lte: now } }] },

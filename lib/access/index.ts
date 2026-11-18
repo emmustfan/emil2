@@ -38,7 +38,9 @@ export async function consumeLimit(
     periodStart: Date;
     db?: Prisma.TransactionClient;
   },
+  readOnly = false,
 ) {
+  if (readOnly) return 0;
   const max = options?.max ?? (await getSetting("lesson.requestsPerMinute"));
   const feature = options?.feature ?? "lesson";
   const periodStart =

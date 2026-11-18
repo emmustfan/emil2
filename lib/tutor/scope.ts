@@ -1,3 +1,4 @@
+import { actorIdentity } from "../lessons/identity";
 import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
 import type { Actor } from "../lessons/types";
@@ -68,7 +69,7 @@ export async function resolveScope(
           where: { id: input.sourceId, archivedAt: null },
         }),
         a = await tx.gapAnswer.findFirst({
-          where: { gapId: input.sourceId, ...actor },
+          where: { gapId: input.sourceId, ...actorIdentity(actor) },
         });
       if (!g || !a || a.isCorrect)
         throw new ContentError(
@@ -101,7 +102,11 @@ export async function resolveScope(
         where: {
           questionId: input.sourceId,
           testRunId: input.runId,
-          testRun: { ...actor, topicId, topicVersion: topic!.version },
+          testRun: {
+            ...actorIdentity(actor),
+            topicId,
+            topicVersion: topic!.version,
+          },
         },
         include: { question: true },
       });

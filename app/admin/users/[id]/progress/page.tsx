@@ -3,6 +3,7 @@ import { getCurrentSession } from "@/lib/auth/server";
 import { contentPage } from "@/lib/content/page";
 import { studentProgress } from "@/lib/progress/student";
 import { StudentProgressCard } from "@/components/progress/student-card";
+import { ImpersonateUser } from "@/components/admin/impersonate-user";
 export const dynamic = "force-dynamic";
 export default async function StudentPage({
   params,
@@ -53,6 +54,9 @@ export default async function StudentPage({
         </select>
         <button className="lesson-primary">Показать</button>
       </form>
+      {!data.user.deleted && viewer?.id !== id && (
+        <ImpersonateUser userId={id} />
+      )}
       <StudentProgressCard
         data={data}
         timeZone={viewer?.timezone ?? "Europe/Moscow"}

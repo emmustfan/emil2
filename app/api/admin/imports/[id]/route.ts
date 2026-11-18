@@ -11,7 +11,7 @@ export async function GET(
   try {
     const actor = await requireContentEditor(),
       { id } = await params;
-    return contentJSON(await getImport(actor.id, id));
+    return contentJSON(await getImport(actor, id));
   } catch (e) {
     return contentFailure(e);
   }

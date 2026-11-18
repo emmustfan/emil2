@@ -1,3 +1,4 @@
+import { actorIdentity } from "../lessons/identity";
 import { track } from "../analytics/events";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -141,7 +142,7 @@ export async function prepareTurn(
         previous?.conversation ??
         (conversationId
           ? await tx.tutorConversation.findFirst({
-              where: { id: conversationId, ...actor },
+              where: { id: conversationId, ...actorIdentity(actor) },
             })
           : null);
       if (conversationId && !conversation)
@@ -173,7 +174,11 @@ export async function prepareTurn(
         db: tx,
       });
       conversation ??= await tx.tutorConversation.create({
-        data: { ...actor, subjectId: scope.subjectId, topicId: scope.topicId },
+        data: {
+          ...actorIdentity(actor),
+          subjectId: scope.subjectId,
+          topicId: scope.topicId,
+        },
       });
       const runToken = randomUUID(),
         data = {
@@ -425,7 +430,7 @@ export async function setFeedback(actor: Actor, id: string, value: 1 | -1) {
       id,
       role: "ASSISTANT",
       status: "COMPLETED",
-      conversation: { ...actor },
+      conversation: { ...actorIdentity(actor) },
     },
     data: { feedback: value },
   });

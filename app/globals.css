@@ -2556,3 +2556,40 @@ a.course-tooth:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.impersonation-banner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 10px 20px;
+  border-bottom: 2px solid #b77b20;
+  background: #fff2cf;
+  color: #583b12;
+  font-size: 14px;
+}
+.impersonation-banner p {
+  flex: 1;
+  min-width: 180px;
+  overflow-wrap: anywhere;
+}
+body:has(.impersonation-banner) .workspace-sidebar {
+  top: var(--impersonation-banner-height, 90px);
+  height: calc(100dvh - var(--impersonation-banner-height, 90px));
+}
+.impersonation-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow-y: auto;
+  border-radius: 20px;
+  border: 1px solid #d7dfe0;
+  padding: 24px;
+}
+.impersonation-dialog::backdrop {
+  background: #15242c80;
+}

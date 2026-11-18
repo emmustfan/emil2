@@ -9,6 +9,8 @@ import { getDb } from "@/lib/db";
 import { GrantForm, RevokeGrant } from "@/components/admin/grants";
 import { formatPrice } from "@/lib/format";
 import { getSetting } from "@/lib/settings";
+import { ImpersonateUser } from "@/components/admin/impersonate-user";
+import { ImpersonationHistory } from "@/components/admin/impersonation-history";
 export default async function UserPage({
   params,
 }: {
@@ -78,6 +80,10 @@ export default async function UserPage({
         initial={data}
         actorId={actor.id}
       />
+      {data.user.id !== actor.id &&
+        data.user.role !== "ADMIN" &&
+        !data.user.deletedAt && <ImpersonateUser userId={id} />}
+      <ImpersonationHistory userId={id} />
       <section className="mt-8">
         <h2 className="text-xl font-semibold">Ручная выдача доступа</h2>
         {!data.user.blockedAt && (

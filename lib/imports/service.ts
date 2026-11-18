@@ -95,7 +95,7 @@ export async function createImport(
     throw e;
   }
 }
-export async function getImport(actorId: string, id: string) {
+export async function getImport(actorId: ContentReader, id: string) {
   await contentActor(actorId);
   const row = await getDb().importJob.findUnique({ where: { id } });
   if (!row) throw missing();
@@ -117,7 +117,7 @@ export async function getImport(actorId: string, id: string) {
     topics,
   };
 }
-export async function listImports(actorId: string, subjectId?: string) {
+export async function listImports(actorId: ContentReader, subjectId?: string) {
   const actor = await contentActor(actorId);
   if (subjectId) await authorizeSubject(subjectId, actorId);
   const rows = await getDb().importJob.findMany({
@@ -136,3 +136,4 @@ export async function listImports(actorId: string, subjectId?: string) {
   return Promise.all(rows.map((row) => getImport(actorId, row.id)));
 }
 export type ImportDTO = Awaited<ReturnType<typeof getImport>>;
+import type { ContentReader } from "../content/permissions";
