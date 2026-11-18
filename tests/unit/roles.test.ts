@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   isStaff,
   workspaceHref,
-  canEditSubject,
   protectedOwner,
   accessChangeError,
   type AppRole,
@@ -28,14 +27,6 @@ describe("separate workspaces and capabilities", () => {
   ] as const)("routes %s to its workspace", (role, path, staff) => {
     expect(workspaceHref(role)).toBe(path);
     expect(isStaff(role)).toBe(staff);
-  });
-  it("limits teachers to assigned subjects and keeps student roles out of the editor", () => {
-    expect(canEditSubject("EDITOR", false)).toBe(false);
-    expect(canEditSubject("EDITOR", true)).toBe(true);
-    for (const assigned of [false, true]) {
-      expect(canEditSubject("USER", assigned)).toBe(false);
-      expect(canEditSubject("ADMIN", assigned)).toBe(true);
-    }
   });
   it("normalizes the bootstrap owner list without treating an absent email as an owner", () => {
     expect(

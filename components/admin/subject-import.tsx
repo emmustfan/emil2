@@ -1,5 +1,5 @@
 import { importLimits } from "@/lib/imports/policy";
-import type { ContentReader } from "@/lib/content/permissions";
+import type { ContentReader } from "@/lib/org";
 import { listImports } from "@/lib/imports/service";
 import { ImportWorkspace } from "./import-workspace";
 export async function SubjectImport({

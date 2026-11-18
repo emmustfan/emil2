@@ -1,3 +1,4 @@
+import { subjectScope } from "@/lib/org";
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { contentRu } from "@/lib/i18n/ru";
@@ -9,11 +10,7 @@ export async function MaterialQueue({
   const topics = await getDb().topic.findMany({
     where: {
       draftState: { in: ["DRAFT", "REVIEW"] },
-      ...(actor.role === "ADMIN"
-        ? {}
-        : {
-            subject: { teachingAssignments: { some: { teacherId: actor.id } } },
-          }),
+      subject: await subjectScope(actor, "content.read"),
     },
     select: {
       id: true,

@@ -161,8 +161,8 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
   await expect
     .poll(
       async () =>
-        await db.teacherSubject.count({
-          where: { teacherId: teacher, subjectId: f.subject.id },
+        await db.roleAssignment.count({
+          where: { userId: teacher, subjectId: f.subject.id },
         }),
     )
     .toBe(1);
@@ -235,11 +235,14 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
           .roleRevision,
     )
     .toBe(2);
-  await p.goto("/teacher");
-  await expect(p.getByText(/Вам пока не назначены предметы/)).toBeVisible();
+  expect((await c.request.get("/teacher")).status()).toBe(403);
+  await p.goto("/cabinet");
+  await expect(
+    p.getByRole("heading", { name: "Кабинет ученика", exact: true }),
+  ).toBeVisible();
   expect(
     (await c.request.get(`/api/admin/content/topics/${f.free.id}`)).status(),
-  ).toBe(404);
+  ).toBe(403);
   const current = await db.topic.findUniqueOrThrow({
     where: { id: f.free.id },
   });
@@ -250,7 +253,7 @@ test("administrator assigns a teacher, teacher edits only their subject, and rev
       data: { revision: current.editRevision, status: "REVIEW" },
     },
   );
-  expect(blocked.status()).toBe(404);
+  expect(blocked.status()).toBe(403);
   expect(
     (await db.topic.findUniqueOrThrow({ where: { id: f.free.id } })).status,
   ).toBe("PUBLISHED");
@@ -474,8 +477,6 @@ test("role changes apply to an existing session and a demoted teacher loses edit
   await expect(
     p.getByRole("heading", { name: "Кабинет ученика", exact: true }),
   ).toBeVisible();
-  expect(await db.teacherSubject.count({ where: { teacherId: teacher } })).toBe(
-    0,
-  );
+  expect(await db.roleAssignment.count({ where: { userId: teacher } })).toBe(0);
   expect(await db.topic.count({ where: { subjectId: f.subject.id } })).toBe(2);
 });

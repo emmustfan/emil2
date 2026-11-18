@@ -9,9 +9,6 @@ export function workspaceHref(role: AppRole) {
       ? "/teacher"
       : "/cabinet";
 }
-export function canEditSubject(role: AppRole, assigned: boolean) {
-  return role === "ADMIN" || (role === "EDITOR" && assigned);
-}
 export function protectedOwner(email: string | null, configured: string) {
   return (
     !!email &&

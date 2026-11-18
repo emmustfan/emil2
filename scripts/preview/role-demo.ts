@@ -26,11 +26,13 @@ export async function ensureRoleDemo() {
           role: "EDITOR",
         },
       });
-      await tx.teacherSubject.create({
+      await tx.roleAssignment.create({
         data: {
-          teacherId: teacher.id,
+          userId: teacher.id,
           subjectId: subject.id,
           assignedById: owner?.id,
+          role: "AUTHOR",
+          scopeKey: "subject:" + subject.id,
         },
       });
     }

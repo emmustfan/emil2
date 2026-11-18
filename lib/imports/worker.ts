@@ -6,7 +6,7 @@ import { getEnv } from "../env";
 import { createStorageDriver } from "../storage";
 import { createLLMProvider } from "../llm";
 import type { LLMProvider } from "../llm/provider";
-import { contentWrite, authorizeSubject } from "../content/permissions";
+import { lockContentStaff, assertCan } from "../org";
 import { hasCurrentConsent } from "../auth/legal";
 import { ContentError } from "../content/errors";
 import { headingSlug } from "../content/slug";
@@ -84,7 +84,9 @@ export async function processImport(id: string, provider?: LLMProvider) {
   }
   try {
     // Recheck assignments before the first external call and again at final commit.
-    await authorizeSubject(job.subjectId, job.createdById);
+    await assertCan(job.createdById, "content.edit", {
+      subjectId: job.subjectId,
+    });
     const actor = await getDb().user.findUniqueOrThrow({
       where: { id: job.createdById },
     });
@@ -111,7 +113,9 @@ export async function processImport(id: string, provider?: LLMProvider) {
     });
     const llm = provider ?? createLLMProvider(env);
     for (const part of parts) {
-      await authorizeSubject(job.subjectId, job.createdById);
+      await assertCan(job.createdById, "content.edit", {
+        subjectId: job.subjectId,
+      });
       drafts.push(
         await generateDraft(llm, part, env.LLM_CHAT_MODEL ?? "mock-import"),
       );
@@ -123,12 +127,17 @@ export async function processImport(id: string, provider?: LLMProvider) {
     }
     await getDb().$transaction(
       async (tx) => {
-        await contentWrite(tx, job.createdById);
+        await lockContentStaff(tx, job.createdById);
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`import:job:${id}`},0))`;
         const current = await tx.importJob.findUniqueOrThrow({ where: { id } });
         if (current.status !== "processing" || current.runToken !== token)
           return;
-        await authorizeSubject(job.subjectId, job.createdById, tx);
+        await assertCan(
+          job.createdById,
+          "content.edit",
+          { subjectId: job.subjectId },
+          tx,
+        );
         if (
           job.sectionId &&
           !(await tx.section.count({

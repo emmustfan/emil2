@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { forbidden, notFound } from "next/navigation";
 import { ContentError } from "./errors";
 import { listSchema } from "./validation";
 export async function contentPage<T>(fn: () => Promise<T>): Promise<T> {
@@ -6,6 +6,7 @@ export async function contentPage<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (e) {
     if (e instanceof ContentError && e.status === 404) notFound();
+    if (e instanceof ContentError && e.status === 403) forbidden();
     throw e;
   }
 }

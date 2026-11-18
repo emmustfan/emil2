@@ -56,8 +56,14 @@ beforeEach(async () => {
   admin = await user("ADMIN");
   teacher = await user("EDITOR");
   student = await user("USER");
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
 });
 afterEach(async () => {
@@ -81,9 +87,9 @@ afterEach(async () => {
     await createStorageDriver(getEnv()).remove(job.fileKey);
   }
   await db.importJob.deleteMany({ where: { createdById: { in: users } } });
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ teacherId: { in: users } }, { assignedById: { in: users } }],
+      OR: [{ userId: { in: users } }, { assignedById: { in: users } }],
     },
   });
   await cleanupLessonFixture(other);
@@ -228,7 +234,7 @@ it("rechecks teaching assignment after generation and rolls back all drafts", as
     original = llm.complete.bind(llm);
   vi.spyOn(llm, "complete").mockImplementation(async (messages, options) => {
     const result = await original(messages, options);
-    await db.teacherSubject.deleteMany({ where: { teacherId: teacher } });
+    await db.roleAssignment.deleteMany({ where: { userId: teacher } });
     return result;
   });
   await processImport(id, llm);

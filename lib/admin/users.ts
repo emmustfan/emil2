@@ -1,3 +1,4 @@
+import { assignmentInclude } from "../org/service";
 import { z } from "zod";
 import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
@@ -121,9 +122,9 @@ export async function getManagedUser(actorId: string, id: string) {
   const user = await getDb().user.findUnique({ where: { id }, select });
   if (!user || user.deletedAt)
     throw new ContentError("Пользователь не найден.", 404);
-  const [assignments, audit, subjects] = await Promise.all([
-    getDb().teacherSubject.findMany({
-      where: { teacherId: id },
+  const [assignments, audit, subjects, staffAssignments] = await Promise.all([
+    getDb().roleAssignment.findMany({
+      where: { userId: id, role: "AUTHOR", subjectId: { not: null } },
       select: { subjectId: true, subject: { select: { title: true } } },
       orderBy: { subjectId: "asc" },
     }),
@@ -143,10 +144,27 @@ export async function getManagedUser(actorId: string, id: string) {
       select: { id: true, title: true, status: true },
       orderBy: [{ order: "asc" }, { title: "asc" }],
     }),
+    getDb().roleAssignment.findMany({
+      where: { userId: id },
+      include: {
+        faculty: assignmentInclude.faculty,
+        department: assignmentInclude.department,
+        subject: assignmentInclude.subject,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    }),
   ]);
   return {
     user: dto(user),
-    assignments,
+    staffAssignments: staffAssignments.map((a) => ({
+      ...a,
+      createdAt: a.createdAt.toISOString(),
+    })),
+    assignments: assignments.flatMap((a) =>
+      a.subject && a.subjectId
+        ? [{ subjectId: a.subjectId, subject: a.subject }]
+        : [],
+    ),
     subjects,
     audit: audit.map((e) => ({ ...e, createdAt: e.createdAt.toISOString() })),
   };
@@ -174,6 +192,18 @@ export async function updateUserAccess(
         [],
         "stale",
       );
+    const scopedRoles = await tx.roleAssignment.count({
+      where: {
+        userId: id,
+        OR: [{ role: { not: "AUTHOR" } }, { subjectId: null }],
+      },
+    });
+    const nextRole =
+      data.role === "ADMIN"
+        ? "ADMIN"
+        : data.subjectIds.length || scopedRoles
+          ? "EDITOR"
+          : "USER";
     const otherAdmins = await tx.user.count({
       where: {
         id: { not: id },
@@ -186,7 +216,7 @@ export async function updateUserAccess(
       actorId,
       targetId: id,
       currentRole: target.role,
-      nextRole: data.role,
+      nextRole: data.role === "EDITOR" ? "EDITOR" : nextRole,
       blocked: data.blocked,
       owner: protectedOwner(target.email, getEnv().ADMIN_EMAILS),
       otherAdmins,
@@ -201,15 +231,15 @@ export async function updateUserAccess(
         "Один из выбранных предметов больше не существует.",
         409,
       );
-    const assigned = await tx.teacherSubject.findMany({
-        where: { teacherId: id },
+    const assigned = await tx.roleAssignment.findMany({
+        where: { userId: id, role: "AUTHOR", subjectId: { not: null } },
         select: { subjectId: true },
       }),
       before = assigned.map((a) => a.subjectId).sort(),
       after = [...data.subjectIds].sort();
     const blocked = !!target.blockedAt;
     if (
-      target.role === data.role &&
+      target.role === nextRole &&
       blocked === data.blocked &&
       JSON.stringify(before) === JSON.stringify(after)
     )
@@ -217,18 +247,34 @@ export async function updateUserAccess(
     await tx.user.update({
       where: { id },
       data: {
-        role: data.role,
+        role: nextRole,
         blockedAt: data.blocked ? (target.blockedAt ?? new Date()) : null,
         roleRevision: { increment: 1 },
       },
     });
-    await tx.teacherSubject.deleteMany({
-      where: { teacherId: id, subjectId: { notIn: after } },
+    await tx.roleAssignment.deleteMany({
+      where: {
+        userId: id,
+        role: "AUTHOR",
+        AND: [{ subjectId: { not: null } }, { subjectId: { notIn: after } }],
+      },
     });
     for (const subjectId of after)
-      await tx.teacherSubject.upsert({
-        where: { teacherId_subjectId: { teacherId: id, subjectId } },
-        create: { teacherId: id, subjectId, assignedById: actorId },
+      await tx.roleAssignment.upsert({
+        where: {
+          userId_role_scopeKey: {
+            userId: id,
+            role: "AUTHOR",
+            scopeKey: "subject:" + subjectId,
+          },
+        },
+        create: {
+          userId: id,
+          role: "AUTHOR",
+          subjectId,
+          scopeKey: "subject:" + subjectId,
+          assignedById: actorId,
+        },
         update: {},
       });
     if (data.blocked) await tx.session.deleteMany({ where: { userId: id } });
@@ -239,7 +285,7 @@ export async function updateUserAccess(
         action: "USER_ACCESS_CHANGED",
         changes: {
           before: { role: target.role, blocked, subjectIds: before },
-          after: { role: data.role, blocked: data.blocked, subjectIds: after },
+          after: { role: nextRole, blocked: data.blocked, subjectIds: after },
         },
       },
     });

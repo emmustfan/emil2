@@ -95,8 +95,14 @@ test.beforeEach(async ({ context }) => {
   f = await createLessonFixture("imports-browser");
   admin = await user("ADMIN");
   teacher = await user("EDITOR");
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
   await signIn(context, teacher);
 });
@@ -121,9 +127,9 @@ test.afterEach(async () => {
     await createStorageDriver(getEnv()).remove(job.fileKey);
   }
   await db.importJob.deleteMany({ where: { createdById: { in: users } } });
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ teacherId: { in: users } }, { assignedById: { in: users } }],
+      OR: [{ userId: { in: users } }, { assignedById: { in: users } }],
     },
   });
   await cleanupLessonFixture(f, [], users.splice(0));

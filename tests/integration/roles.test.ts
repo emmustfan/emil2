@@ -217,8 +217,10 @@ it("lets a teacher create assignments and publish in their subject, while reserv
     seoTitle: f.subject.seoTitle,
     seoDescription: f.subject.seoDescription,
   };
+  await expect(content.createSubject(subject, teacher)).rejects.toMatchObject({
+    status: 404,
+  });
   for (const fn of [
-    () => content.createSubject(subject, teacher),
     () => content.updateSubject(f.subject.id, 0, subject, teacher),
     () => content.deleteSubject(f.subject.id, 0, teacher),
   ])
@@ -229,7 +231,7 @@ it("revokes an assignment immediately, preserves material and records the before
   expect(granted.user.roleRevision).toBe(1);
   expect(granted.audit).toHaveLength(1);
   const removed = await assign([]);
-  expect(removed.user.roleRevision).toBe(2);
+  expect(removed.user).toMatchObject({ role: "USER", roleRevision: 2 });
   expect(removed.audit).toHaveLength(2);
   await expect(
     content.updateTopic(
@@ -238,7 +240,7 @@ it("revokes an assignment immediately, preserves material and records the before
       { ...fields(await content.getTopic(f.free.id)), title: "Forbidden" },
       teacher,
     ),
-  ).rejects.toMatchObject({ status: 404 });
+  ).rejects.toMatchObject({ status: 403 });
   expect((await content.getTopic(f.free.id)).title).toBe(f.free.title);
   expect(removed.audit[0].changes).toMatchObject({
     before: { subjectIds: [f.subject.id] },
@@ -352,9 +354,7 @@ it("protects self and configured owners, and clears assignments when a teacher b
     blocked: false,
     subjectIds: [],
   });
-  expect(await db.teacherSubject.count({ where: { teacherId: teacher } })).toBe(
-    0,
-  );
+  expect(await db.roleAssignment.count({ where: { userId: teacher } })).toBe(0);
   await expect(
     content.getTopic(f.free.id, undefined, teacher),
   ).rejects.toMatchObject({ status: 403 });

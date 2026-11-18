@@ -167,9 +167,9 @@ afterEach(async () => {
     },
   });
   await db.event.deleteMany({ where: { id: { in: eventIds.splice(0) } } });
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ teacherId: { in: users } }, { assignedById: { in: users } }],
+      OR: [{ userId: { in: users } }, { assignedById: { in: users } }],
     },
   });
   await cleanupLessonFixture(other);
@@ -321,8 +321,14 @@ it("shows a learner only their own overview and uses the plan quota", async () =
   expect(view.recent?.topic.subjectId).toBe(f.subject.id);
 });
 it("limits teacher tutor logs to assigned subjects and removes account identifiers and contacts", async () => {
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
   for (const subjectId of [f.subject.id, other.subject.id]) {
     const c = await db.tutorConversation.create({

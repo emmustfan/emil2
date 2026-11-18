@@ -78,7 +78,9 @@ async function handle(request: NextRequest, context: Context, method: string) {
     }
     if (entity === "subjects" && !id && method === "POST")
       result = await service.createSubject(
-        subjectFields.parse(input),
+        subjectFields
+          .extend({ departmentId: z.string().min(1).max(100).optional() })
+          .parse(input),
         actor.id,
       );
     else if (entity === "subjects" && id && !action && method === "PATCH") {
