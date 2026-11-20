@@ -1,3 +1,5 @@
+import type { Question, QuestionAttempt } from "../generated/prisma/client";
+import type { QuestionFeedback } from "./types";
 import { createHash } from "node:crypto";
 import { parseTopic } from "../content/parse";
 import type { LessonBlock, Option } from "./types";
@@ -27,8 +29,10 @@ export function publicBlocks(
   const blocks =
     previewCount === undefined
       ? parsed.blocks
-      : parsed.blocks.slice(0, previewCount);
+      : parsed.blocks.filter((block) => !block.videoId).slice(0, previewCount);
   return blocks.map((block) => {
+    if (block.videoId)
+      return { blockKey: block.blockKey, markdown: "", videoId: block.videoId };
     let md = "",
       cursor = block.start;
     for (const gap of parsed.gaps
@@ -65,4 +69,21 @@ export function optionsFromJSON(value: unknown): Option[] {
         typeof o.text === "string",
     )
     .map((o) => ({ id: o.id, text: o.text }));
+}
+
+export function questionFeedback(
+  q: Question,
+  attempt: QuestionAttempt,
+): QuestionFeedback {
+  return {
+    chosenId: attempt.chosenOptionIds[0] ?? "",
+    correct: attempt.isCorrect,
+    correctId: q.correctOptionIds[0] ?? "",
+    chosenIds: attempt.chosenOptionIds,
+    correctIds: q.correctOptionIds,
+    chosenText: attempt.chosenText,
+    answerText: q.answerType === "SHORT_TEXT" ? q.acceptedAnswers[0] : null,
+    explanation: q.explanation,
+    sourceBlockKey: q.sourceBlockKey,
+  };
 }

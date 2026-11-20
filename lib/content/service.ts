@@ -1,4 +1,9 @@
 import {
+  checkTopicVideoText,
+  rejectVideoCredentials,
+} from "../video/credentials";
+import { videoMetadata } from "../video/admin";
+import {
   assertContent,
   lockContentStaff,
   subjectScope,
@@ -70,6 +75,12 @@ function questionDTO(q: Question, working = true): QuestionDTO {
     sourceBlockKey: source.sourceBlockKey,
     isDiagnostic: source.isDiagnostic,
     order: source.order,
+    videoId: source.videoId,
+    atSec: source.atSec,
+    aiGenerated: source.aiGenerated,
+    sourceQuote: source.sourceQuote,
+    sourceSec: source.sourceSec,
+    sourceVideoId: source.sourceVideoId,
     publishedAt: q.publishedAt?.toISOString() ?? null,
     hasDraft: working && !!q.draft,
   };
@@ -169,6 +180,11 @@ export async function getTopic(
     include: {
       subject: { select: { id: true, title: true, slug: true, status: true } },
       images: { select: { id: true } },
+      videos: {
+        where: { archivedAt: null },
+        select: videoMetadata,
+        orderBy: { createdAt: "asc" },
+      },
       gap_topicId: { select: { gapKey: true, sentence: true, answer: true } },
       question_topicId: {
         where: { archivedAt: null },
@@ -205,6 +221,7 @@ export async function getTopic(
     : null;
   return {
     imageIds: row.images.map((i) => i.id),
+    videos: row.videos,
     id: row.id,
     subjectId: row.subjectId,
     sectionId: row.sectionId,
@@ -411,6 +428,7 @@ export async function createTopic(
 ) {
   const data = topicData(input);
   validateReview(data);
+  rejectVideoCredentials(data.fields);
   return getDb().$transaction(async (tx) => {
     await lockContentStaff(tx, actorId);
     await assertContent(actorId, "content.edit", { subjectId: subjectId }, tx);
@@ -457,6 +475,7 @@ export async function updateTopic(
       tx,
     );
     checkRevision(row.editRevision, revision);
+    await checkTopicVideoText(tx, id, data.fields);
     if (row.version > 0 && input.slug !== row.slug)
       throw new ContentError(
         "Адрес уже опубликованного урока менять нельзя: он используется в ссылках студентов.",
@@ -566,6 +585,27 @@ async function validQuestionSource(
   topicId: string,
   input: QuestionInput,
 ) {
+  await checkTopicVideoText(tx, topicId, input);
+  if (
+    input.sourceVideoId &&
+    !(await tx.videoLecture.count({
+      where: { id: input.sourceVideoId, topicId },
+    }))
+  )
+    throw new ContentError("Видео-источник относится к другой теме.");
+  if (input.videoId) {
+    const video = await tx.videoLecture.findFirst({
+      where: { id: input.videoId, topicId, archivedAt: null },
+      select: { durationSec: true },
+    });
+    if (
+      !video ||
+      (video.durationSec !== null && (input.atSec ?? 0) > video.durationSec)
+    )
+      throw new ContentError(
+        "Выберите видео этой темы и момент в пределах его длительности.",
+      );
+  }
   const row = await tx.topic.findUniqueOrThrow({ where: { id: topicId } });
   if (
     input.sourceBlockKey &&
@@ -772,7 +812,48 @@ export async function publishTopic(
         ),
       };
       checkRevision(topic.editRevision, revision);
+      await checkTopicVideoText(tx, id, [
+        topic.title,
+        topic.contentMd,
+        topic.gapExercises,
+        topic.referencesMd,
+        topic.authorName,
+        topic.reviewerName,
+        topic.questions,
+      ]);
       const parsed = parseTopic(topic.contentMd);
+      const videos = await tx.videoLecture.findMany({
+        where: { topicId: id, archivedAt: null },
+        select: videoMetadata,
+      });
+      const referenced = new Set<string>();
+      const badBlocks = parsed.blocks.flatMap((block) => {
+        if (!block.videoId) return [];
+        const valid =
+          !referenced.has(block.videoId) &&
+          videos.some((v) => v.id === block.videoId);
+        referenced.add(block.videoId);
+        return valid
+          ? []
+          : [
+              {
+                code: "video_reference",
+                line: block.line,
+                column: 1,
+                message:
+                  "Блок видео должен ссылаться на действующее видео этого урока и встречаться один раз.",
+              },
+            ];
+      });
+      if (badBlocks.length)
+        throw new ContentError(
+          "Исправьте блоки видео перед публикацией.",
+          422,
+          badBlocks,
+        );
+      const topicQuestionCount = topic.questions.filter(
+        (q) => !q.videoId,
+      ).length;
       const imageIds = [...new Set(parsed.images.map((i) => i.id))];
       if (
         imageIds.length !==
@@ -812,8 +893,8 @@ export async function publishTopic(
           ],
         );
       if (
-        topic.questions.length < minQuestions ||
-        topic.questions.length > maxQuestions
+        topicQuestionCount < minQuestions ||
+        topicQuestionCount > maxQuestions
       )
         throw new ContentError(
           `В теме должно быть от ${minQuestions} до ${maxQuestions} вопросов.`,
@@ -823,11 +904,22 @@ export async function publishTopic(
           [
             fieldIssue(
               "questions",
-              `Сохранено вопросов: ${topic.questions.length}. Нужно от ${minQuestions} до ${maxQuestions}.`,
+              `Сохранено вопросов: ${topicQuestionCount}. Нужно от ${minQuestions} до ${maxQuestions}.`,
             ),
           ],
         );
       for (const [questionIndex, q] of topic.questions.entries()) {
+        if (q.videoId) {
+          const video = videos.find((v) => v.id === q.videoId);
+          if (
+            !video ||
+            !referenced.has(q.videoId) ||
+            (video.durationSec !== null && (q.atSec ?? 0) > video.durationSec)
+          )
+            throw new ContentError(
+              `У вопроса ${questionIndex + 1} проверьте блок видео и время показа.`,
+            );
+        }
         const checkedQuestion = questionFields.safeParse({
           answerType: q.answerType,
           acceptedAnswers: q.acceptedAnswers,
@@ -836,6 +928,8 @@ export async function publishTopic(
           correctOptionIds: q.correctOptionIds,
           explanation: q.explanation,
           sourceBlockKey: q.sourceBlockKey,
+          videoId: q.videoId,
+          atSec: q.atSec,
           isDiagnostic: q.isDiagnostic,
           order: q.order,
         });
@@ -1110,6 +1204,12 @@ export async function publishTopic(
 }
 function questionSnapshot(q: QuestionDTO) {
   const {
+    videoId,
+    atSec,
+    aiGenerated,
+    sourceQuote,
+    sourceSec,
+    sourceVideoId,
     id,
     topicId,
     answerType,
@@ -1123,6 +1223,12 @@ function questionSnapshot(q: QuestionDTO) {
     order,
   } = q;
   return {
+    videoId,
+    atSec,
+    aiGenerated,
+    sourceQuote,
+    sourceSec,
+    sourceVideoId,
     id,
     topicId,
     answerType,

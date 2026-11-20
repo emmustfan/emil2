@@ -1,7 +1,23 @@
+import {
+  makeVideo,
+  testVideoExternalId,
+  testVideoKey,
+} from "../helpers/video-fixture";
+import { loadLesson } from "../../lib/lessons/service";
+import { indexTopic } from "../../lib/tutor/indexing";
+import { MockLLMProvider } from "../../lib/llm";
+import { withSettingsSnapshot } from "../../lib/settings";
+import { makeLogger } from "../../lib/logger";
 import { beforeAll, afterAll, it, expect } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { openSync, closeSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  openSync,
+  closeSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../../lib/db";
@@ -16,7 +32,10 @@ import {
   apiRouteInventory,
   serverPageInventory,
 } from "../helpers/route-inventory";
-let child: ChildProcess, f: ImpersonationFixture, origin: string;
+let child: ChildProcess,
+  f: ImpersonationFixture,
+  origin: string,
+  serverLog: string;
 const db = getDb();
 beforeAll(async () => {
   f = await createImpersonationFixture();
@@ -31,7 +50,8 @@ beforeAll(async () => {
   });
   origin = `http://127.0.0.1:${port}`;
   mkdirSync("tmp", { recursive: true });
-  const fd = openSync(`tmp/impersonation-http-${randomUUID()}.log`, "w", 0o600);
+  serverLog = `tmp/impersonation-http-${randomUUID()}.log`;
+  const fd = openSync(serverLog, "w", 0o600);
   child = spawn(
     process.execPath,
     [
@@ -414,3 +434,78 @@ it("rejects non-administrator HTTP starts and returns 422 for a missing reason w
     await db.impersonationSession.count({ where: { adminId: f.admin.id } }),
   ).toBe(before);
 });
+
+it("keeps closed Rutube credentials out of unauthorised HTML, lesson payloads, events, logs, indexing and revisions", async () => {
+  const { topic, video } = await makeVideo(f.f);
+  const clean = (value: unknown) => {
+    const serialized =
+      typeof value === "string"
+        ? value
+        : JSON.stringify(value, (_key, property) =>
+            typeof property === "bigint" ? property.toString() : property,
+          );
+    for (const secret of [testVideoExternalId, testVideoKey])
+      expect(serialized).not.toContain(secret);
+  };
+  const actor = { userId: f.teacher.id };
+  const locked = await withSettingsSnapshot(() => loadLesson(topic.id, actor));
+  expect(locked.locked).toBe(true);
+  expect(locked.blocks.every((block) => !block.videoId)).toBe(true);
+  clean(locked);
+  const url = `/learn/${f.f.subject.slug}/${topic.slug}`;
+  const closed = await request(url, `sid=${f.teacherSid}`);
+  expect(closed.status).toBe(200);
+  const html = await closed.text();
+  clean(html);
+  expect(html).not.toContain("/play/embed/");
+  const opened = await request(url, `sid=${f.studentSid}`);
+  expect(opened.status).toBe(200);
+  const allowed = await opened.text();
+  expect(allowed).toContain(testVideoExternalId);
+  expect(allowed).toContain(testVideoKey);
+  const bad = await request(
+    `/api/videos/${video.id}/progress`,
+    `sid=${f.teacherSid}`,
+    "POST",
+    { selfReported: true },
+  );
+  expect(bad.status).toBe(403);
+  clean(await bad.text());
+  const snapshot = await db.topicRevision.findMany({
+    where: { topicId: topic.id },
+  });
+  expect(snapshot[0].contentMd).toContain(video.id);
+  clean(snapshot);
+  const embedded: string[] = [];
+  class CapturingMock extends MockLLMProvider {
+    override async embed(source: string[]) {
+      embedded.push(...source);
+      return super.embed(source);
+    }
+  }
+  expect(
+    await indexTopic(
+      { topicId: topic.id, subjectId: topic.subjectId, version: topic.version },
+      new CapturingMock(1536),
+    ),
+  ).toMatchObject({ indexed: true });
+  expect(embedded.length).toBeGreaterThan(0);
+  clean(embedded);
+  clean(
+    await db.$queryRaw`SELECT text,heading FROM "ContentChunk" WHERE "topicId"=${topic.id}`,
+  );
+  const events = await db.event.findMany({
+    where: { props: { path: ["topicId"], equals: topic.id } },
+  });
+  expect(events.some((event) => event.name === "paywall_shown")).toBe(true);
+  clean(events);
+  clean(await (await request("/sitemap.xml", "")).text());
+  clean(readFileSync(serverLog, "utf8"));
+  const logs: string[] = [];
+  makeLogger({ write: (entry) => logs.push(entry) }).info(
+    { video: { externalId: testVideoExternalId, accessKey: testVideoKey } },
+    "fixture",
+  );
+  expect(logs.join("")).toContain("[REDACTED]");
+  clean(logs);
+}, 35000);

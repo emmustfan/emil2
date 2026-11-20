@@ -44,6 +44,7 @@ async function subjects(db: Db) {
             where: {
               archivedAt: null,
               isDiagnostic: true,
+              videoId: null,
               publishedAt: { not: null },
             },
             select: { id: true },
@@ -176,6 +177,7 @@ export async function demoAction(id: string, input: DemoAction) {
             archivedAt: null,
             publishedAt: { not: null },
             isDiagnostic: true,
+            videoId: null,
             topic: {
               ...published,
               version: pinned.version,
@@ -399,6 +401,7 @@ export async function demoView(
             archivedAt: null,
             publishedAt: { not: null },
             isDiagnostic: true,
+            videoId: null,
             topic: {
               ...published,
               version: pinned.version,

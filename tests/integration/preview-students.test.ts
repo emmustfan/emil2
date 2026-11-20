@@ -184,6 +184,32 @@ it("seeds twelve consistent preview learners through domain services, preserves 
       "demo-applicant-01@example.ru",
       "demo-applicant-02@example.ru",
     ]);
+    const video = (
+      await db.query(`
+      SELECT v.id, v."externalId", v."accessKey", t."needsExpertReview", t."contentMd", t.title
+      FROM "VideoLecture" v JOIN "Topic" t ON t.id=v."topicId"
+      JOIN "Subject" s ON s.id=t."subjectId"
+      WHERE s.slug='platform-demo' AND t.slug='test-video-lecture'
+    `)
+    ).rows[0];
+    expect(video).toMatchObject({
+      externalId: "9230ec3691d02a011f7f32a577eb23d7",
+      accessKey: null,
+      needsExpertReview: true,
+      title: "Тестовая видеолекция",
+    });
+    expect(video.contentMd).toContain(video.id);
+    expect(video.contentMd).not.toContain(video.externalId);
+    const questions = (
+      await db.query(
+        'SELECT stem,"atSec" FROM "Question" WHERE "videoId"=$1 ORDER BY "atSec"',
+        [video.id],
+      )
+    ).rows;
+    expect(questions.map((q) => q.atSec)).toEqual([30, 60]);
+    expect(
+      questions.every((q) => /демо-вопрос, не учебный материал/i.test(q.stem)),
+    ).toBe(true);
     await db.query(
       `UPDATE "GroupMember" SET status='REJECTED' WHERE "groupId"=$1 AND "userId"=(SELECT id FROM "User" WHERE email='demo-applicant-01@example.ru')`,
       [group.id],
@@ -214,6 +240,8 @@ it("seeds twelve consistent preview learners through domain services, preserves 
       "GroupMember",
       "GroupSubject",
       "GroupTeacher",
+      "VideoLecture",
+      "VideoProgress",
     ];
     async function snapshot() {
       const result: Record<string, string> = {};
@@ -242,6 +270,12 @@ it("seeds twelve consistent preview learners through domain services, preserves 
         ["--import", "tsx", "scripts/preview/students-demo.ts"],
         override,
       );
+      const videoDenied = run(
+        process.execPath,
+        ["--import", "tsx", "scripts/preview/video-demo.ts"],
+        override,
+      );
+      expect(videoDenied.status).not.toBe(0);
       expect(denied.status).not.toBe(0);
       expect(denied.stderr).toContain(
         "Demo students require a preview database",

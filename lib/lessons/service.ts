@@ -1,3 +1,4 @@
+import { lessonVideos, topicVideoIds } from "../video/catalog";
 import { actorIdentity, assertWritableActor } from "./identity";
 import { track } from "../analytics/events";
 import {
@@ -8,13 +9,7 @@ import {
 } from "../srs/cards";
 import { gradeAnswer, type Definition, type Submission } from "../exercises";
 import { getDb } from "../db";
-import type {
-  Prisma,
-  Gap,
-  GapAnswer,
-  Question,
-  QuestionAttempt,
-} from "../generated/prisma/client";
+import type { Prisma, Gap, GapAnswer } from "../generated/prisma/client";
 import { hasAccess, consumeLimit } from "../access";
 import { getSetting } from "../settings";
 import { lockTopicForLearning } from "../content/locks";
@@ -24,6 +19,7 @@ import {
   completedLesson,
   optionsFromJSON,
   publicBlocks,
+  questionFeedback,
   shuffledOptions,
 } from "./public";
 import type {
@@ -32,7 +28,6 @@ import type {
   LessonGap,
   LessonTest,
   GapFeedback,
-  QuestionFeedback,
 } from "./types";
 type Db = Prisma.TransactionClient;
 const order = [{ order: "asc" as const }, { id: "asc" as const }];
@@ -43,7 +38,7 @@ export async function publishedTopic(id: string, db: Db = getDb()) {
   if (!topic) throw new ContentError("Тема не найдена.", 404);
   return topic;
 }
-async function accessibleTopic(id: string, actor: Actor, db: Db) {
+export async function accessibleTopic(id: string, actor: Actor, db: Db) {
   const topic = await publishedTopic(id, db);
   if (!(await hasAccess(actor.userId ?? null, topic, db)))
     throw new ContentError("Для этой темы нужен доступ к предмету.", 403);
@@ -71,28 +66,12 @@ function gapFeedback(
     explanation: answer.explanation,
   };
 }
-function questionFeedback(
-  q: Question,
-  attempt: QuestionAttempt,
-): QuestionFeedback {
-  return {
-    chosenId: attempt.chosenOptionIds[0] ?? "",
-    correct: attempt.isCorrect,
-    correctId: q.correctOptionIds[0] ?? "",
-    chosenIds: attempt.chosenOptionIds,
-    correctIds: q.correctOptionIds,
-    chosenText: attempt.chosenText,
-    answerText: q.answerType === "SHORT_TEXT" ? q.acceptedAnswers[0] : null,
-    explanation: q.explanation,
-    sourceBlockKey: q.sourceBlockKey,
-  };
-}
 function gapOptions(g: Gap, actor: Actor) {
   return g.answerType === "SHORT_TEXT"
     ? []
     : shuffledOptions([g.answer, ...g.distractors], actorKey(actor), g.id);
 }
-function grade(definition: Definition, input: Submission) {
+export function grade(definition: Definition, input: Submission) {
   try {
     return gradeAnswer(definition, input);
   } catch (error) {
@@ -106,6 +85,7 @@ export async function progressFor(
   actor: Actor,
   threshold: number,
   db: Db = getDb(),
+  contentMd?: string,
 ) {
   const [total, answered, correct, best] = await Promise.all([
     db.gap.count({ where: { topicId, archivedAt: null } }),
@@ -130,7 +110,31 @@ export async function progressFor(
     }),
   ]);
   const bestScore = best._max.score;
-  const completed = completedLesson(answered, total, bestScore, threshold);
+  const oldConditions = completedLesson(answered, total, bestScore, threshold);
+  const videoIds =
+    oldConditions && (await getSetting("lesson.requireVideo"))
+      ? topicVideoIds(
+          contentMd ??
+            (
+              await db.topic.findUnique({
+                where: { id: topicId },
+                select: { contentMd: true },
+              })
+            )?.contentMd ??
+            "",
+        )
+      : [];
+  const videosPending =
+    videoIds.length > 0 &&
+    (!actor.userId ||
+      (await db.videoProgress.count({
+        where: {
+          userId: actor.userId,
+          videoId: { in: videoIds },
+          completedAt: { not: null },
+        },
+      })) !== videoIds.length);
+  const completed = oldConditions && !videosPending;
   if (actor.userId && !actor.readOnly) {
     const existing = await db.topicProgress.findUnique({
       where: { userId_topicId: { userId: actor.userId, topicId } },
@@ -148,7 +152,14 @@ export async function progressFor(
       update: data,
     });
   }
-  return { answered, correct, total, bestScore, completed };
+  return {
+    answered,
+    correct,
+    total,
+    bestScore,
+    completed,
+    ...(videosPending ? { videosPending } : {}),
+  };
 }
 async function testFor(
   topicId: string,
@@ -157,7 +168,12 @@ async function testFor(
   db: Db,
 ): Promise<LessonTest> {
   const questions = await db.question.findMany({
-    where: { topicId, archivedAt: null, publishedAt: { not: null } },
+    where: {
+      topicId,
+      videoId: null,
+      archivedAt: null,
+      publishedAt: { not: null },
+    },
     orderBy: order,
   });
   const run = await db.testRun.findFirst({
@@ -251,7 +267,14 @@ export async function loadLesson(
       ),
       gaps: publicGaps,
       test: await testFor(topicId, topic.version, actor, tx),
-      progress: await progressFor(topicId, actor, threshold, tx),
+      videos: await lessonVideos(tx, topic, actor),
+      progress: await progressFor(
+        topicId,
+        actor,
+        threshold,
+        tx,
+        topic.contentMd,
+      ),
       review: await lessonReview(tx, actor, topicId),
     };
   });
@@ -354,7 +377,13 @@ export async function answerGap(
       );
     return {
       feedback: gapFeedback(gap, practice && existing ? snapshot : answer),
-      progress: await progressFor(topic.id, actor, threshold, tx),
+      progress: await progressFor(
+        topic.id,
+        actor,
+        threshold,
+        tx,
+        topic.contentMd,
+      ),
       review: await lessonReview(tx, actor, topic.id),
     };
   });
@@ -383,7 +412,12 @@ export async function startTest(
     });
     if (!open) {
       const total = await tx.question.count({
-        where: { topicId, archivedAt: null, publishedAt: { not: null } },
+        where: {
+          topicId,
+          videoId: null,
+          archivedAt: null,
+          publishedAt: { not: null },
+        },
       });
       if (!total) throw new ContentError("Тест пока недоступен.", 409);
       await tx.testRun.create({
@@ -427,6 +461,7 @@ export async function answerQuestion(
       where: {
         id: questionId,
         topicId,
+        videoId: null,
         archivedAt: null,
         publishedAt: { not: null },
       },
@@ -494,7 +529,13 @@ export async function answerQuestion(
     return {
       feedback: questionFeedback(q, attempt),
       test: await testFor(topicId, topic.version, actor, tx),
-      progress: await progressFor(topicId, actor, threshold, tx),
+      progress: await progressFor(
+        topicId,
+        actor,
+        threshold,
+        tx,
+        topic.contentMd,
+      ),
       review: await lessonReview(tx, actor, topicId),
     };
   });

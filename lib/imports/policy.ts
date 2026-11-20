@@ -10,11 +10,12 @@ export const importInput = z
       .string()
       .regex(/^[a-zA-Z0-9_-]{1,100}$/)
       .nullable(),
+    videoId: z.uuid().optional(),
     rightsConfirmed: z.literal(true),
   })
   .strict();
 export type ImportInput = z.infer<typeof importInput>;
-export type SourceFormat = "pdf" | "docx" | "text";
+export type SourceFormat = "pdf" | "docx" | "text" | "subtitles";
 export async function importLimits(direct = false) {
   const rows = direct ? await getDb().appSetting.findMany() : [];
   const read = <K extends SettingKey>(key: K) =>
@@ -51,6 +52,7 @@ export function sourceFormat(
   name: string,
   body: Buffer,
   maxBytes: number,
+  video = false,
 ): SourceFormat {
   if (!body.length || body.length > maxBytes)
     throw new ContentError("Файл пуст или превышает допустимый размер.", 413);
@@ -62,6 +64,8 @@ export function sourceFormat(
     body.readUInt16LE(0) === 0x4b50
   )
     return "docx";
+  if (video && /\.(?:vtt|srt)$/i.test(name) && !body.includes(0))
+    return "subtitles";
   if (/\.txt$/i.test(name) && !body.includes(0)) {
     try {
       new TextDecoder("utf-8", { fatal: true }).decode(body);

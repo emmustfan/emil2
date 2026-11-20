@@ -246,6 +246,11 @@ export default async function StudyGroupPage({
             {!active.length && <p>Зачисленных студентов пока нет.</p>}
             {active.map((member) => (
               <Member key={member.userId} member={member}>
+                {(data.selfReported.get(member.userId) ?? []).map((video) => (
+                  <p key={video.id} className="text-sm">
+                    {video.title} · просмотр отмечен студентом
+                  </p>
+                ))}
                 {permissions.members && (
                   <GroupButtons
                     id={id}

@@ -1,3 +1,4 @@
+import { videoMarker } from "../video/rutube";
 import { Node, mergeAttributes } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -133,6 +134,44 @@ export const LessonGapNode = Node.create<{
     },
   },
 });
+const LessonVideoNode = Node.create({
+  name: "lessonVideo",
+  group: "block",
+  atom: true,
+  addAttributes() {
+    return { videoId: { default: null } };
+  },
+  markdownTokenName: "lessonVideo",
+  markdownTokenizer: {
+    name: "lessonVideo",
+    level: "block",
+    start: (source) => source.search(/^::video\{/m),
+    tokenize(source) {
+      const raw = source.match(/^::video\{[^\n]*\}(?:\r?\n|$)/)?.[0];
+      const match = raw && videoMarker.exec(raw.trim());
+      return match
+        ? { type: "lessonVideo", raw, videoId: match[1] }
+        : undefined;
+    },
+  },
+  parseMarkdown(token, helpers) {
+    return helpers.createNode("lessonVideo", { videoId: token.videoId });
+  },
+  renderMarkdown(node) {
+    return `::video{#${node.attrs?.videoId}}\n\n`;
+  },
+  renderHTML({ node }) {
+    return [
+      "div",
+      { "data-lesson-video": node.attrs.videoId },
+      "Видеолекция Rutube",
+    ];
+  },
+  renderText({ node }) {
+    return `::video{#${node.attrs.videoId}}`;
+  },
+});
+
 export function lessonEditorExtensions(onEditGap?: (position: number) => void) {
   return [
     StarterKit.configure({
@@ -142,6 +181,7 @@ export function lessonEditorExtensions(onEditGap?: (position: number) => void) {
     LessonImageNode.configure({ inline: false, allowBase64: false }),
     TableKit.configure({ table: false }),
     LessonTable,
+    LessonVideoNode,
     LessonGapNode.configure({ onEdit: onEditGap }),
     Markdown,
   ];

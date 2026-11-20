@@ -232,7 +232,12 @@ async function seedStudent(
       );
     const test = await startTest(topicId, lesson.version, actor),
       questions = await db.question.findMany({
-        where: { topicId, archivedAt: null, publishedAt: { not: null } },
+        where: {
+          topicId,
+          archivedAt: null,
+          publishedAt: { not: null },
+          videoId: null,
+        },
         orderBy: { order: "asc" },
       });
     for (const [index, q] of questions.entries())
@@ -358,6 +363,7 @@ async function seedDemoStudents(now: Date) {
     const topics = await db.topic.findMany({
       where: {
         status: "PUBLISHED",
+        slug: { not: "test-video-lecture" },
         subject: {
           status: "PUBLISHED",
           slug: {

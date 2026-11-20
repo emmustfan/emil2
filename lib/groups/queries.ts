@@ -1,3 +1,4 @@
+import { topicVideoIds } from "../video/catalog";
 import { getDb } from "../db";
 import type { ContentReader } from "../org";
 import { searchGroupTeachers, groupAccess } from "../org/groups";
@@ -106,11 +107,69 @@ export async function staffGroup(
     subjectsToAssign.map(({ subject }) => subject),
     q,
   );
+  const videoReports =
+    permissions.roster &&
+    !group.archivedAt &&
+    !group.faculty.archivedAt &&
+    members.length
+      ? await db.videoProgress.findMany({
+          where: {
+            userId: {
+              in: members
+                .filter((member) => member.status === "ACTIVE")
+                .map((member) => member.userId),
+            },
+            selfReported: true,
+            completedAt: { not: null },
+            video: {
+              archivedAt: null,
+              topic: {
+                status: "PUBLISHED",
+                subject: {
+                  status: "PUBLISHED",
+                  groupSubjects: {
+                    some: {
+                      groupId: id,
+                      ...(actor.role === "ADMIN" ? {} : teachingScope),
+                    },
+                  },
+                },
+              },
+            },
+          },
+          select: {
+            userId: true,
+            video: {
+              select: {
+                id: true,
+                title: true,
+                topic: { select: { id: true, contentMd: true } },
+              },
+            },
+          },
+          orderBy: { completedAt: "desc" },
+        })
+      : [];
+  const publishedVideos = new Map<string, string[]>();
+  const selfReported = new Map<string, { id: string; title: string }[]>();
+  for (const report of videoReports) {
+    const { video, userId } = report;
+    let ids = publishedVideos.get(video.topic.id);
+    if (!ids) {
+      ids = topicVideoIds(video.topic.contentMd);
+      publishedVideos.set(video.topic.id, ids);
+    }
+    if (!ids.includes(video.id)) continue;
+    const items = selfReported.get(userId) ?? [];
+    items.push({ id: video.id, title: video.title });
+    selfReported.set(userId, items);
+  }
   const opened = new Set(subjects.map(({ subject }) => subject.id));
   return {
     group,
     permissions,
     members,
+    selfReported,
     subjects: subjects.map((entry) => ({
       ...entry,
       manageable: manageable.has(entry.subject.id),

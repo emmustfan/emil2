@@ -1,3 +1,7 @@
+import {
+  redactVideoCredentials,
+  rejectVideoCredentials,
+} from "../video/credentials";
 import { z } from "zod";
 import { parseTopic } from "../content/parse";
 import { questionFields } from "../content/validation";
@@ -14,6 +18,7 @@ export const draftSchema = z
   .strict();
 export type ImportDraft = z.infer<typeof draftSchema>;
 export function validateDraft(value: unknown): ImportDraft {
+  rejectVideoCredentials(value);
   const draft = draftSchema.parse(value),
     parsed = parseTopic(draft.contentMd);
   const issues = parsed.errors.map((e) => `Строка ${e.line}: ${e.message}`);
@@ -72,7 +77,9 @@ export function importMessages(source: string): ChatMessage[] {
     },
     {
       role: "user",
-      content: JSON.stringify({ source: redactPersonalData(source) }),
+      content: JSON.stringify({
+        source: redactPersonalData(redactVideoCredentials(source, [])),
+      }),
     },
   ];
 }

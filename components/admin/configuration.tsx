@@ -126,23 +126,38 @@ function SettingForm({ row }: { row: Config["settings"][number] }) {
         const raw = String(new FormData(e.currentTarget).get("value")),
           value = Array.isArray(row.value)
             ? raw.split(",").map(Number)
-            : Number(raw);
+            : typeof row.value === "boolean"
+              ? raw === "true"
+              : Number(raw);
         const r = await save("settings", { key: row.key, revision, value });
         if (r) setRevision(r.revision);
       }}
     >
       <label className="block text-sm">
         {settingLabels[row.key] ?? row.key}
-        <input
-          className={field}
-          name="value"
-          required
-          type={Array.isArray(row.value) ? "text" : "number"}
-          step="any"
-          defaultValue={
-            Array.isArray(row.value) ? row.value.join(", ") : String(row.value)
-          }
-        />
+        {typeof row.value === "boolean" ? (
+          <select
+            className={field}
+            name="value"
+            defaultValue={String(row.value)}
+          >
+            <option value="true">Включено</option>
+            <option value="false">Выключено</option>
+          </select>
+        ) : (
+          <input
+            className={field}
+            name="value"
+            required
+            type={Array.isArray(row.value) ? "text" : "number"}
+            step="any"
+            defaultValue={
+              Array.isArray(row.value)
+                ? row.value.join(", ")
+                : String(row.value)
+            }
+          />
+        )}
       </label>
       <Result {...state} />
       <button

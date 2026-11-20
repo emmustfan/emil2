@@ -213,7 +213,7 @@ export async function studentProgress(
               };
             }),
           tests: runs
-            .filter((r) => r.topicId === t.id)
+            .filter((r) => r.topicId === t.id && r.mode !== "VIDEO")
             .map((r) => ({
               id: r.id,
               at: r.startedAt.toISOString(),

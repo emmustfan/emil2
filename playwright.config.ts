@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 // Keep browser binaries inside the writable, ignored project directory.
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve("tmp/playwright");
 process.env.E2E_RUN_ID ??= randomUUID();
+// The iframe fixture is installed by Playwright routing, never by the application.
+process.env.E2E_RUTUBE_PLAYER = "1";
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,

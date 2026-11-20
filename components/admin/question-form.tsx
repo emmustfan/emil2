@@ -8,19 +8,22 @@ import { AnswerPreview } from "@/components/exercises/preview";
 import type { Definition } from "@/lib/exercises";
 import { Button } from "@/components/ui/button";
 import { contentRu as t } from "@/lib/i18n/ru";
-import type { QuestionDTO } from "@/lib/content/types";
+import { parseVideoTime, videoTime } from "@/lib/video/rutube";
+import type { QuestionDTO, VideoMetadata } from "@/lib/content/types";
 import type { QuestionInput } from "@/lib/content/validation";
 import type { ParsedBlock } from "@/lib/content/parse";
 import { fieldClass } from "./helpers";
 export function QuestionForm({
   initial,
   blocks,
+  videos = [],
   busy,
   onSave,
   onCancel,
 }: {
   initial?: QuestionDTO;
   blocks: ParsedBlock[];
+  videos?: VideoMetadata[];
   busy: boolean;
   onSave: (input: QuestionInput, id?: string) => Promise<void>;
   onCancel: () => void;
@@ -37,18 +40,30 @@ export function QuestionForm({
     explanation: initial?.explanation ?? "",
   });
   const [stem, setStem] = useState(initial?.stem ?? "");
+  const [inVideo, setInVideo] = useState(!!initial?.videoId);
   const [error, setError] = useState("");
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
     setError("");
     try {
+      const atSec = inVideo
+        ? parseVideoTime(String(values.get("atSec")))
+        : null;
+      if (inVideo && atSec === null)
+        throw new Error("Укажите момент показа в формате мм:сс.");
       await onSave(
         {
           stem: String(values.get("stem")),
           ...cleanDefinition(definition),
           sourceBlockKey: String(values.get("sourceBlockKey")) || null,
-          isDiagnostic: values.get("isDiagnostic") === "on",
+          isDiagnostic: !inVideo && values.get("isDiagnostic") === "on",
+          videoId: inVideo ? String(values.get("videoId")) : null,
+          atSec,
+          aiGenerated: initial?.aiGenerated,
+          sourceQuote: initial?.sourceQuote,
+          sourceSec: initial?.sourceSec,
+          sourceVideoId: initial?.sourceVideoId,
           order: Number(values.get("order")),
         },
         initial?.id,
@@ -112,10 +127,54 @@ export function QuestionForm({
             />
           </label>
         </div>
+        {videos.length > 0 && (
+          <>
+            <label className="flex min-h-11 items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={inVideo}
+                onChange={(event) => setInVideo(event.target.checked)}
+              />
+              Показать в видео
+            </label>
+            {inVideo && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  Видеолекция
+                  <select
+                    name="videoId"
+                    defaultValue={initial?.videoId ?? videos[0]?.id}
+                    required
+                    className={fieldClass}
+                  >
+                    {videos.map((video) => (
+                      <option key={video.id} value={video.id}>
+                        {video.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Момент показа (мм:сс)
+                  <input
+                    name="atSec"
+                    required
+                    defaultValue={
+                      initial?.atSec != null ? videoTime(initial.atSec) : ""
+                    }
+                    placeholder="0:30"
+                    className={fieldClass}
+                  />
+                </label>
+              </div>
+            )}
+          </>
+        )}
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input
             type="checkbox"
             name="isDiagnostic"
+            disabled={inVideo}
             aria-describedby="question-demo-hint"
             className="book-switch"
             defaultChecked={initial?.isDiagnostic}

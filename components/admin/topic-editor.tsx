@@ -26,6 +26,8 @@ import {
 } from "@/lib/exercises";
 import { QuestionForm } from "./question-form";
 import { RichEditor, type RichEditorHandle } from "./rich-editor";
+import { VideoEditor } from "./video-editor";
+import { videoTime } from "@/lib/video/rutube";
 import { ImageUpload } from "./image-upload";
 import { PublicationTools } from "./publication-tools";
 import { LessonReview } from "./lesson-review";
@@ -77,6 +79,7 @@ export function TopicEditor({
 }) {
   const router = useRouter();
   const [imageIds, setImageIds] = useState(initial.imageIds ?? []);
+  const [videos, setVideos] = useState(initial.videos ?? []);
   const [row, setRow] = useState(initial);
   const rowRef = useRef(initial);
   const [form, setForm] = useState(() => fields(initial));
@@ -411,6 +414,7 @@ export function TopicEditor({
     subjectPublished: row.subject.status === "PUBLISHED",
     status: row.draftState,
     imageIds: [...new Set([...imageIds, ...(row.imageIds ?? [])])],
+    videos,
     previewCurrent: previewSource === form.contentMd,
   });
   const reviewPrompt = lessonReviewPrompt(
@@ -764,6 +768,27 @@ export function TopicEditor({
                 insertText(md);
               }}
             />
+            <VideoEditor
+              topicId={initial.id}
+              subjectId={initial.subjectId}
+              videos={videos}
+              busy={busy || conflict || sourceOpen || !hydrated}
+              onChange={(video) =>
+                setVideos((items) =>
+                  typeof video === "string"
+                    ? items.filter((item) => item.id !== video)
+                    : items.some((item) => item.id === video.id)
+                      ? items.map((item) =>
+                          item.id === video.id ? video : item,
+                        )
+                      : [...items, video],
+                )
+              }
+              onInsert={(id) => {
+                if (!formRef.current.contentMd.includes(`::video{#${id}}`))
+                  insertText(`::video{#${id}}`);
+              }}
+            />
             <div className="rich-source-details">
               <button
                 type="button"
@@ -963,7 +988,23 @@ export function TopicEditor({
                       )?.heading ?? "Фрагмент методички")
                     : "не выбран"}
                   {q.isDiagnostic ? " · Для диагностики демо" : ""}
+                  {q.videoId && q.atSec != null
+                    ? ` · В видео на ${videoTime(q.atSec)}`
+                    : ""}
                 </p>
+                {q.aiGenerated && q.sourceQuote && (
+                  <div className="book-question-note">
+                    <p>Цитата из исходника — «{q.sourceQuote}»</p>
+                    {q.sourceSec != null && q.sourceVideoId && (
+                      <Link
+                        href={`/admin/topics/${row.id}/student-preview#video-${q.sourceVideoId}-at-${q.sourceSec}`}
+                        className="underline"
+                      >
+                        Перейти к моменту {videoTime(q.sourceSec)}
+                      </Link>
+                    )}
+                  </div>
+                )}
               </article>
             ))}
             {!row.questions.length && (
@@ -974,6 +1015,7 @@ export function TopicEditor({
             key={`${selected?.id ?? "new"}-${questionNonce}`}
             initial={selected}
             blocks={parsed.blocks}
+            videos={videos}
             busy={busy || conflict}
             onSave={question}
             onCancel={() => {
