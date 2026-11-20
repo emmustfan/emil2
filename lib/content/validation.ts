@@ -75,10 +75,26 @@ export const questionFields = z
     explanation: z.string().trim().min(1).max(5000),
     sourceBlockKey: z.string().max(200).nullable(),
     isDiagnostic: z.boolean(),
+    videoId: z.uuid().nullable().default(null),
+    atSec: z.number().int().min(0).max(86400).nullable().default(null),
+    aiGenerated: z.boolean().default(false),
+    sourceQuote: z.string().trim().min(1).max(1500).nullable().default(null),
+    sourceVideoId: z.uuid().nullable().default(null),
+    sourceSec: z.number().int().min(0).max(86400).nullable().default(null),
     order: z.number().int().min(0).max(10000),
   })
   .strict()
   .superRefine((q, ctx) => {
+    if (
+      (q.videoId === null) !== (q.atSec === null) ||
+      (q.videoId && q.isDiagnostic)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["atSec"],
+        message:
+          "Укажите видео и время вопроса. Вопросы в видео не входят в диагностику.",
+      });
     for (const message of definitionErrors(q))
       ctx.addIssue({ code: "custom", message });
     if (q.answerType !== "SHORT_TEXT" && q.options.length < 3)

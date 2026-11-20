@@ -39,13 +39,33 @@ export type LessonQuestion = {
   options: Option[];
   feedback: QuestionFeedback | null;
 };
-export type LessonBlock = { blockKey: string; markdown: string };
+export type LessonBlock = {
+  blockKey: string;
+  markdown: string;
+  videoId?: string;
+};
+export type LessonVideo = {
+  id: string;
+  title: string;
+  src: string;
+  durationSec: number | null;
+  allowWrites: boolean;
+  signedIn: boolean;
+  progress: {
+    lastPositionSec: number;
+    watchedSec: number;
+    selfReported: boolean;
+    completed: boolean;
+  } | null;
+  questions: (LessonQuestion & { atSec: number })[];
+};
 export type LessonProgress = {
   answered: number;
   correct: number;
   total: number;
   bestScore: number | null;
   completed: boolean;
+  videosPending?: boolean;
 };
 export type LessonTest = {
   runId: string | null;
@@ -60,6 +80,7 @@ export type LessonData = {
   version: number;
   locked: boolean;
   blocks: LessonBlock[];
+  videos?: LessonVideo[];
   gaps: LessonGap[];
   test: LessonTest | null;
   progress: LessonProgress | null;

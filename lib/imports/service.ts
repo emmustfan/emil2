@@ -40,7 +40,7 @@ export async function createImport(
   const data = importInput.parse(input),
     limits = await importLimits();
   await assertCan(actorId, "content.edit", { subjectId: data.subjectId });
-  const format = sourceFormat(filename, body, limits.maxBytes),
+  const format = sourceFormat(filename, body, limits.maxBytes, !!data.videoId),
     storage = createStorageDriver(getEnv());
   await getContentQueue();
   const fileKey = `import-${randomUUID()}`;
@@ -64,6 +64,17 @@ export async function createImport(
         }))
       )
         throw new ContentError("Раздел не найден в выбранном предмете.", 404);
+      const video = data.videoId
+        ? await tx.videoLecture.findFirst({
+            where: {
+              id: data.videoId,
+              archivedAt: null,
+              topic: { subjectId: data.subjectId },
+            },
+            select: { id: true, updatedAt: true },
+          })
+        : null;
+      if (data.videoId && !video) throw missing();
       const recent = await tx.importJob.count({
           where: {
             createdById: actorId,
@@ -87,6 +98,8 @@ export async function createImport(
           subjectId: data.subjectId,
           sectionId: data.sectionId,
           fileKey,
+          videoId: video?.id,
+          videoRevision: video?.updatedAt,
           format,
           status: "queued",
           topicIds: [],
@@ -113,6 +126,7 @@ export async function getImport(actorId: ContentReader, id: string) {
     id: row.id,
     subjectId: row.subjectId,
     status: row.status,
+    ...(row.report ? { report: row.report } : {}),
     stage: row.stage,
     error: row.error,
     partsDone: row.partsDone,

@@ -86,6 +86,12 @@ export async function recordInitialTopicRevision(
       sourceBlockKey,
       isDiagnostic,
       order,
+      videoId,
+      atSec,
+      aiGenerated,
+      sourceQuote,
+      sourceSec,
+      sourceVideoId,
     }) => ({
       id,
       topicId,
@@ -98,6 +104,12 @@ export async function recordInitialTopicRevision(
       sourceBlockKey,
       isDiagnostic,
       order,
+      videoId,
+      atSec,
+      aiGenerated,
+      sourceQuote,
+      sourceSec,
+      sourceVideoId,
     }),
   );
   await db.topicRevision.upsert({

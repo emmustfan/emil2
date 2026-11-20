@@ -32,6 +32,7 @@ export async function indexTopic(
   const topic = await db.topic.findUnique({
     where: { id: job.topicId },
     include: {
+      videos: { select: { externalId: true, accessKey: true } },
       gap_topicId: { where: { archivedAt: null } },
       subject: { select: { status: true } },
     },
@@ -55,7 +56,7 @@ export async function indexTopic(
     ]),
   );
   const chunks = chunkBlocks(
-    publishedBlocks(topic.contentMd, answers),
+    publishedBlocks(topic.contentMd, answers, topic.videos),
     settings.chunkTargetTokens,
     settings.chunkMaxTokens,
   );

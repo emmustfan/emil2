@@ -105,7 +105,7 @@ export function LessonMarkdown({
           id={`b-${b.blockKey}`}
           className="lesson-block"
         >
-          <SafeMarkdown markdown={b.markdown} gap={gap} />
+          {!b.videoId && <SafeMarkdown markdown={b.markdown} gap={gap} />}
           {afterBlock?.(b)}
         </section>
       ))}

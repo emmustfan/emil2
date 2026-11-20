@@ -46,3 +46,48 @@ export function mockImport(source: string) {
     })),
   };
 }
+
+export function mockVideoImport(source: {
+  cues: import("./subtitles").Cue[];
+  text: string;
+}) {
+  const fragments = source.cues.length
+    ? source.cues.slice(0, 10)
+    : [{ fromSec: null, toSec: 0, text: source.text.slice(0, 500) }];
+  const question = (item: (typeof fragments)[number], index: number) => ({
+    answerType: "SINGLE_CHOICE",
+    stem: `Демо-вопрос ${index + 1}: какая фраза есть в источнике?`,
+    options: [
+      { id: "a", text: item.text.slice(0, 500) },
+      { id: "b", text: "Произвольный пример Б" },
+      { id: "c", text: "Произвольный пример В" },
+    ],
+    correctOptionIds: ["a"],
+    explanation: "Демонстрация привязки вопроса к фрагменту исходника.",
+    sourceQuote: item.text.slice(0, 500),
+    sourceSec: item.fromSec === null ? null : Math.floor(item.fromSec),
+  });
+  const checkpoints = source.cues.length
+    ? fragments.map((cue, i) => ({
+        ...question(cue, i),
+        atSec: Math.ceil(cue.toSec),
+      }))
+    : [];
+  const testQuestions = Array.from(
+    { length: Math.max(5, fragments.length) },
+    (_, i) => question(fragments[i % fragments.length], i),
+  );
+  testQuestions.push({
+    ...testQuestions[0],
+    sourceQuote: "Искусственная цитата, которой нет в источнике ФИКСТУРА.",
+  });
+  return {
+    checkpoints,
+    testQuestions,
+    summaryMd: Array.from(
+      { length: 10 },
+      (_, i) =>
+        `Демонстрационная строка ${i + 1} содержит [[текст-${i + 1}|вариант-${i + 1}]].`,
+    ).join("\n\n"),
+  };
+}

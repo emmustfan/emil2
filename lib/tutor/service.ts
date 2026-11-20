@@ -1,3 +1,4 @@
+import { rejectVideoCredentials } from "../video/credentials";
 import { actorIdentity } from "../lessons/identity";
 import { track } from "../analytics/events";
 import { createHash, randomUUID } from "node:crypto";
@@ -89,6 +90,15 @@ export async function prepareTurn(
           [],
           "personal_data",
         );
+      rejectVideoCredentials(
+        scope.question,
+        scope.topicId
+          ? await tx.videoLecture.findMany({
+              where: { topicId: scope.topicId },
+              select: { externalId: true, accessKey: true },
+            })
+          : [],
+      );
       const previous = await tx.tutorMessage.findUnique({
         where: { requestKey },
         include: { conversation: true },

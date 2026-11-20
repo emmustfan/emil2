@@ -38,7 +38,7 @@ export const settingInput = z
         (k) => editableSettingKeys.includes(k as SettingKey),
         "Неизвестная настройка.",
       ),
-    value: z.union([z.number(), z.array(z.number())]),
+    value: z.union([z.number(), z.array(z.number()), z.boolean()]),
   })
   .strict()
   .refine(

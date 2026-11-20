@@ -30,6 +30,10 @@ export const DEFAULT_SETTINGS = {
   "tutor.chunkTargetTokens": 500,
   "tutor.chunkMaxTokens": 800,
   "tutor.embeddingBatchSize": 16,
+  "video.completeThreshold": 0.9,
+  "video.requestsPerMinute": 10,
+  "video.subtitleMaxChars": 60000,
+  "lesson.requireVideo": true,
   "lesson.passThreshold": 0.7,
   "lesson.requestsPerMinute": 120,
   "lesson.guestDays": 30,
@@ -93,26 +97,29 @@ export function decodeSetting<K extends SettingKey>(
   value: unknown,
 ): (typeof DEFAULT_SETTINGS)[K] {
   const fallback = DEFAULT_SETTINGS[key];
-  let schema = key.startsWith("llm.")
-    ? z.number().nonnegative().max(1000000)
-    : Array.isArray(fallback)
-      ? z.array(z.number().positive()).min(1).max(10)
-      : key.endsWith("Threshold") ||
-          key === "tutor.minSimilarity" ||
-          key === "tutor.topicBonus"
-        ? z.number().min(0).max(1)
-        : z
-            .number()
-            .positive()
-            .max(
-              key === "import.maxBytes"
-                ? 20971520
-                : key === "content.imageMaxBytes"
-                  ? 10485760
-                  : key === "content.imageMaxPixels"
-                    ? 40000000
-                    : 100000,
-            );
+  let schema =
+    typeof fallback === "boolean"
+      ? z.boolean()
+      : key.startsWith("llm.")
+        ? z.number().nonnegative().max(1000000)
+        : Array.isArray(fallback)
+          ? z.array(z.number().positive()).min(1).max(10)
+          : key.endsWith("Threshold") ||
+              key === "tutor.minSimilarity" ||
+              key === "tutor.topicBonus"
+            ? z.number().min(0).max(1)
+            : z
+                .number()
+                .positive()
+                .max(
+                  key === "import.maxBytes"
+                    ? 20971520
+                    : key === "content.imageMaxBytes"
+                      ? 10485760
+                      : key === "content.imageMaxPixels"
+                        ? 40000000
+                        : 100000,
+                );
   if (key === "progress.minCompletionPercent")
     schema = z.number().int().min(0).max(100);
   if (key === "progress.pageSize") schema = z.number().int().min(1).max(100);
@@ -121,6 +128,11 @@ export function decodeSetting<K extends SettingKey>(
   if (key === "group.joinCodeDays") schema = z.number().int().min(1).max(365);
   if (key === "group.joinAttemptsPerMinute")
     schema = z.number().int().min(1).max(10);
+  if (key === "video.completeThreshold") schema = z.number().gt(0).max(1);
+  if (key === "video.requestsPerMinute")
+    schema = z.number().int().min(1).max(10);
+  if (key === "video.subtitleMaxChars")
+    schema = z.number().int().min(1).max(100000);
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (
@@ -160,7 +172,9 @@ export function decodeSetting<K extends SettingKey>(
       key.startsWith("content.") ||
       key === "srs.newCardsPerDay" ||
       key === "srs.queuePageSize" ||
-      (key.startsWith("lesson.") && !key.endsWith("Threshold"))) &&
+      (key.startsWith("lesson.") &&
+        key !== "lesson.requireVideo" &&
+        !key.endsWith("Threshold"))) &&
       (typeof result.data !== "number" || !Number.isInteger(result.data))) ||
     (key === "srs.queuePageSize" &&
       typeof result.data === "number" &&

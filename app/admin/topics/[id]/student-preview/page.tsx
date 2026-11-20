@@ -1,3 +1,5 @@
+import { draftVideoPreviews } from "@/lib/video/admin";
+import { RutubePlayer } from "@/components/lessons/rutube-player";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
 import { getTopic } from "@/lib/content/service";
@@ -15,6 +17,7 @@ export default async function StudentPreview({
   const user = await requireEditor(),
     { id } = await params;
   const topic = await contentPage(() => getTopic(id, undefined, user));
+  const videos = await contentPage(() => draftVideoPreviews(user, id));
   return (
     <main className="student-lesson-preview">
       <div className="student-preview-banner">
@@ -48,24 +51,29 @@ export default async function StudentPreview({
           exercises={topic.gapExercises}
         />
       </article>
+      {videos.map((video) => (
+        <RutubePlayer key={video.id} video={video} version={topic.version} />
+      ))}
       <section className="emal-panel student-preview-test">
         <h2>Тест по теме</h2>
         <p>Ответьте на вопросы после чтения методички.</p>
-        {topic.questions.map((q, i) => (
-          <article key={q.id}>
-            <AnswerPreview
-              id={`student-preview-${q.id}`}
-              title={`${i + 1}. ${q.stem}`}
-              definition={{
-                answerType: q.answerType,
-                options: q.options,
-                correctOptionIds: q.correctOptionIds,
-                acceptedAnswers: q.acceptedAnswers,
-                explanation: q.explanation,
-              }}
-            />
-          </article>
-        ))}
+        {topic.questions
+          .filter((q) => !q.videoId)
+          .map((q, i) => (
+            <article key={q.id}>
+              <AnswerPreview
+                id={`student-preview-${q.id}`}
+                title={`${i + 1}. ${q.stem}`}
+                definition={{
+                  answerType: q.answerType,
+                  options: q.options,
+                  correctOptionIds: q.correctOptionIds,
+                  acceptedAnswers: q.acceptedAnswers,
+                  explanation: q.explanation,
+                }}
+              />
+            </article>
+          ))}
       </section>
       {topic.referencesMd && (
         <section className="emal-panel">

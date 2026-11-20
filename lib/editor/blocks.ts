@@ -22,7 +22,7 @@ export function moveBlock(editor: Editor, direction: -1 | 1) {
     .delete(block.from, block.from + block.node.nodeSize)
     .insert(target, block.node);
   tr.setSelection(
-    block.node.type.name === "image" || block.node.type.name === "table"
+    ["image", "table", "lessonVideo"].includes(block.node.type.name)
       ? NodeSelection.create(tr.doc, target)
       : TextSelection.near(tr.doc.resolve(target + 1)),
   );

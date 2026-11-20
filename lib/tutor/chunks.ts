@@ -1,3 +1,4 @@
+import { redactVideoCredentials, type Credentials } from "../video/credentials";
 import { parseTopic, type ParsedBlock } from "../content/parse";
 import { redactPersonalData } from "./privacy";
 export type Chunk = {
@@ -9,6 +10,7 @@ export type Chunk = {
 export function publishedBlocks(
   markdown: string,
   answers: Map<string, string>,
+  videos: Credentials[] = [],
 ) {
   const parsed = parseTopic(markdown);
   if (parsed.errors.length) throw new Error("Invalid published Markdown");
@@ -23,8 +25,15 @@ export function publishedBlocks(
   const clean = parseTopic(unfolded);
   return parsed.blocks.map((block, i) => ({
     ...block,
-    heading: block.heading ? redactPersonalData(block.heading) : null,
-    text: redactPersonalData(clean.blocks[i]?.text ?? ""),
+    heading: block.heading
+      ? redactPersonalData(redactVideoCredentials(block.heading, videos))
+      : null,
+    text:
+      block.kind === "video"
+        ? ""
+        : redactPersonalData(
+            redactVideoCredentials(clean.blocks[i]?.text ?? "", videos),
+          ),
   }));
 }
 export function chunkBlocks(

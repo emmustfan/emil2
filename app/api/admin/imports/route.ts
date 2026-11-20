@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       "subjectId",
       "sectionId",
       "rightsConfirmed",
+      "videoId",
     ];
     if (
       [...form.keys()].some(
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
         {
           subjectId: form.get("subjectId"),
           sectionId: form.get("sectionId") || null,
+          videoId: form.get("videoId") ?? undefined,
           rightsConfirmed: form.get("rightsConfirmed") === "true",
         },
         file instanceof File ? file.name : "source.txt",

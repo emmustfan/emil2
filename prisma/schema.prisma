@@ -69,6 +69,7 @@ enum PaymentStatus {
 }
 
 enum TestMode {
+  VIDEO
   TOPIC
   DIAGNOSTIC
   EXAM
@@ -130,6 +131,8 @@ model User {
   firstName String?
   middleName String?
   studentNumber String?
+  videoProgress VideoProgress[]
+  createdVideos VideoLecture[]
   groupMemberships GroupMember[] @relation("MembershipUser")
   groupDecisions GroupMember[] @relation("MembershipDecider")
   openedGroupSubjects GroupSubject[]
@@ -286,6 +289,7 @@ model Topic {
   draftUpdatedAt            DateTime?
   draftUpdatedById          String?
   revisions                 TopicRevision[]
+  videos                    VideoLecture[]
   subject                   Subject             @relation("Topic_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   section                   Section?            @relation("Topic_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
   gap_topicId               Gap[]               @relation("Gap_topicId")
@@ -366,6 +370,14 @@ model Question {
   topic                      Topic             @relation("Question_topicId", fields: [topicId], references: [id], onDelete: Restrict)
   questionAttempt_questionId QuestionAttempt[] @relation("QuestionAttempt_questionId")
   card_questionId            Card[]            @relation("Card_questionId")
+  videoId                    String?
+  atSec                      Int?
+  aiGenerated                Boolean           @default(false)
+  sourceQuote                String?           @db.Text
+  sourceSec                  Int?
+  sourceVideoId              String?
+  video                      VideoLecture?     @relation(fields: [videoId], references: [id], onDelete: Restrict)
+  @@index([videoId])
 }
 
 model ContentChunk {
@@ -766,6 +778,11 @@ model ImportJob {
   subject     Subject   @relation("ImportJob_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)
   section     Section?  @relation("ImportJob_sectionId", fields: [sectionId], references: [id], onDelete: Restrict)
 
+  videoId     String?
+  video       VideoLecture? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  videoRevision DateTime?
+  report      Json?
+
   @@index([status, leaseUntil])
   @@index([subjectId, createdAt])
 }
@@ -1000,4 +1017,40 @@ model GroupTeacher {
 
   @@id([groupId, subjectId, teacherId])
   @@index([teacherId])
+}
+
+model VideoLecture {
+  id               String @id @default(uuid())
+  topicId          String
+  title            String
+  provider         String @default("rutube")
+  externalId       String
+  accessKey        String?
+  durationSec      Int?
+  patientConsentAt DateTime
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  archivedAt       DateTime?
+  topic            Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  createdBy        User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  progress         VideoProgress[]
+  questions        Question[]
+  imports          ImportJob[]
+  @@index([topicId])
+}
+
+model VideoProgress {
+  userId          String
+  videoId         String
+  watchedRanges   Json
+  watchedSec      Int @default(0)
+  lastPositionSec Int @default(0)
+  selfReported    Boolean @default(false)
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video           VideoLecture @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  @@id([userId, videoId])
+  @@index([videoId])
 }

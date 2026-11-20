@@ -14,6 +14,7 @@ import type {
   LessonTest,
   LessonReview,
 } from "@/lib/lessons/types";
+import { RutubePlayer } from "./rutube-player";
 import { LessonMarkdown } from "./markdown";
 import { TutorPanel, type TutorHandle } from "@/components/tutor/panel";
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -195,40 +196,54 @@ export function Lesson({
                 </a>
               );
             }}
-            afterBlock={(block) => (
-              <div className="my-5 space-y-4">
-                {gaps
-                  .filter(
-                    (g) =>
-                      g.blockKey === block.blockKey &&
-                      g.answerType === "MULTIPLE_CHOICE",
-                  )
-                  .map((g) => (
-                    <AnswerCard
-                      key={`${g.id}-${attempt}`}
-                      id={g.id}
-                      title={`Пропуск ${gaps.indexOf(g) + 1}`}
-                      description={g.stem}
-                      answerType={g.answerType}
-                      options={g.options}
-                      feedback={g.feedback}
-                      pending={!!pending}
-                      onAnswer={(input) => void answer(g.id, input)}
-                      onExplain={
-                        !practice
-                          ? () =>
-                              explain({
-                                kind: "explain",
-                                source: "GAP",
-                                sourceId: g.id,
-                                topicVersion: initial.version,
-                              })
-                          : undefined
-                      }
-                    />
-                  ))}
-              </div>
-            )}
+            afterBlock={(block) => {
+              const video = initial.videos?.find(
+                (video) => video.id === block.videoId,
+              );
+              if (video)
+                return (
+                  <RutubePlayer
+                    video={video}
+                    version={initial.version}
+                    onProgress={setProgress}
+                    onReview={setReview}
+                  />
+                );
+              return (
+                <div className="my-5 space-y-4">
+                  {gaps
+                    .filter(
+                      (g) =>
+                        g.blockKey === block.blockKey &&
+                        g.answerType === "MULTIPLE_CHOICE",
+                    )
+                    .map((g) => (
+                      <AnswerCard
+                        key={`${g.id}-${attempt}`}
+                        id={g.id}
+                        title={`Пропуск ${gaps.indexOf(g) + 1}`}
+                        description={g.stem}
+                        answerType={g.answerType}
+                        options={g.options}
+                        feedback={g.feedback}
+                        pending={!!pending}
+                        onAnswer={(input) => void answer(g.id, input)}
+                        onExplain={
+                          !practice
+                            ? () =>
+                                explain({
+                                  kind: "explain",
+                                  source: "GAP",
+                                  sourceId: g.id,
+                                  topicVersion: initial.version,
+                                })
+                            : undefined
+                        }
+                      />
+                    ))}
+                </div>
+              );
+            }}
           />
           {initial.review?.signedIn && (
             <GapAnswerHistory
@@ -340,7 +355,11 @@ export function Lesson({
               aria-label="Итог урока"
             >
               <h2 className="text-2xl font-semibold">
-                {progress.completed ? "Тема пройдена!" : "Продолжайте практику"}
+                {progress.completed
+                  ? "Тема пройдена!"
+                  : progress.videosPending
+                    ? "Досмотрите видеолекции"
+                    : "Продолжайте практику"}
               </h2>
               <p className="mt-3 leading-7">
                 Результат теста:{" "}

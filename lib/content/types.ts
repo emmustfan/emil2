@@ -36,6 +36,17 @@ export type QuestionDTO = {
   sourceBlockKey: string | null;
   isDiagnostic: boolean;
   order: number;
+  videoId?: string | null;
+  atSec?: number | null;
+  aiGenerated?: boolean;
+  sourceQuote?: string | null;
+  sourceSec?: number | null;
+  sourceVideoId?: string | null;
+};
+export type VideoMetadata = {
+  id: string;
+  title: string;
+  durationSec: number | null;
 };
 export type TopicDTO = {
   draftState: DraftState;
@@ -43,6 +54,7 @@ export type TopicDTO = {
   draftUpdatedBy: { id: string; name: string | null } | null;
   published: PublishedTopicDTO | null;
   imageIds?: string[];
+  videos?: VideoMetadata[];
   gapExercises: GapExercises;
   id: string;
   subjectId: string;

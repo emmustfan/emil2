@@ -3,7 +3,7 @@ import type { AppEnv } from "../env";
 import { assertDevelopment } from "../providers";
 import type { ChatMessage, ChatOptions, LLMProvider } from "./provider";
 import { HttpLLMProvider } from "./http";
-import { mockImport } from "../imports/mock";
+import { mockImport, mockVideoImport } from "../imports/mock";
 import { terms } from "./tokens";
 export class MockLLMProvider implements LLMProvider {
   constructor(private readonly dimension: number) {
@@ -20,6 +20,21 @@ export class MockLLMProvider implements LLMProvider {
   }
   async complete(messages: ChatMessage[], opts: ChatOptions) {
     opts.signal?.throwIfAborted();
+    if (
+      messages.some(
+        (m) =>
+          m.role === "system" && m.content.includes('"task":"video-import/v1"'),
+      )
+    ) {
+      const source = JSON.parse(
+        messages.find((m) => m.role === "user")?.content ?? "{}",
+      );
+      return {
+        text: JSON.stringify(mockVideoImport(source)),
+        tokensIn: 0,
+        tokensOut: 0,
+      };
+    }
     if (
       messages.some(
         (m) =>

@@ -1,3 +1,4 @@
+import { processVideoImport } from "./video-worker";
 import { withTopicDraft } from "../content/drafts";
 import { reportFault } from "../monitoring";
 import { randomUUID } from "node:crypto";
@@ -100,6 +101,15 @@ export async function processImport(id: string, provider?: LLMProvider) {
     const body = await storage.get(job.fileKey);
     if (body.length > limits.maxBytes)
       throw new ContentError("Файл превышает допустимый размер.");
+    if (job.videoRevision) {
+      await processVideoImport(
+        job,
+        token,
+        body,
+        provider ?? createLLMProvider(env),
+      );
+      return;
+    }
     const source = await extractIsolated(
         body,
         job.format as SourceFormat,

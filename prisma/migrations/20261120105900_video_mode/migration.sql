@@ -1,0 +1,1 @@
+ALTER TYPE "TestMode" ADD VALUE 'VIDEO';

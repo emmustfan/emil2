@@ -1,3 +1,4 @@
+import { videoMarker } from "../video/rutube";
 import type { AnswerType } from "../exercises";
 import { headingSlug } from "./slug";
 import { createHash } from "node:crypto";
@@ -28,6 +29,7 @@ export type ParsedBlock = {
   start: number;
   end: number;
   rootIndex: number;
+  videoId?: string;
 };
 export type ParsedGap = {
   explicitId?: string;
@@ -189,6 +191,18 @@ export function parseTopic(md: string): ParsedTopic {
       end,
       rootIndex,
     };
+    const video = node.type === "paragraph" && videoMarker.exec(raw.trim());
+    if (video) {
+      block.kind = "video";
+      block.videoId = video[1];
+      block.text = "";
+    } else if (node.type === "paragraph" && /^::video\{/m.test(raw)) {
+      error(
+        "video_marker",
+        "Поместите блок видео на отдельной строке с пустыми строками вокруг.",
+        start,
+      );
+    }
     result.blocks.push(block);
     function walk(current: Node) {
       const from = current.position?.start.offset ?? start,
@@ -315,6 +329,7 @@ export function parseTopic(md: string): ParsedTopic {
   }
   const keys = new Set<string>();
   for (const block of result.blocks) {
+    if (block.kind === "video") continue;
     const group = candidates.filter((g) => g.blockKey === block.blockKey);
     let marked = "",
       cursor = block.start;

@@ -1,7 +1,7 @@
 import type { ParsedTopic } from "./parse";
 import type { TopicInput } from "./validation";
 import { questionFields } from "./validation";
-import type { QuestionDTO } from "./types";
+import type { QuestionDTO, VideoMetadata } from "./types";
 import { gapDefinition, gapExerciseFor } from "../exercises";
 import { contentFieldIssues, contentFieldSummary } from "./field-errors";
 export function lessonReadiness(
@@ -14,6 +14,7 @@ export function lessonReadiness(
     subjectPublished: boolean;
     status: string;
     imageIds: string[];
+    videos?: VideoMetadata[];
     previewCurrent: boolean;
   },
 ) {
@@ -27,6 +28,10 @@ export function lessonReadiness(
       ];
     }
   });
+  const testCount = questions.filter((q) => !q.videoId).length;
+  const refs = new Set(
+    parsed.blocks.flatMap((block) => (block.videoId ? [block.videoId] : [])),
+  );
   const questionProblems = questions.flatMap((q, index) => {
     const validation = questionFields.safeParse({
       answerType: q.answerType,
@@ -38,7 +43,11 @@ export function lessonReadiness(
       sourceBlockKey: q.sourceBlockKey,
       isDiagnostic: q.isDiagnostic,
       order: q.order,
+      videoId: q.videoId,
+      atSec: q.atSec,
     });
+    if (q.videoId && !refs.has(q.videoId))
+      return [`Вопрос ${index + 1}: добавьте блок выбранного видео в текст.`];
     if (!validation.success)
       return [
         contentFieldSummary(
@@ -93,22 +102,35 @@ export function lessonReadiness(
       ok: parsed.images.every((i) => options.imageIds.includes(i.id)),
       note: `Изображений в тексте: ${parsed.images.length}`,
     },
+    ...(refs.size
+      ? [
+          {
+            id: "videos",
+            target: "lesson-videos",
+            label: "Видео относятся к этой теме",
+            ok: [...refs].every((id) =>
+              options.videos?.some((video) => video.id === id),
+            ),
+            note: `Блоков видео: ${refs.size}`,
+          },
+        ]
+      : []),
     {
       id: "questions",
       target: "lesson-questions",
       label: "Вопросы теста и правильные ответы",
       ok:
-        questions.length >= options.minQuestions &&
-        questions.length <= options.maxQuestions &&
+        testCount >= options.minQuestions &&
+        testCount <= options.maxQuestions &&
         !questionProblems.length,
       note:
-        questions.length < options.minQuestions
-          ? `Сохранено ${questions.length}. Добавьте ещё ${options.minQuestions - questions.length} вопросов; нужно от ${options.minQuestions} до ${options.maxQuestions}.`
-          : questions.length > options.maxQuestions
-            ? `Сохранено ${questions.length}. Уберите ${questions.length - options.maxQuestions} вопросов; максимум ${options.maxQuestions}.`
+        testCount < options.minQuestions
+          ? `Сохранено ${testCount}. Добавьте ещё ${options.minQuestions - testCount} вопросов; нужно от ${options.minQuestions} до ${options.maxQuestions}.`
+          : testCount > options.maxQuestions
+            ? `Сохранено ${testCount}. Уберите ${testCount - options.maxQuestions} вопросов; максимум ${options.maxQuestions}.`
             : questionProblems.length
               ? questionProblems.join(" ")
-              : `Сохранено ${questions.length} вопросов. Ответы и объяснения заполнены.`,
+              : `Сохранено ${testCount} вопросов. Ответы и объяснения заполнены.`,
     },
     {
       id: "sources",
