@@ -1,5 +1,8 @@
 import { ContentError } from "./lib/content/errors";
-import { isStudentProgressPath } from "./lib/progress/routes";
+import {
+  isGroupProgressPath,
+  isStudentProgressPath,
+} from "./lib/progress/routes";
 import { assertCanViewStudent } from "./lib/progress/access";
 import { BILLING_RETURN_COOKIE } from "./lib/billing/http";
 import { safeLoginReturn } from "./lib/auth/return";
@@ -134,9 +137,20 @@ async function routeRequest(
       response.cookies.set(SID, token, cookieOptions(session.expiresAt));
     return response;
   }
-  if (isStudentProgressPath(path)) {
+  if (isGroupProgressPath(path) || isStudentProgressPath(path)) {
     try {
-      await assertCanViewStudent(session?.user.id);
+      if (isGroupProgressPath(path)) {
+        if (
+          !session ||
+          session.readOnly ||
+          !["EDITOR", "ADMIN"].includes(session.user.role)
+        )
+          throw new ContentError("Данные не найдены.", 404);
+      } else {
+        await assertCanViewStudent(
+          session && { id: session.user.id, readOnly: session.readOnly },
+        );
+      }
     } catch (error) {
       if (!(error instanceof ContentError) || error.status !== 404) throw error;
       return new NextResponse("Данные не найдены.", {

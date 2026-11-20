@@ -183,7 +183,14 @@ export async function anonymizeAccount(id: string, now = new Date()) {
         where: { createdById: id },
         data: { createdById: null },
       });
-      await tx.groupMember.deleteMany({ where: { userId: id } });
+      await tx.groupMember.deleteMany({
+        where: { userId: id, status: { in: ["PENDING", "REJECTED"] } },
+      });
+      // Keep a placeholder for former members in the group journal.
+      await tx.groupMember.updateMany({
+        where: { userId: id },
+        data: { status: "REMOVED", decidedAt: now, decidedById: null },
+      });
       await tx.groupMember.updateMany({
         where: { decidedById: id },
         data: { decidedById: null },

@@ -8,6 +8,7 @@ import {
 } from "@/components/groups/staff-actions";
 import { GroupInvite } from "@/components/groups/invite";
 import { staffGroup } from "@/lib/groups/queries";
+import { journalPath } from "@/lib/progress/routes";
 
 export const metadata = {
   title: "Учебная группа",
@@ -58,6 +59,16 @@ export default async function StudyGroupPage({
             {group.faculty.title} · {group.course} курс · {group.academicYear}
           </p>
           {group.archivedAt && <p>Архивная группа</p>}
+          {permissions.roster && (
+            <nav aria-label="Разделы группы" className="flex flex-wrap gap-4">
+              <a href="#subjects" className="underline">
+                Предметы и преподаватели
+              </a>
+              <a href="#applications" className="underline">
+                Заявки и участники
+              </a>
+            </nav>
+          )}
         </header>
         {permissions.manage && (
           <div className="grid gap-4 md:grid-cols-2">
@@ -96,7 +107,7 @@ export default async function StudyGroupPage({
             </section>
           </div>
         )}
-        <section className="emal-panel space-y-4">
+        <section id="subjects" className="emal-panel space-y-4">
           <h2 className="text-xl font-semibold">Предметы и преподаватели</h2>
           {available.length > 0 && (
             <GroupSelectAction
@@ -129,6 +140,11 @@ export default async function StudyGroupPage({
               key={subject.id}
             >
               <h3 className="text-lg font-semibold">{subject.title}</h3>
+              {!actor.readOnly && (
+                <Link className="underline" href={journalPath(id, subject.id)}>
+                  Открыть журнал
+                </Link>
+              )}
               {teachers.length ? (
                 <ul className="space-y-2">
                   {teachers.map(({ teacher }) => (
@@ -194,7 +210,7 @@ export default async function StudyGroupPage({
           ))}
         </section>
         {permissions.roster && (
-          <section className="emal-panel space-y-5">
+          <section id="applications" className="emal-panel space-y-5">
             <h2 className="text-xl font-semibold">Заявки и участники</h2>
             <h3 className="text-lg font-semibold">Заявки на рассмотрении</h3>
             {permissions.members && pending.length > 0 && (

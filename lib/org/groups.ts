@@ -2,8 +2,14 @@ import { getDb } from "../db";
 import { ContentError } from "../content/errors";
 import type { Prisma } from "../generated/prisma/client";
 import { orgActor, type ContentReader } from "./actor";
-import { groupPermissions, groupScopes } from "./group-policy";
+import {
+  activeDepartment,
+  groupPermissions,
+  groupScopes,
+  teachingScope,
+} from "./group-policy";
 import type { GroupAction, StaffActor } from "./policy";
+import { progressSubjectScope } from "./progress";
 
 type Db = Prisma.TransactionClient;
 type Group = { facultyId: string };
@@ -12,38 +18,11 @@ type GroupPermissions = ReturnType<typeof groupPermissions>;
 export const groupMissing = () =>
   new ContentError("Группа или предмет не найдены.", 404);
 
-const activeDepartment = {
-  archivedAt: null,
-  faculty: { archivedAt: null },
-};
-
-function teachingScope(actor: StaffActor): Prisma.GroupSubjectWhereInput {
-  const assignments = actor.role === "EDITOR" ? actor.assignments : [];
-  return {
-    teachers: { some: { teacherId: actor.id } },
-    subject: {
-      department: activeDepartment,
-      OR: [
-        {
-          id: {
-            in: assignments.flatMap((a) => (a.subjectId ? [a.subjectId] : [])),
-          },
-        },
-        {
-          departmentId: {
-            in: assignments.flatMap((a) =>
-              a.departmentId ? [a.departmentId] : [],
-            ),
-          },
-        },
-      ],
-    },
-  };
-}
-
 export async function groupDirectory(reader: ContentReader) {
   const actor = await orgActor(reader);
   const { admin, faculties, departments } = groupScopes(actor);
+  const journalScope = progressSubjectScope(actor);
+  const teaching = teachingScope(actor);
   const db = getDb();
   const [groups, availableFaculties] = await Promise.all([
     db.studyGroup.findMany({
@@ -52,12 +31,11 @@ export async function groupDirectory(reader: ContentReader) {
         : {
             OR: [
               { facultyId: { in: faculties } },
+              { subjects: { some: journalScope } },
               {
                 archivedAt: null,
                 faculty: { archivedAt: null },
-                ...(departments.length
-                  ? {}
-                  : { subjects: { some: teachingScope(actor) } }),
+                ...(departments.length ? {} : { subjects: { some: teaching } }),
               },
             ],
           },
@@ -66,8 +44,14 @@ export async function groupDirectory(reader: ContentReader) {
         name: true,
         course: true,
         academicYear: true,
+        facultyId: true,
         archivedAt: true,
-        faculty: { select: { title: true } },
+        faculty: { select: { title: true, archivedAt: true } },
+        subjects: {
+          where: journalScope,
+          select: { subject: { select: { id: true, title: true } } },
+          orderBy: { subject: { title: "asc" } },
+        },
       },
       orderBy: [{ academicYear: "desc" }, { name: "asc" }, { id: "asc" }],
     }),
@@ -82,7 +66,21 @@ export async function groupDirectory(reader: ContentReader) {
           orderBy: [{ order: "asc" }, { title: "asc" }],
         }),
   ]);
-  return { groups, faculties: availableFaculties };
+  const canManageGroup = (g: (typeof groups)[number]) =>
+    admin || faculties.includes(g.facultyId);
+  return {
+    groups: groups
+      .filter((g) => canManageGroup(g) || g.subjects.length > 0)
+      .map((g) => ({
+        ...g,
+        hasGroupPage:
+          canManageGroup(g) || !(g.archivedAt || g.faculty.archivedAt),
+      })),
+    managementGroups: groups.filter(
+      (g) => !canManageGroup(g) && !g.subjects.length,
+    ),
+    faculties: availableFaculties,
+  };
 }
 
 export async function createGroupStatus(
