@@ -18,7 +18,9 @@ export default async function ImportsPage({
   const user = await requireEditor(),
     query = await searchParams;
   const subjects = await getDb().subject.findMany({
-    where: await subjectScope(user, "content.edit"),
+    where: {
+      AND: [{ archivedAt: null }, await subjectScope(user, "content.edit")],
+    },
     select: {
       id: true,
       title: true,

@@ -219,6 +219,7 @@ model Subject {
   courses                     Int[]
   order                       Int                 @default(0)
   status                      ContentStatus       @default(DRAFT)
+  archivedAt                  DateTime?
   seoTitle                    String?
   seoDescription              String?
   createdAt                   DateTime            @default(now())

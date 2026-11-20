@@ -1,4 +1,5 @@
 import { requireEditor } from "@/lib/auth/server";
+import { redirect } from "next/navigation";
 import { getSubject, getTopic, listSections } from "@/lib/content/service";
 import { contentPage } from "@/lib/content/page";
 import { getDb } from "@/lib/db";
@@ -23,6 +24,7 @@ export async function LessonBookPage({
     : null;
   const subject =
     chosen?.subject ?? (await contentPage(() => getSubject(subjectId!, user)));
+  if (subject.archivedAt) redirect(`/admin/subjects/${subject.id}`);
   const [
     sections,
     topics,

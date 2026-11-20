@@ -94,6 +94,22 @@ async function handle(request: NextRequest, context: Context, method: string) {
         .strict()
         .parse(input);
       result = await service.deleteSubject(id, revision, actor.id);
+    } else if (
+      entity === "subjects" &&
+      id &&
+      (action === "archive" || action === "restore") &&
+      method === "POST"
+    ) {
+      const { revision } = z
+        .object({ revision: revisionSchema })
+        .strict()
+        .parse(input);
+      result = await service.setSubjectArchived(
+        id,
+        revision,
+        action === "archive",
+        actor.id,
+      );
     } else if (entity === "sections" && !id && method === "POST") {
       const { subjectId, ...fields } = sectionFields
         .extend({ subjectId: z.string().min(1).max(100) })

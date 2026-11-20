@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from "../../lib/settings/defaults";
 import * as service from "../../lib/content/service";
 import * as jobs from "../../lib/content/jobs";
 import { parseTopic } from "../../lib/content/parse";
+import { publishedTopic } from "../../lib/lessons/service";
 import type {
   TopicInput,
   SubjectInput,
@@ -445,5 +446,64 @@ describe("content publication with PostgreSQL and pg-boss", () => {
     expect(await db.topicProgress.count({ where: { topicId: row.id } })).toBe(
       1,
     );
+  });
+
+  it("archives the whole subject and restores its lessons with their existing publication and progress", async () => {
+    const working = await reviewed(await draft());
+    const topic = await service.publishTopic(working.id, working.editRevision);
+    const original = await service.getSubject(topic.subjectId);
+    const progress = await db.topicProgress.create({
+      data: { userId: await fixtureUser(), topicId: topic.id, gapsAnswered: 1 },
+    });
+    await expect(
+      service.setSubjectArchived(
+        original.id,
+        original.editRevision,
+        true,
+        progress.userId,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    const archived = await service.setSubjectArchived(
+      original.id,
+      original.editRevision,
+      true,
+    );
+    expect(archived.status).toBe("DRAFT");
+    expect(archived.archivedAt).toBeInstanceOf(Date);
+    expect((await service.listSubjects(original.slug)).total).toBe(0);
+    expect(
+      (await service.listSubjects(original.slug, 1, undefined, true)).total,
+    ).toBe(1);
+    await expect(publishedTopic(topic.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      service.updateSubject(original.id, archived.editRevision, original),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.setSubjectArchived(original.id, original.editRevision, false),
+    ).rejects.toMatchObject({ code: "stale" });
+
+    const restored = await service.setSubjectArchived(
+      original.id,
+      archived.editRevision,
+      false,
+    );
+    expect(restored).toMatchObject({ archivedAt: null, status: "DRAFT" });
+    expect((await service.listSubjects(original.slug)).total).toBe(1);
+    await expect(publishedTopic(topic.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    await service.updateSubject(original.id, restored.editRevision, original);
+    expect(await publishedTopic(topic.id)).toMatchObject({
+      version: topic.version,
+    });
+    expect(
+      await db.topicProgress.findUnique({
+        where: {
+          userId_topicId: { userId: progress.userId, topicId: topic.id },
+        },
+      }),
+    ).toEqual(progress);
   });
 });

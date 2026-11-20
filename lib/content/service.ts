@@ -86,7 +86,12 @@ function questionDTO(q: Question, working = true): QuestionDTO {
     hasDraft: working && !!q.draft,
   };
 }
-export async function listSubjects(q = "", page = 1, actorId?: ContentReader) {
+export async function listSubjects(
+  q = "",
+  page = 1,
+  actorId?: ContentReader,
+  archived = false,
+) {
   const size = await getSetting("content.pageSize");
   const where = q
     ? {
@@ -97,7 +102,11 @@ export async function listSubjects(q = "", page = 1, actorId?: ContentReader) {
       }
     : {};
   const scopedWhere: Prisma.SubjectWhereInput = {
-    AND: [where, await subjectScope(actorId, "content.read")],
+    archivedAt: archived ? { not: null } : null,
+    AND: [
+      where,
+      await subjectScope(actorId, archived ? "subject.manage" : "content.read"),
+    ],
   };
   const [items, total] = await Promise.all([
     getDb().subject.findMany({
@@ -185,7 +194,15 @@ export async function getTopic(
   const row = await db.topic.findUnique({
     where: { id },
     include: {
-      subject: { select: { id: true, title: true, slug: true, status: true } },
+      subject: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          status: true,
+          archivedAt: true,
+        },
+      },
       images: { select: { id: true } },
       videos: {
         where: { archivedAt: null },
@@ -267,7 +284,10 @@ export async function getTopic(
     editRevision: row.editRevision,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     archivedAt: row.archivedAt?.toISOString() ?? null,
-    subject: row.subject,
+    subject: {
+      ...row.subject,
+      archivedAt: row.subject.archivedAt?.toISOString() ?? null,
+    },
     questions,
   };
 }
@@ -300,6 +320,8 @@ export async function updateSubject(
     const row = await tx.subject.findUnique({ where: { id } });
     if (!row) throw notFound();
     await assertContent(actorId, "subject.manage", { subjectId: id }, tx);
+    if (row.archivedAt)
+      throw new ContentError("Сначала восстановите предмет из архива.", 409);
     if (
       data.status === "PUBLISHED" &&
       !(await tx.department.count({
@@ -318,6 +340,30 @@ export async function updateSubject(
     });
   });
 }
+export async function setSubjectArchived(
+  id: string,
+  revision: number,
+  archived: boolean,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await lockContentStaff(tx, actorId);
+    await lock(tx, `subject:${id}`);
+    const row = await tx.subject.findUnique({ where: { id } });
+    if (!row) throw notFound();
+    await assertContent(actorId, "subject.manage", { subjectId: id }, tx);
+    checkRevision(row.editRevision, revision);
+    if (archived === !!row.archivedAt) return row;
+    return tx.subject.update({
+      where: { id },
+      data: {
+        archivedAt: archived ? new Date() : null,
+        status: "DRAFT",
+        editRevision: { increment: 1 },
+      },
+    });
+  });
+}
 export async function deleteSubject(
   id: string,
   revision: number,
@@ -330,6 +376,8 @@ export async function deleteSubject(
     if (!row) throw notFound();
     await assertContent(actorId, "subject.manage", { subjectId: id }, tx);
     checkRevision(row.editRevision, revision);
+    if (row.archivedAt)
+      throw new ContentError("Сначала восстановите предмет из архива.", 409);
     if (row.status === "PUBLISHED")
       throw new ContentError("Сначала переведите предмет в черновик.", 409);
     await tx.subject.delete({ where: { id } });

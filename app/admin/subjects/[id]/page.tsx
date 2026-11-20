@@ -7,6 +7,7 @@ import { contentPage } from "@/lib/content/page";
 import { contentRu as t } from "@/lib/i18n/ru";
 import { SubjectForm } from "@/components/admin/subject-form";
 import { SectionForm } from "@/components/admin/section-form";
+import { SubjectArchiveButton } from "@/components/admin/subject-archive-button";
 import { getDb } from "@/lib/db";
 export default async function SubjectPage({
   params,
@@ -16,8 +17,31 @@ export default async function SubjectPage({
   const user = await requireEditor();
   const { id } = await params;
   const subject = await contentPage(() => getSubject(id, user));
-  const sections = await listSections(id, user);
   const manage = await can(user, "subject.manage", { subjectId: id });
+  const archive = (
+    <SubjectArchiveButton
+      id={id}
+      revision={subject.editRevision}
+      archived={!!subject.archivedAt}
+      returnTo={user.role === "ADMIN" ? "/admin" : "/admin/subjects/archive"}
+    />
+  );
+  if (subject.archivedAt)
+    return (
+      <main className="space-y-5">
+        <Link className="underline" href="/admin/subjects/archive">
+          К архиву предметов
+        </Link>
+        <h1 className="text-3xl font-semibold">{subject.title}</h1>
+        <p>
+          Предмет в архиве. Восстановление вернёт его в список предметов как
+          черновик.
+        </p>
+        {manage && archive}
+      </main>
+    );
+
+  const sections = await listSections(id, user);
   const edit = await can(user, "content.edit", { subjectId: id });
   const archivedTopics = await getDb().topic.findMany({
     where: { subjectId: id, archivedAt: { not: null } },
@@ -27,9 +51,12 @@ export default async function SubjectPage({
   return (
     <main className="space-y-8">
       <h1 className="text-3xl font-semibold">{subject.title}</h1>
-      <Link className="lesson-primary" href={`/admin/subjects/${id}/editor`}>
-        Открыть книгу и редактор уроков →
-      </Link>
+      <div className="flex flex-wrap items-start gap-3">
+        <Link className="lesson-primary" href={`/admin/subjects/${id}/editor`}>
+          Открыть книгу и редактор уроков →
+        </Link>
+        {manage && archive}
+      </div>
       <ContentTree subjects={[subject]} canManageSubjects={manage} />
       {archivedTopics.length > 0 && (
         <details className="emal-panel" id="archived-lessons">

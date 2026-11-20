@@ -10,7 +10,10 @@ export async function MaterialQueue({
   const topics = await getDb().topic.findMany({
     where: {
       draftState: { in: ["DRAFT", "REVIEW"] },
-      subject: await subjectScope(actor, "content.read"),
+      archivedAt: null,
+      subject: {
+        AND: [{ archivedAt: null }, await subjectScope(actor, "content.read")],
+      },
     },
     select: {
       id: true,

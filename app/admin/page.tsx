@@ -20,7 +20,13 @@ export default async function Admin({
   const data = await listSubjects(q, page, user);
   const [users, review, paid] = await Promise.all([
     getDb().user.count({ where: { deletedAt: null } }),
-    getDb().topic.count({ where: { draftState: "REVIEW" } }),
+    getDb().topic.count({
+      where: {
+        draftState: "REVIEW",
+        archivedAt: null,
+        subject: { archivedAt: null },
+      },
+    }),
     getDb().payment.count({ where: { status: "SUCCEEDED" } }),
   ]);
   return (
@@ -55,6 +61,9 @@ export default async function Admin({
           </Button>
           <Button asChild>
             <Link href="/admin/org">Факультеты и кафедры</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/subjects/archive">Архив предметов</Link>
           </Button>
         </div>
         <form className="my-6 flex flex-wrap gap-3" role="search">

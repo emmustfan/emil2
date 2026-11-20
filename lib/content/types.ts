@@ -75,7 +75,13 @@ export type TopicDTO = {
   editRevision: number;
   publishedAt: string | null;
   archivedAt: string | null;
-  subject: { id: string; title: string; slug: string; status?: ContentStatus };
+  subject: {
+    id: string;
+    title: string;
+    slug: string;
+    status?: ContentStatus;
+    archivedAt: string | null;
+  };
   questions: QuestionDTO[];
 };
 

@@ -353,6 +353,7 @@ async function publishSoprCourse() {
   const subject = await db.subject.findUniqueOrThrow({
     where: { id: subjectId },
   });
+  if (subject.archivedAt) return;
   if (subject.status !== "PUBLISHED")
     await db.subject.update({
       where: { id: subjectId },
