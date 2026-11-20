@@ -16,6 +16,7 @@ export function lessonReadiness(
     imageIds: string[];
     videos?: VideoMetadata[];
     previewCurrent: boolean;
+    quickPublication?: boolean;
   },
 ) {
   const gapProblems = parsed.gaps.flatMap((g) => {
@@ -167,5 +168,9 @@ export function lessonReadiness(
       ok: ["REVIEW", "PUBLISHED", "CLEAN"].includes(options.status),
       note: "Нажмите «Отправить на проверку» перед публикацией",
     },
-  ];
+  ].filter(
+    (check) =>
+      !options.quickPublication ||
+      !["sources", "expert", "status"].includes(check.id),
+  );
 }

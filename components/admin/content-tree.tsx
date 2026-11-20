@@ -25,6 +25,7 @@ export async function ContentTree({
         orderBy: [{ order: "asc" }, { id: "asc" }],
       },
       topic_subjectId: {
+        where: { archivedAt: null },
         select: {
           id: true,
           draftTitle: true,

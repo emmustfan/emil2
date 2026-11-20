@@ -154,17 +154,25 @@ async function handle(request: NextRequest, context: Context, method: string) {
     } else if (
       entity === "topics" &&
       id &&
-      ["discard", "unpublish"].includes(action) &&
+      ["archive", "restore", "discard", "unpublish"].includes(action) &&
       method === "POST"
     ) {
       const { revision } = z
         .object({ revision: revisionSchema })
         .strict()
         .parse(input);
-      result =
-        action === "discard"
-          ? await service.discardTopicChanges(id, revision, actor.id)
-          : await service.unpublishTopic(id, revision, actor.id);
+      if (action === "archive" || action === "restore")
+        result = await service.setTopicArchived(
+          id,
+          revision,
+          action === "archive",
+          actor.id,
+        );
+      else
+        result =
+          action === "discard"
+            ? await service.discardTopicChanges(id, revision, actor.id)
+            : await service.unpublishTopic(id, revision, actor.id);
     } else if (
       entity === "topics" &&
       id &&

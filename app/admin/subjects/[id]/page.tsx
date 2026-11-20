@@ -7,6 +7,7 @@ import { contentPage } from "@/lib/content/page";
 import { contentRu as t } from "@/lib/i18n/ru";
 import { SubjectForm } from "@/components/admin/subject-form";
 import { SectionForm } from "@/components/admin/section-form";
+import { getDb } from "@/lib/db";
 export default async function SubjectPage({
   params,
 }: {
@@ -18,6 +19,11 @@ export default async function SubjectPage({
   const sections = await listSections(id, user);
   const manage = await can(user, "subject.manage", { subjectId: id });
   const edit = await can(user, "content.edit", { subjectId: id });
+  const archivedTopics = await getDb().topic.findMany({
+    where: { subjectId: id, archivedAt: { not: null } },
+    orderBy: [{ archivedAt: "desc" }, { id: "asc" }],
+    select: { id: true, draftTitle: true },
+  });
   return (
     <main className="space-y-8">
       <h1 className="text-3xl font-semibold">{subject.title}</h1>
@@ -25,6 +31,20 @@ export default async function SubjectPage({
         Открыть книгу и редактор уроков →
       </Link>
       <ContentTree subjects={[subject]} canManageSubjects={manage} />
+      {archivedTopics.length > 0 && (
+        <details className="emal-panel" id="archived-lessons">
+          <summary>Архив уроков ({archivedTopics.length})</summary>
+          <ul className="mt-4 space-y-2">
+            {archivedTopics.map((topic) => (
+              <li key={topic.id}>
+                <Link className="underline" href={`/admin/topics/${topic.id}`}>
+                  {topic.draftTitle}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {manage && (
         <details
           id="subject-settings"

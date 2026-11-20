@@ -1,4 +1,4 @@
-import { isStudentDentalPreview } from "../../lib/content/preview-access";
+import { allowsQuickPublication } from "../../lib/content/preview-access";
 import { it, expect } from "vitest";
 import sharp from "sharp";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -116,6 +116,22 @@ it("shows incomplete lesson readiness, validates exercise configurations and che
   expect(rows.find((r) => r.id === "gaps")?.ok).toBe(true);
   expect(rows.find((r) => r.id === "questions")?.ok).toBe(false);
   expect(rows.find((r) => r.id === "expert")?.ok).toBe(false);
+  const quickChecks = lessonReadiness(form, parsed, [], {
+    minQuestions: 5,
+    maxQuestions: 15,
+    subjectPublished: false,
+    status: "DRAFT",
+    imageIds: [],
+    previewCurrent: true,
+    quickPublication: true,
+  });
+  expect(quickChecks.map(({ id }) => id)).toEqual([
+    "text",
+    "gaps",
+    "images",
+    "questions",
+    "subject",
+  ]);
   const image = parseTopic(imageMarkdown(id, "Схема"));
   expect(
     lessonReadiness(form, image, [], {
@@ -151,32 +167,19 @@ it("reports configuration modes without exposing integration secrets or assertin
   expect(wire).toContain("Настройки бота заданы");
 });
 
-it("permits unreviewed demo images only for the dedicated topic on a non-production preview database", () => {
+it("permits quick publication only on a non-production preview database", () => {
   const env = {
     NODE_ENV: "development",
     DATABASE_URL: "postgresql://app:app@localhost/dental_preview_a12000000001",
   };
-  expect(
-    isStudentDentalPreview(env, "progress-dental-demo", "fdi-visual-demo"),
-  ).toBe(true);
-  expect(
-    isStudentDentalPreview(
-      { ...env, NODE_ENV: "production" },
-      "progress-dental-demo",
-      "fdi-visual-demo",
-    ),
-  ).toBe(false);
-  expect(
-    isStudentDentalPreview(
-      { ...env, DATABASE_URL: "postgresql://app:app@localhost/app" },
-      "progress-dental-demo",
-      "fdi-visual-demo",
-    ),
-  ).toBe(false);
-  expect(isStudentDentalPreview(env, "propaedeutics", "fdi-visual-demo")).toBe(
+  expect(allowsQuickPublication(env)).toBe(true);
+  expect(allowsQuickPublication({ ...env, NODE_ENV: "production" })).toBe(
     false,
   );
   expect(
-    isStudentDentalPreview(env, "progress-dental-demo", "another-topic"),
+    allowsQuickPublication({
+      ...env,
+      DATABASE_URL: "postgresql://app:app@localhost/app",
+    }),
   ).toBe(false);
 });

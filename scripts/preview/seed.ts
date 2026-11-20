@@ -10,6 +10,7 @@ import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
 import { ensureDentalDemo } from "./dental-demo";
 import { getDb } from "../../lib/db";
+import { closeContentQueue } from "../../lib/content/jobs";
 import { parseTopic } from "../../lib/content/parse";
 import { decodeSetting } from "../../lib/settings/defaults";
 const name = new URL(process.env.DATABASE_URL!).pathname.slice(1);
@@ -139,8 +140,12 @@ await ensureDentalDemo();
 await ensureRoleDemo();
 await ensureDemoStudents();
 await ensureVideoDemo();
-await ensureSoprComplete();
-await db.$disconnect();
+try {
+  await ensureSoprComplete();
+} finally {
+  await closeContentQueue();
+  await db.$disconnect();
+}
 console.log(
   "Preview lessons are ready: /subjects/platform-demo and /learn/platform-demo/first-lesson",
 );

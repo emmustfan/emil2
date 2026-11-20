@@ -36,6 +36,7 @@ export function LessonBook({
     maxQuestions: number;
     imageMaxBytes: number;
     timeZone: string;
+    quickPublication: boolean;
   };
   upload: ReactNode;
   startCreating?: boolean;

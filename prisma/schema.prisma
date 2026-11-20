@@ -288,6 +288,7 @@ model Topic {
   draftReviewed             Boolean             @default(false)
   draftUpdatedAt            DateTime?
   draftUpdatedById          String?
+  archivedAt                DateTime?
   revisions                 TopicRevision[]
   videos                    VideoLecture[]
   subject                   Subject             @relation("Topic_subjectId", fields: [subjectId], references: [id], onDelete: Restrict)

@@ -410,7 +410,7 @@ describe("content publication with PostgreSQL and pg-boss", () => {
     row = await service.publishTopic(row.id, row.editRevision);
     expect(row.version).toBe(1);
   });
-  it("rolls back an attempted deletion when learner progress references the topic", async () => {
+  it("archives a lesson with learner progress and restores it as a draft", async () => {
     const row = await draft(),
       userId = await fixtureUser();
     await db.topicProgress.create({
@@ -420,6 +420,28 @@ describe("content publication with PostgreSQL and pg-boss", () => {
       service.deleteTopic(row.id, row.editRevision),
     ).rejects.toMatchObject({ code: "P2003" });
     expect((await service.getTopic(row.id)).questions).toHaveLength(5);
+    expect(await db.topicProgress.count({ where: { topicId: row.id } })).toBe(
+      1,
+    );
+    const archived = await service.setTopicArchived(
+      row.id,
+      row.editRevision,
+      true,
+    );
+    expect(archived.archivedAt).not.toBeNull();
+    expect(
+      (await service.listTopics(row.subjectId)).items.map((t) => t.id),
+    ).not.toContain(row.id);
+    await expect(
+      service.publishTopic(row.id, archived.editRevision),
+    ).rejects.toMatchObject({ status: 409 });
+    const restored = await service.setTopicArchived(
+      row.id,
+      archived.editRevision,
+      false,
+    );
+    expect(restored).toMatchObject({ archivedAt: null, status: "DRAFT" });
+    expect(restored.questions).toHaveLength(5);
     expect(await db.topicProgress.count({ where: { topicId: row.id } })).toBe(
       1,
     );

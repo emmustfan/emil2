@@ -8,6 +8,7 @@ import { imageLimits, normalizeImage } from "../../lib/content/images";
 import { lockTopicForChange } from "../../lib/content/locks";
 import { parseTopic } from "../../lib/content/parse";
 import { questionFields } from "../../lib/content/validation";
+import { publishTopic, setTopicArchived } from "../../lib/content/service";
 import { getDb } from "../../lib/db";
 import { getEnv } from "../../lib/env";
 import type { Prisma, Topic } from "../../lib/generated/prisma/client";
@@ -19,19 +20,13 @@ import { assertStudentPreview } from "./student-profiles";
 
 const subjectId = "preview-sopr-complete";
 const readyKey = "preview.soprInteractiveReady";
+const publishedReadyKey = "preview.soprPublishedReady";
 const folder = "content-seed/sopr-complete";
 const title = "Слизистая оболочка полости рта · Курс по методичке КФУ";
 const shortDescription =
-  "Десять уроков по СОПР с иллюстрациями, заданиями с пропусками и тестами.";
+  "Девять уроков по СОПР с иллюстрациями, заданиями с пропусками и тестами.";
 const references =
   "Хафизов Р. Г., Хафизова Ф. А., Малышев Н. В., Фасахов А. Р. Патоморфологические процессы и элементы поражения при заболеваниях слизистой оболочки полости рта. Казань, Издательство Казанского университета, 2019. 54 с.";
-const demo = {
-  slug: "demo",
-  title: "Пятно, папула, пузырёк, эрозия и язва",
-  section: "Пробный урок",
-  first: 23,
-  last: 32,
-};
 type FigureName = keyof typeof catalog.figures;
 type LessonSlug = keyof typeof quiz;
 
@@ -40,6 +35,7 @@ function isSeedDraft(topic: Topic) {
     !topic.editRevision &&
     !topic.version &&
     topic.status === "DRAFT" &&
+    !topic.archivedAt &&
     topic.draftState === "DRAFT" &&
     !topic.draftUpdatedById &&
     !topic.draftReviewed
@@ -99,7 +95,7 @@ async function removePreface(tx: Prisma.TransactionClient) {
     });
 }
 
-export async function ensureSoprComplete() {
+async function ensureSoprDrafts() {
   assertStudentPreview(process.env.DATABASE_URL, process.env.NODE_ENV);
   const env = getEnv();
   if (env.STORAGE_DRIVER !== "local")
@@ -152,7 +148,7 @@ export async function ensureSoprComplete() {
         await removePreface(tx);
 
         const sections = new Map<string, string>();
-        for (const [order, chapter] of [demo, ...catalog.chapters].entries()) {
+        for (const [order, chapter] of catalog.chapters.entries()) {
           const id = `${subjectId}-${chapter.slug}`;
           await lockTopicForChange(tx, id);
           const existing = await tx.topic.findUnique({
@@ -253,11 +249,11 @@ export async function ensureSoprComplete() {
             title: chapter.title,
             contentMd,
             order,
-            isFree: false,
+            isFree: true,
             status: "DRAFT",
             needsExpertReview: true,
             aiGenerated: true,
-            readingMinutes: chapter.slug === "demo" ? 4 : 6,
+            readingMinutes: 6,
             referencesMd: `${references}\n\nСтраницы ${chapter.first}–${chapter.last}.`,
             gap_topicId: {
               create: parsed.gaps.map((gap) => ({
@@ -291,7 +287,101 @@ export async function ensureSoprComplete() {
     throw error;
   }
   await cleanup(replaced);
+}
+
+export async function ensureSoprComplete() {
+  await ensureSoprDrafts();
+  await getDb().$transaction(
+    async (tx) => {
+      await lock(tx, publishedReadyKey);
+      if (await tx.appSetting.findUnique({ where: { key: publishedReadyKey } }))
+        return;
+      await withSettingsSnapshot(publishSoprCourse);
+      await tx.appSetting.create({
+        data: { key: publishedReadyKey, value: true },
+      });
+    },
+    { timeout: 120000 },
+  );
+}
+
+async function publishSoprCourse() {
+  const db = getDb();
+
+  const oldDemoId = `${subjectId}-demo`;
+  const redundantLessons = await db.topic.findMany({
+    where: {
+      archivedAt: null,
+      OR: [
+        { id: oldDemoId, subjectId },
+        { title: { equals: "Нижний клык", mode: "insensitive" } },
+        { draftTitle: { equals: "Нижний клык", mode: "insensitive" } },
+      ],
+    },
+    select: { id: true, editRevision: true },
+  });
+  for (const lesson of redundantLessons)
+    await setTopicArchived(lesson.id, lesson.editRevision, true);
+
+  await db.$transaction(async (tx) => {
+    await lockTopicForChange(tx, oldDemoId);
+    const demo = await tx.topic.findUnique({
+      where: { id: oldDemoId },
+      include: { section: true },
+    });
+    const section = demo?.section;
+    if (
+      demo?.archivedAt &&
+      section?.subjectId === subjectId &&
+      section.title === "Пробный урок" &&
+      !section.editRevision
+    ) {
+      await tx.topic.update({
+        where: { id: oldDemoId },
+        data: { sectionId: null },
+      });
+      await tx.section.deleteMany({
+        where: {
+          id: section.id,
+          topic_sectionId: { none: {} },
+          importJob_sectionId: { none: {} },
+        },
+      });
+    }
+  });
+
+  const subject = await db.subject.findUniqueOrThrow({
+    where: { id: subjectId },
+  });
+  if (subject.status !== "PUBLISHED")
+    await db.subject.update({
+      where: { id: subjectId },
+      data: { status: "PUBLISHED", editRevision: { increment: 1 } },
+    });
+  await db.subject.updateMany({
+    where: {
+      id: subjectId,
+      shortDescription:
+        "Десять уроков по СОПР с иллюстрациями, заданиями с пропусками и тестами.",
+    },
+    data: { shortDescription },
+  });
+  const drafts = await db.topic.findMany({
+    where: {
+      subjectId,
+      id: { in: catalog.chapters.map(({ slug }) => `${subjectId}-${slug}`) },
+    },
+    orderBy: { order: "asc" },
+  });
+  for (const topic of drafts.filter(isSeedDraft)) {
+    if (!topic.isFree)
+      await db.topic.update({
+        where: { id: topic.id },
+        data: { isFree: true },
+      });
+    await publishTopic(topic.id, topic.editRevision);
+  }
   console.log(
-    "Интерактивный курс по СОПР доступен в предпросмотре: /admin/subjects/preview-sopr-complete",
+    "Курс по СОПР доступен студентам: /subjects/sopr-khafizov-complete",
   );
 }

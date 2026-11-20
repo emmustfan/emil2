@@ -45,6 +45,7 @@ import {
   existingGapIdentities,
 } from "./gap-identity";
 import { initialTopicDraft } from "./drafts";
+import { allowsQuickPublication } from "./preview-access";
 type Db = Prisma.TransactionClient;
 const optionsSchema = z.array(z.object({ id: z.string(), text: z.string() }));
 const notFound = () => new ContentError("Материал не найден.", 404);
@@ -105,7 +106,12 @@ export async function listSubjects(q = "", page = 1, actorId?: ContentReader) {
       skip: (page - 1) * size,
       take: size,
       include: {
-        _count: { select: { topic_subjectId: true, section_subjectId: true } },
+        _count: {
+          select: {
+            topic_subjectId: { where: { archivedAt: null } },
+            section_subjectId: true,
+          },
+        },
       },
     }),
     getDb().subject.count({ where: scopedWhere }),
@@ -135,6 +141,7 @@ export async function listTopics(
   const size = await getSetting("content.pageSize");
   const where = {
     subjectId,
+    archivedAt: null,
     ...(q
       ? {
           OR: [
@@ -259,6 +266,7 @@ export async function getTopic(
     version: row.version,
     editRevision: row.editRevision,
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    archivedAt: row.archivedAt?.toISOString() ?? null,
     subject: row.subject,
     questions,
   };
@@ -775,6 +783,7 @@ export async function publishTopic(
   revision: number,
   actorId?: string,
 ) {
+  const quickPublication = allowsQuickPublication(getEnv());
   const [minQuestions, maxQuestions] = await Promise.all([
     getSetting("content.minQuestions"),
     getSetting("content.maxQuestions"),
@@ -786,7 +795,7 @@ export async function publishTopic(
       await lockTopicForChange(tx, id);
       const lastEditor = await tx.topic.findUnique({
         where: { id },
-        select: { draftUpdatedById: true, subjectId: true },
+        select: { draftUpdatedById: true, subjectId: true, archivedAt: true },
       });
       if (!lastEditor) throw notFound();
       await assertContent(
@@ -798,6 +807,8 @@ export async function publishTopic(
         },
         tx,
       );
+      if (lastEditor.archivedAt)
+        throw new ContentError("Сначала восстановите урок из архива.", 409);
       const currentTopic = await getTopic(id, tx);
       const known = await tx.gap.findMany({
         where: { topicId: id },
@@ -985,13 +996,14 @@ export async function publishTopic(
             ),
           ],
         );
-      if (
-        topic.needsExpertReview ||
-        !topic.reviewedAt ||
-        !topic.authorName?.trim() ||
-        !topic.reviewerName?.trim() ||
-        !topic.referencesMd?.trim()
-      ) {
+      const expertReviewed = !!(
+        !topic.needsExpertReview &&
+        topic.reviewedAt &&
+        topic.authorName?.trim() &&
+        topic.reviewerName?.trim() &&
+        topic.referencesMd?.trim()
+      );
+      if (!quickPublication && !expertReviewed) {
         const fields = [];
         if (!topic.authorName?.trim())
           fields.push(fieldIssue("authorName", "Укажите автора урока."));
@@ -1022,6 +1034,7 @@ export async function publishTopic(
       if (topic.status === "PUBLISHED" && topic.draftState === "CLEAN")
         return topic;
       if (
+        !quickPublication &&
         topic.draftState !== "REVIEW" &&
         !(topic.draftState === "CLEAN" && topic.version > 0)
       )
@@ -1173,12 +1186,13 @@ export async function publishTopic(
           gapExercises: topic.gapExercises,
           draftContentMd: topic.contentMd,
           draftGapExercises: topic.gapExercises,
+          draftReviewed: expertReviewed,
           readingMinutes: topic.readingMinutes,
           referencesMd: topic.referencesMd,
           authorName: topic.authorName,
           reviewerName: topic.reviewerName,
-          needsExpertReview: false,
-          reviewedAt: publicationTime,
+          needsExpertReview: !expertReviewed,
+          reviewedAt: expertReviewed ? publicationTime : null,
           publishedAt: publicationTime,
           version: { increment: 1 },
           editRevision: { increment: 1 },
@@ -1308,6 +1322,39 @@ export async function unpublishTopic(
       await tx.topic.update({
         where: { id },
         data: { status: "DRAFT", editRevision: { increment: 1 } },
+      });
+    return getTopic(id, tx);
+  });
+}
+
+export async function setTopicArchived(
+  id: string,
+  revision: number,
+  archived: boolean,
+  actorId?: string,
+) {
+  return getDb().$transaction(async (tx) => {
+    await lockContentStaff(tx, actorId);
+    await lockTopicForChange(tx, id);
+    const topic = await tx.topic.findUnique({ where: { id } });
+    if (!topic) throw notFound();
+    await assertContent(
+      actorId,
+      topic.version > 0 || topic.status === "PUBLISHED"
+        ? "content.unpublish"
+        : "content.edit",
+      { subjectId: topic.subjectId },
+      tx,
+    );
+    checkRevision(topic.editRevision, revision);
+    if (archived !== !!topic.archivedAt)
+      await tx.topic.update({
+        where: { id },
+        data: {
+          archivedAt: archived ? new Date() : null,
+          status: "DRAFT",
+          editRevision: { increment: 1 },
+        },
       });
     return getTopic(id, tx);
   });

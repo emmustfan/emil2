@@ -61,6 +61,7 @@ export function TopicEditor({
   maxQuestions,
   imageMaxBytes,
   timeZone,
+  quickPublication,
   tree,
   ref,
   onTopicChange,
@@ -73,6 +74,7 @@ export function TopicEditor({
   maxQuestions: number;
   imageMaxBytes: number;
   timeZone: string;
+  quickPublication: boolean;
   tree?: ReactNode;
   ref?: Ref<TopicEditorHandle>;
   onTopicChange?: (topic: TopicDTO) => void;
@@ -327,16 +329,26 @@ export function TopicEditor({
       setMessage(t.deleted);
     } catch {}
   }
-  async function removeTopic() {
-    if (!confirm(t.confirmDelete)) return;
+  async function archiveTopic(archived: boolean) {
+    if (
+      archived &&
+      !confirm(
+        "Убрать урок из списка и закрыть его для студентов? Ответы и история сохранятся.",
+      )
+    )
+      return;
     try {
-      await foreground(async (current) => {
-        await requestContent(`topics/${initial.id}`, "DELETE", {
-          revision: current.editRevision,
-        });
+      const next = await foreground((current) =>
+        requestContent<TopicDTO>(
+          `topics/${initial.id}/${archived ? "archive" : "restore"}`,
+          "POST",
+          { revision: current.editRevision },
+        ),
+      );
+      if (next) {
         router.push(`/admin/subjects/${initial.subjectId}`);
-        return current;
-      });
+        router.refresh();
+      }
     } catch {}
   }
   async function readGap(
@@ -416,6 +428,7 @@ export function TopicEditor({
     imageIds: [...new Set([...imageIds, ...(row.imageIds ?? [])])],
     videos,
     previewCurrent: previewSource === form.contentMd,
+    quickPublication,
   });
   const reviewPrompt = lessonReviewPrompt(
     form.contentMd,
@@ -475,6 +488,25 @@ export function TopicEditor({
       focus?.focus({ preventScroll: true });
     });
   }
+  if (row.archivedAt)
+    return (
+      <section className="emal-panel space-y-4">
+        <h1 className="text-2xl font-semibold">{row.title}</h1>
+        <p>Урок в архиве. Восстановление вернёт его в редактор как черновик.</p>
+        {error && (
+          <p role="alert" className="text-red-700">
+            {error}
+          </p>
+        )}
+        <Button
+          type="button"
+          disabled={busy || conflict}
+          onClick={() => void archiveTopic(false)}
+        >
+          Восстановить из архива
+        </Button>
+      </section>
+    );
   return (
     <div className="lesson-editor space-y-4">
       <nav
@@ -497,8 +529,18 @@ export function TopicEditor({
         ))}
       </nav>
       <div className="flex flex-wrap items-center gap-3">
+        {quickPublication && (
+          <Button
+            type="button"
+            disabled={busy || conflict}
+            onClick={() => void publish()}
+          >
+            {t.publish}
+          </Button>
+        )}
         <Button
           type="button"
+          variant={quickPublication ? "outline" : "default"}
           disabled={busy || conflict}
           onClick={() => {
             void foreground(async (current) => current).catch(() => {});
@@ -510,7 +552,9 @@ export function TopicEditor({
           href="#lesson-review"
           className="inline-flex min-h-11 items-center px-3 text-sm text-emerald-800 underline"
         >
-          Проверить урок перед публикацией
+          {quickPublication
+            ? "Настройки публикации"
+            : "Проверить урок перед публикацией"}
         </a>
         <Button
           type="button"
@@ -1030,43 +1074,48 @@ export function TopicEditor({
         >
           <h2 className="text-2xl font-semibold">Перед публикацией</h2>
           <p className="text-sm leading-7 text-stone-600">
-            Проверьте содержание, эталоны и объяснения. После этого заполните
-            автора, рецензента и источники, отметьте экспертную проверку.
-            Изменение текста или вопроса снимает отметку проверки рабочей копии.
-            Опубликованная версия остаётся доступной ученикам до новой
-            публикации.
+            {quickPublication
+              ? "В локальной демонстрации кнопка «Опубликовать» сразу открывает сохранённый урок ученикам. Отметка экспертной проверки ставится только после фактической проверки."
+              : "Проверьте содержание, эталоны и объяснения. После этого заполните автора, рецензента и источники, отметьте экспертную проверку. Изменение текста или вопроса снимает отметку проверки рабочей копии. Опубликованная версия остаётся доступной ученикам до новой публикации."}
           </p>
-          <fieldset
-            disabled={busy || conflict}
-            className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"
-          >
-            <label className="text-sm font-medium sm:col-span-2">
-              {t.references}
-              <textarea
-                {...inputProps("referencesMd", t.references)}
-                className={fieldClass}
-                rows={3}
-                maxLength={20000}
-                value={form.referencesMd ?? ""}
-                onChange={(e) => change("referencesMd", e.target.value || null)}
-              />
-              {inputError("referencesMd")}
-            </label>
-            <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
-              <input
-                type="checkbox"
-                {...inputProps("reviewed", t.reviewed)}
-                checked={form.reviewed}
-                onChange={(e) => change("reviewed", e.target.checked)}
-                className="book-switch"
-              />
-              {t.reviewed}
-              {inputError("reviewed")}
-            </label>
-            <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
-              {t.reviewNote} Правки станут видны ученикам после публикации.
-            </p>
-          </fieldset>
+          <details open={!quickPublication}>
+            <summary className="cursor-pointer text-sm font-medium">
+              Источники и экспертная проверка
+            </summary>
+            <fieldset
+              disabled={busy || conflict}
+              className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"
+            >
+              <label className="text-sm font-medium sm:col-span-2">
+                {t.references}
+                <textarea
+                  {...inputProps("referencesMd", t.references)}
+                  className={fieldClass}
+                  rows={3}
+                  maxLength={20000}
+                  value={form.referencesMd ?? ""}
+                  onChange={(e) =>
+                    change("referencesMd", e.target.value || null)
+                  }
+                />
+                {inputError("referencesMd")}
+              </label>
+              <label className="flex min-h-11 items-center gap-3 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  {...inputProps("reviewed", t.reviewed)}
+                  checked={form.reviewed}
+                  onChange={(e) => change("reviewed", e.target.checked)}
+                  className="book-switch"
+                />
+                {t.reviewed}
+                {inputError("reviewed")}
+              </label>
+              <p className="text-xs leading-6 text-stone-500 sm:col-span-2">
+                {t.reviewNote} Правки станут видны ученикам после публикации.
+              </p>
+            </fieldset>
+          </details>
           <LessonReview checks={checks} prompt={reviewPrompt} />
           <PublicationTools
             key={`${row.id}-${row.version}`}
@@ -1075,21 +1124,25 @@ export function TopicEditor({
             timeZone={timeZone}
           />
           <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy || conflict}
-              onClick={() => void status("REVIEW")}
-            >
-              {t.sendReview}
-            </Button>
-            <Button
-              type="button"
-              disabled={busy || conflict}
-              onClick={() => void publish()}
-            >
-              {t.publish}
-            </Button>
+            {!quickPublication && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy || conflict}
+                  onClick={() => void status("REVIEW")}
+                >
+                  {t.sendReview}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy || conflict}
+                  onClick={() => void publish()}
+                >
+                  {t.publish}
+                </Button>
+              </>
+            )}
             {row.version > 0 && (
               <Button
                 type="button"
@@ -1110,16 +1163,14 @@ export function TopicEditor({
                 Снять с публикации
               </Button>
             )}
-            {row.version === 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy || conflict}
-                onClick={() => void removeTopic()}
-              >
-                {t.remove}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || conflict}
+              onClick={() => void archiveTopic(true)}
+            >
+              В архив
+            </Button>
           </div>
           <p className="text-sm leading-7 text-emerald-800">
             Состояние урока: {t.statuses[row.status]} · версия {row.version}.{" "}

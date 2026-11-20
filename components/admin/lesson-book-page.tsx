@@ -6,6 +6,8 @@ import { getSetting } from "@/lib/settings";
 import { parseTopic } from "@/lib/content/parse";
 import { LessonBook } from "./lesson-book";
 import { SubjectImport } from "./subject-import";
+import { getEnv } from "@/lib/env";
+import { allowsQuickPublication } from "@/lib/content/preview-access";
 export async function LessonBookPage({
   topicId,
   subjectId,
@@ -31,7 +33,7 @@ export async function LessonBookPage({
   ] = await Promise.all([
     listSections(subject.id, user),
     getDb().topic.findMany({
-      where: { subjectId: subject.id },
+      where: { subjectId: subject.id, archivedAt: null },
       select: {
         id: true,
         draftTitle: true,
@@ -69,6 +71,7 @@ export async function LessonBookPage({
         maxQuestions,
         imageMaxBytes,
         timeZone: user.timezone,
+        quickPublication: allowsQuickPublication(getEnv()),
       }}
       upload={
         <SubjectImport
