@@ -6,12 +6,14 @@
 
 ## Запуск на Mac
 
-Остановите уже запущенную preview-версию платформы, если она занимает порты
-3000 и 8025. Распакуйте этот архив в «Загрузки» и откройте Docker Desktop.
+1. Откройте Docker Desktop и дождитесь его запуска. Если старая версия платформы ещё работает, [остановите её](docs/presentation-mvp.html#stop).
+2. В Finder дважды нажмите на ZIP, чтобы распаковать его. Найдите папку из последнего скачивания. Внутри лежит `start-mac.command`.
+3. Откройте Terminal. Напечатайте `cd` и нажмите пробел. Перетащите распакованную папку из Finder в окно Terminal и только потом нажмите Enter.
+4. В том же окне выполните команду и нажмите Enter.
 
-```bash
-cd ~/Downloads/emil2-codex-sopr-complete-preview && bash start-mac.command
-```
+   ```bash
+   bash start-mac.command
+   ```
 
 Войдите под `demo-student-01@example.ru` через [Mailpit](http://localhost:8025).
 После входа откройте [курс СОПР](http://localhost:3000/subjects/sopr-khafizov-complete)

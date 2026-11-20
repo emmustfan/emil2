@@ -308,27 +308,27 @@
             <a href="#stop">в конце инструкции</a>.
           </li>
           <li>
+            Открой в Finder папку «Загрузки» и дважды нажми на ZIP, чтобы его
+            распаковать. Если браузер уже распаковал архив, найди получившуюся
+            папку проекта. Выбери папку из последнего скачивания, внутри которой
+            лежит <code>start-mac.command</code>.
+          </li>
+          <li id="open-project">
             Открой <strong>Terminal</strong> через Spotlight (<strong
               >⌘ + пробел</strong
-            >, набери <code>Terminal</code>). Вставляй команды по очереди и
-            нажимай Enter после каждой.
+            >, набери <code>Terminal</code>). Напечатай <code>cd</code> и нажми
+            <strong>пробел</strong>. Пока не нажимай Enter.
+          </li>
+          <li>
+            Перетащи <strong>распакованную папку проекта</strong> из Finder в
+            окно Terminal. Путь к папке появится после <code>cd</code>. Теперь
+            нажми <strong>Enter</strong>.
+          </li>
+          <li>
+            В том же окне введи эту команду и нажми <strong>Enter</strong>.
+            <div class="command"><pre>bash start-mac.command</pre></div>
           </li>
         </ol>
-        <div class="command">
-          <pre>
-cd ~/Downloads &amp;&amp; unzip -oq emil2-codex-sopr-complete-preview.zip</pre>
-        </div>
-        <p>
-          Если браузер уже распаковал ZIP и в «Загрузках» есть папка
-          <code>emil2-codex-sopr-complete-preview</code>, переходи к следующей
-          команде. Если имя папки другое, набери в Terminal <code>cd </code> с
-          пробелом и перетащи папку из Finder в это окно. Нажми Enter, затем
-          выполни <code>bash start-mac.command</code>.
-        </p>
-        <div class="command">
-          <pre>
-cd ~/Downloads/emil2-codex-sopr-complete-preview &amp;&amp; bash start-mac.command</pre>
-        </div>
         <p>
           При первом запуске Docker скачивает образы и зависимости. Сделай этот
           шаг дома с интернетом и оставь время на ожидание. Когда Terminal
@@ -603,14 +603,14 @@ cd ~/Downloads/emil2-codex-sopr-complete-preview &amp;&amp; bash start-mac.comma
           <summary>На Mac не запускается сайт</summary>
           <p>
             Проверь, что Docker Desktop уже запущен, и повтори
-            <code>bash start-mac.command</code> из папки проекта. Открой
+            <code>bash start-mac.command</code> из
+            <a href="#open-project">папки проекта</a>. Открой
             <a href="http://localhost:3000/subjects">каталог</a> в адресной
             строке. Если ошибка осталась, сохрани вывод двух команд и покажи его
             владельцу.
           </p>
           <div class="command">
             <pre>
-cd ~/Downloads/emil2-codex-sopr-complete-preview
 docker compose -f docker-compose.yml -f docker-compose.preview.yml ps -a
 docker compose -f docker-compose.yml -f docker-compose.preview.yml logs --tail 100 web migrate</pre>
           </div>
@@ -674,11 +674,13 @@ docker compose -f docker-compose.yml -f docker-compose.preview.yml logs --tail 1
       <section id="stop">
         <h2>7. Остановка и повторный запуск</h2>
         <p>
-          После показа останови контейнеры. Команда сохраняет данные preview.
+          После показа выполни команду в Terminal из текущей папки проекта. Если
+          Terminal открыт заново, напечатай <code>cd</code> и пробел, перетащи
+          папку из Finder и нажми Enter. Команда сохраняет данные preview.
         </p>
         <div class="command">
           <pre>
-cd ~/Downloads/emil2-codex-sopr-complete-preview &amp;&amp; docker compose -f docker-compose.yml -f docker-compose.preview.yml down</pre>
+docker compose -f docker-compose.yml -f docker-compose.preview.yml down</pre>
         </div>
         <p>
           При следующем показе повтори <code>bash start-mac.command</code> из
