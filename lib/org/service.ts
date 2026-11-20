@@ -58,6 +58,17 @@ export async function saveFaculty(
         "Сначала архивируйте действующие кафедры факультета.",
         409,
       );
+    if (
+      id &&
+      archived &&
+      (await tx.studyGroup.count({
+        where: { facultyId: id, archivedAt: null },
+      }))
+    )
+      throw new ContentError(
+        "Сначала архивируйте действующие учебные группы факультета.",
+        409,
+      );
     const row = { ...data, archivedAt: archived ? new Date() : null };
     return id
       ? tx.faculty.update({ where: { id }, data: row })

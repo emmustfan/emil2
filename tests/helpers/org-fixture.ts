@@ -70,12 +70,14 @@ export async function createOrgFixture() {
     author,
     reviewer,
     admin,
+    user,
     async cleanup() {
       await db.importJob.deleteMany({
         where: { subjectId: { in: [own.subject.id, other.subject.id] } },
       });
       await cleanupLessonFixture(other);
       await cleanupLessonFixture(own, [], users);
+      await db.studyGroup.deleteMany({ where: { facultyId: faculty.id } });
       await db.department.deleteMany({ where: { facultyId: faculty.id } });
       await db.faculty.delete({ where: { id: faculty.id } });
     },

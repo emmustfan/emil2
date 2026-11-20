@@ -9,6 +9,7 @@ import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 import { z } from "zod";
 import { getDb } from "../lib/db";
+import { GROUP_NOTICE_KIND } from "../lib/groups/notice";
 import { DEFAULT_SETTINGS } from "../lib/settings/defaults";
 import { ru } from "../lib/i18n/ru";
 import { parseTopic } from "../lib/content/parse";
@@ -90,6 +91,17 @@ try {
           },
           update: {},
         });
+      await tx.legalDocument.upsert({
+        where: { kind_version: { kind: GROUP_NOTICE_KIND, version: "0.1" } },
+        create: {
+          kind: GROUP_NOTICE_KIND,
+          version: "0.1",
+          contentMd:
+            "НУЖНО СОГЛАСОВАНИЕ\n\nПреподаватели группы видят ваш прогресс, ответы на задания, результаты тестов и просмотр видео по предметам группы. Переписка с ИИ-тьютором преподавателям не показывается.",
+          publishedAt: new Date("2026-11-20T00:00:00Z"),
+        },
+        update: {},
+      });
       const landing = {
         "landing.v1": LANDING_DEFAULTS,
         "billing.v1": BILLING_CONTENT,

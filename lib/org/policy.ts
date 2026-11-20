@@ -1,5 +1,7 @@
 import type { StaffRole } from "../generated/prisma/client";
 
+export type GroupAction = "group.manage" | "group.members";
+
 export type Action =
   | "content.read"
   | "content.edit"
@@ -9,8 +11,7 @@ export type Action =
   | "subject.manage"
   | "department.staff"
   | "faculty.manage"
-  | "group.manage"
-  | "group.members"
+  | GroupAction
   | "progress.view";
 
 export type Assignment = {
@@ -18,6 +19,13 @@ export type Assignment = {
   facultyId: string | null;
   departmentId: string | null;
   subjectId: string | null;
+};
+
+export type StaffActor = {
+  id: string;
+  role: string;
+  assignments: Assignment[];
+  readOnly?: boolean;
 };
 
 export type Area = {
@@ -63,12 +71,7 @@ export function roleAllows(role: StaffRole, action: Action) {
 }
 
 export function decide(
-  actor: {
-    id: string;
-    role: string;
-    assignments: Assignment[];
-    readOnly?: boolean;
-  },
+  actor: StaffActor,
   action: Action,
   area: Area,
 ): 200 | 403 | 404 {

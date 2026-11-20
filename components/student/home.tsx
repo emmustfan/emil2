@@ -7,10 +7,11 @@ import { lessonHref } from "@/lib/lessons/catalog";
 import { rolesRu as t } from "@/lib/i18n/ru";
 import { studentOverview } from "@/lib/admin/cabinet";
 import { courseMapTopics } from "@/lib/ui/course-map";
+import { studentGroups } from "@/lib/groups/queries";
 import { CourseMap } from "@/components/workspace/course-map";
 export async function StudentHome() {
   const user = await requireUser(),
-    [review, overview, topics, recent] = await Promise.all([
+    [review, overview, topics, recent, memberships] = await Promise.all([
       currentReviewSummary(),
       studentOverview(user.id, undefined, user.readOnly),
       courseMapTopics(user.id),
@@ -35,7 +36,11 @@ export async function StudentHome() {
           },
         },
       }),
+      studentGroups(user.id),
     ]);
+  const groups = memberships.filter(
+    ({ status, group }) => status === "ACTIVE" && !group.archivedAt,
+  );
   const completed = overview.subjects.reduce((sum, s) => sum + s.completed, 0);
   return (
     <main className="student-home">
@@ -138,6 +143,23 @@ export async function StudentHome() {
           <strong>{review?.reviewedToday ?? 0}</strong>
         </div>
       </div>
+      <section className="emal-panel mb-7 space-y-3">
+        <h2>Мои группы</h2>
+        {groups.length ? (
+          <ul className="space-y-2">
+            {groups.map(({ group }) => (
+              <li key={group.id}>
+                {group.name} · {group.faculty.title} · {group.academicYear}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>У вас пока нет действующих зачислений.</p>
+        )}
+        <Link href="/cabinet/groups" className="text-sm underline">
+          Группы и заявки
+        </Link>
+      </section>
       <section className="mb-7">
         <div className="student-heading">
           <h2>Мои предметы</h2>
@@ -161,9 +183,11 @@ export async function StudentHome() {
                 />
               </div>
               <p>
-                {s.permitted && s.until
-                  ? `Открыт до ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: user.timezone }).format(s.until)}`
-                  : "Бесплатные темы"}
+                {s.enrolled
+                  ? "Доступ по зачислению"
+                  : s.permitted && s.until
+                    ? `Открыт до ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: user.timezone }).format(s.until)}`
+                    : "Бесплатные темы"}
               </p>
             </article>
           ))}

@@ -1,4 +1,4 @@
-import { safePricingReturn } from "@/lib/billing/policy";
+import { safeLoginReturn } from "@/lib/auth/return";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/server";
 import { hasCurrentConsent } from "@/lib/auth/legal";
@@ -13,7 +13,7 @@ export default async function Login({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  const target = safePricingReturn((await searchParams).next);
+  const target = safeLoginReturn((await searchParams).next);
   const session = await getCurrentSession();
   if (session)
     redirect((await hasCurrentConsent(session.user)) ? target : "/onboarding");

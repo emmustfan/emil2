@@ -63,7 +63,7 @@ export function AnalyticsConsent({ metrikaId }: { metrikaId?: string }) {
     [editing, setEditing] = useState(false);
   const landingViewId = useRef<string | null>(null);
   const privatePage =
-    /^\/(cabinet|student|teacher|admin|tutor|onboarding|auth|login|learn|review|pricing|checkout|dev)(\/|$)/.test(
+    /^\/(cabinet|student|teacher|admin|tutor|onboarding|auth|login|learn|review|pricing|checkout|dev|join)(\/|$)/.test(
       path,
     );
   useEffect(() => {

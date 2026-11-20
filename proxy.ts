@@ -2,7 +2,7 @@ import { ContentError } from "./lib/content/errors";
 import { isStudentProgressPath } from "./lib/progress/routes";
 import { assertCanViewStudent } from "./lib/progress/access";
 import { BILLING_RETURN_COOKIE } from "./lib/billing/http";
-import { safePricingReturn } from "./lib/billing/policy";
+import { safeLoginReturn } from "./lib/auth/return";
 import { NextRequest, NextResponse } from "next/server";
 import { SID, cookieOptions } from "./lib/auth/session";
 import {
@@ -122,9 +122,7 @@ async function routeRequest(
         cookieOptions(new Date(Date.now() + cookie.days * 86400000)),
       );
     if (path === "/login" && request.nextUrl.searchParams.has("next")) {
-      const target = safePricingReturn(
-        request.nextUrl.searchParams.get("next"),
-      );
+      const target = safeLoginReturn(request.nextUrl.searchParams.get("next"));
       if (target !== "/cabinet")
         response.cookies.set(
           BILLING_RETURN_COOKIE,
@@ -150,8 +148,11 @@ async function routeRequest(
       });
     }
   }
-  if (!session)
-    return NextResponse.redirect(new URL("/login", getEnv().APP_URL));
+  if (!session) {
+    const login = new URL("/login", getEnv().APP_URL);
+    if (path === "/cabinet/groups") login.searchParams.set("next", path);
+    return NextResponse.redirect(login);
+  }
   if (
     path.startsWith("/admin") &&
     !["ADMIN", "EDITOR"].includes(session.user.role)

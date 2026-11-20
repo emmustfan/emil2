@@ -178,6 +178,20 @@ export async function anonymizeAccount(id: string, now = new Date()) {
         data: { reason: null },
       });
       await tx.billingMail.deleteMany({ where: { userId: id } });
+      await tx.groupMember.deleteMany({ where: { userId: id } });
+      await tx.groupMember.updateMany({
+        where: { decidedById: id },
+        data: { decidedById: null },
+      });
+      await tx.groupSubject.updateMany({
+        where: { createdById: id },
+        data: { createdById: null },
+      });
+      await tx.groupTeacher.deleteMany({ where: { teacherId: id } });
+      await tx.groupTeacher.updateMany({
+        where: { assignedById: id },
+        data: { assignedById: null },
+      });
       const payments = await tx.payment.findMany({
         where: { userId: id },
         select: { id: true, providerPaymentId: true, providerRequest: true },
@@ -234,6 +248,10 @@ export async function anonymizeAccount(id: string, now = new Date()) {
           telegramNotify: false,
           vkId: null,
           name: null,
+          lastName: null,
+          firstName: null,
+          middleName: null,
+          studentNumber: null,
           university: null,
           course: null,
           goal: null,

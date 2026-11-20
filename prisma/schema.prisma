@@ -126,6 +126,15 @@ model User {
   securityChangesReceived  SecurityAudit[]     @relation("SecurityAudit_target")
   staffAssignments RoleAssignment[] @relation("StaffUser")
   madeAssignments RoleAssignment[] @relation("StaffAssigner")
+  lastName String?
+  firstName String?
+  middleName String?
+  studentNumber String?
+  groupMemberships GroupMember[] @relation("MembershipUser")
+  groupDecisions GroupMember[] @relation("MembershipDecider")
+  openedGroupSubjects GroupSubject[]
+  groupTeaching GroupTeacher[] @relation("GroupTeacherUser")
+  groupTeacherAssignments GroupTeacher[] @relation("GroupTeacherAssigner")
   @@index([deletedAt, anonymizedAt])
 }
 
@@ -225,6 +234,7 @@ model Subject {
   departmentId String @default("org-unassigned")
   department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   staffAssignments RoleAssignment[]
+  groupSubjects GroupSubject[]
   @@index([departmentId])
 
 }
@@ -714,7 +724,7 @@ model LandingContent {
 
 model LegalDocument {
   id          String   @id @default(cuid())
-  kind        String // oferta | privacy | consent | refund
+  kind        String // oferta | privacy | consent | refund | group-notice
   version     String
   contentMd   String   @db.Text
   publishedAt DateTime
@@ -877,6 +887,7 @@ model Faculty {
   archivedAt DateTime?
   departments Department[]
   staffAssignments RoleAssignment[]
+  studyGroups StudyGroup[]
 }
 
 model Department {
@@ -919,4 +930,74 @@ model RoleAssignment {
   @@index([departmentId])
   @@index([subjectId])
   @@index([facultyId])
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  REMOVED
+}
+
+model StudyGroup {
+  id                String    @id @default(cuid())
+  facultyId         String
+  name              String
+  course            Int
+  academicYear      String
+  joinCode          String?   @unique
+  joinCodeExpiresAt DateTime?
+  requireApproval   Boolean   @default(true)
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  faculty           Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  members           GroupMember[]
+  subjects          GroupSubject[]
+
+  @@unique([facultyId, academicYear, name])
+}
+
+model GroupMember {
+  groupId          String
+  userId           String
+  status           MembershipStatus
+  requestedAt      DateTime @default(now())
+  decidedAt        DateTime?
+  decidedById      String?
+  noticeVersion    String
+  noticeAcceptedAt DateTime
+  group            StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user             User       @relation("MembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy        User?      @relation("MembershipDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@id([groupId, userId])
+  @@index([userId, status])
+}
+
+model GroupSubject {
+  groupId     String
+  subjectId   String
+  createdById String?
+  createdAt   DateTime @default(now())
+  group       StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  teachers    GroupTeacher[]
+
+  @@id([groupId, subjectId])
+  @@index([subjectId])
+}
+
+model GroupTeacher {
+  groupId    String
+  subjectId  String
+  teacherId  String
+  assignedById String?
+  createdAt  DateTime @default(now())
+  groupSubject GroupSubject @relation(fields: [groupId, subjectId], references: [groupId, subjectId], onDelete: Cascade)
+  teacher    User @relation("GroupTeacherUser", fields: [teacherId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("GroupTeacherAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([groupId, subjectId, teacherId])
+  @@index([teacherId])
 }

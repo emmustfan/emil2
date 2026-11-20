@@ -20,6 +20,7 @@ import { MockLLMProvider } from "../../lib/llm";
 import { lockTopicForChange } from "../../lib/content/locks";
 import { recordInitialTopicRevision } from "../../lib/content/drafts";
 import { ensureDentalDemo } from "./dental-demo";
+import { ensureDemoStudyGroup } from "./study-group";
 import {
   studentProfiles,
   studentPlan,
@@ -317,7 +318,11 @@ async function seedStudent(
 }
 export async function ensureDemoStudents(now = new Date()) {
   assertStudentPreview(process.env.DATABASE_URL, process.env.NODE_ENV);
-  return withSettingsSnapshot(() => seedDemoStudents(now));
+  return withSettingsSnapshot(async () => {
+    const result = await seedDemoStudents(now);
+    await ensureDemoStudyGroup(now);
+    return result;
+  });
 }
 async function seedDemoStudents(now: Date) {
   const mutex = new Client({ connectionString: process.env.DATABASE_URL });
