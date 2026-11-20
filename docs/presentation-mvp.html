@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>
+      Как показать университету MVP платформы · Инструкция для MacBook
+    </title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #162a33;
+        --muted: #405760;
+        --accent: #11635b;
+        --deep: #153a42;
+        --line: #d8e5e3;
+        --paper: #fff;
+        --bg: #f4f8f7;
+        --light: #e8f4ef;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--bg);
+        font:
+          1.03rem/1.6 system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        width: min(70rem, 100% - 2rem);
+        margin: 2rem auto 4rem;
+      }
+      header {
+        background: var(--deep);
+        color: white;
+        border-radius: 1.35rem;
+        padding: clamp(1.5rem, 5vw, 3.4rem);
+      }
+      header p {
+        color: #d4eae6;
+        margin: 0.6rem 0 0;
+        max-width: 49rem;
+      }
+      header .eyebrow {
+        font-weight: 700;
+        color: #bfe5d8;
+        margin: 0;
+      }
+      h1,
+      h2,
+      h3 {
+        line-height: 1.22;
+        text-wrap: balance;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5.5vw, 4rem);
+        margin: 0.55rem 0;
+      }
+      h2 {
+        font-size: clamp(1.42rem, 3.7vw, 2.25rem);
+        margin: 0 0 0.9rem;
+      }
+      h3 {
+        font-size: 1.19rem;
+        margin: 1.4rem 0 0.45rem;
+      }
+      a {
+        color: #0d625a;
+        text-underline-offset: 0.16em;
+      }
+      a:focus-visible,
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid #167d70;
+        outline-offset: 3px;
+      }
+      nav {
+        display: flex;
+        gap: 0.45rem 1rem;
+        flex-wrap: wrap;
+        margin: 1rem 0 1.6rem;
+        background: var(--paper);
+        padding: 0.8rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+      }
+      nav a {
+        font-weight: 600;
+      }
+      section {
+        padding: clamp(1.2rem, 4vw, 2.5rem);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        margin: 1rem 0;
+        background: var(--paper);
+        scroll-margin-top: 1rem;
+      }
+      p {
+        margin: 0.62rem 0;
+      }
+      ul,
+      ol {
+        margin: 0.55rem 0;
+        padding-left: 1.35rem;
+      }
+      li {
+        padding-inline-start: 0.2rem;
+        margin: 0.42rem 0;
+      }
+      aside {
+        background: var(--light);
+        border-left: 4px solid var(--accent);
+        padding: 0.75rem 1rem;
+        margin: 1rem 0;
+        border-radius: 0.3rem;
+      }
+      aside p {
+        margin: 0.28rem 0;
+      }
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code {
+        font-size: 0.93em;
+        overflow-wrap: anywhere;
+      }
+      :not(pre) > code {
+        background: #edf3f1;
+        border-radius: 0.25rem;
+        padding: 0.13rem 0.28rem;
+      }
+      .command {
+        position: relative;
+        background: #eff5f4;
+        border: 1px solid var(--line);
+        border-radius: 0.65rem;
+        margin: 0.7rem 0;
+      }
+      pre {
+        font-size: 0.89rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 0;
+        padding: 0.85rem;
+      }
+      button {
+        font: inherit;
+        color: var(--accent);
+        background: white;
+        border: 1px solid #a8c5bf;
+        border-radius: 0.4rem;
+        padding: 0.26rem 0.64rem;
+        cursor: pointer;
+        font-weight: 650;
+      }
+      .command button {
+        display: block;
+        margin: 0.5rem 0.55rem 0 auto;
+        font-size: 0.87rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 0.65rem 0.62rem;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        background: #eff5f4;
+      }
+      dt {
+        font-weight: 700;
+        margin-top: 0.7rem;
+      }
+      dd {
+        margin: 0;
+        color: var(--muted);
+      }
+      details {
+        border-top: 1px solid var(--line);
+        padding: 0.65rem 0;
+      }
+      summary {
+        font-weight: 700;
+        cursor: pointer;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.94rem;
+        padding: 1rem 0.25rem;
+      }
+      @media (max-width: 560px) {
+        main {
+          width: calc(100% - 1rem);
+          margin: 0.5rem auto 2rem;
+        }
+        body {
+          font-size: 0.97rem;
+        }
+        th,
+        td {
+          min-width: 8rem;
+        }
+        nav {
+          gap: 0.45rem 0.8rem;
+        }
+      }
+      @media print {
+        body,
+        section,
+        header,
+        nav {
+          background: white;
+          color: black;
+        }
+        header p,
+        header .eyebrow {
+          color: black;
+        }
+        main {
+          width: 100%;
+          margin: 0;
+        }
+        header,
+        section {
+          border: none;
+          padding: 0.4rem 0.2rem;
+        }
+        section {
+          break-inside: auto;
+        }
+        h2,
+        h3 {
+          break-after: avoid;
+        }
+        .command button,
+        nav {
+          display: none;
+        }
+        details > * {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">MacBook · локальный показ</p>
+        <h1>Как показать MVP платформы в университете</h1>
+        <p>
+          Подготовь MacBook заранее. На встрече открой медицинский урок, покажи
+          работу студента и перейди в журнал преподавателя. Основной сценарий
+          занимает 10–12 минут.
+        </p>
+      </header>
+      <nav aria-label="Содержание">
+        <a href="#install">Установка</a><a href="#login">Вход по почте</a
+        ><a href="#roles">Аккаунты</a><a href="#walkthrough">Сценарий показа</a
+        ><a href="#invite">Ссылка в группу</a
+        ><a href="#trouble">Если что-то не работает</a
+        ><a href="#stop">Остановка</a>
+      </nav>
+
+      <section id="install">
+        <h2>1. Подготовь MacBook и запусти площадку</h2>
+        <ol>
+          <li>
+            Открой меню <strong> → Об этом Mac</strong>. Если там указано «Чип
+            Apple» (M1, M2, M3 и т. д.), выбери <strong>Apple Silicon</strong>.
+            Если указан процессор Intel, выбери <strong>Intel</strong>.
+            <a href="https://docs.docker.com/desktop/setup/install/mac-install/"
+              >Скачать Docker Desktop для Mac</a
+            >.
+          </li>
+          <li>
+            Открой скачанный <code>Docker.dmg</code>, перетащи Docker в
+            «Программы» и запусти <strong>Docker Desktop</strong>. При первом
+            открытии пройди настройку, которую покажет Docker, и дождись
+            состояния, когда движок Docker запущен. Оставь приложение открытым.
+          </li>
+          <li>
+            Скачай ZIP ветки <strong>codex/sopr-complete-preview</strong> в
+            «Загрузки». В нём платформа, PDF, курс и этот файл.
+            <a
+              href="https://github.com/emmustfan/emil2/archive/refs/heads/codex/sopr-complete-preview.zip"
+              >Скачать ZIP с GitHub</a
+            >.
+          </li>
+          <li>
+            Если на ноутбуке уже работает предыдущая версия этой платформы,
+            останови её прежде, чем запускать новую. Способ остановки есть
+            <a href="#stop">в конце инструкции</a>.
+          </li>
+          <li>
+            Открой <strong>Terminal</strong> через Spotlight (<strong
+              >⌘ + пробел</strong
+            >, набери <code>Terminal</code>). Вставляй команды по очереди и
+            нажимай Enter после каждой.
+          </li>
+        </ol>
+        <div class="command">
+          <pre>
+cd ~/Downloads &amp;&amp; unzip -oq emil2-codex-sopr-complete-preview.zip</pre>
+        </div>
+        <p>
+          Если браузер уже распаковал ZIP и в «Загрузках» есть папка
+          <code>emil2-codex-sopr-complete-preview</code>, переходи к следующей
+          команде. Если имя папки другое, набери в Terminal <code>cd </code> с
+          пробелом и перетащи папку из Finder в это окно. Нажми Enter, затем
+          выполни <code>bash start-mac.command</code>.
+        </p>
+        <div class="command">
+          <pre>
+cd ~/Downloads/emil2-codex-sopr-complete-preview &amp;&amp; bash start-mac.command</pre>
+        </div>
+        <p>
+          При первом запуске Docker скачивает образы и зависимости. Сделай этот
+          шаг дома с интернетом и оставь время на ожидание. Когда Terminal
+          сообщит «Готово», проверь, что на Mac открываются
+          <a href="http://localhost:3000/subjects">каталог</a> и
+          <a href="http://localhost:8025">Mailpit</a>. Git, Node.js и pnpm на
+          Mac ставить не нужно.
+        </p>
+        <aside>
+          <p>
+            <strong>Перед выездом</strong> один раз войди под всеми нужными
+            аккаунтами, открой курс, пройди несколько заданий и проверь журнал.
+            В университет возьми уже распакованную папку и заранее скачанный
+            ZIP.
+          </p>
+        </aside>
+      </section>
+
+      <section id="login">
+        <h2>2. Войди по ссылке из письма</h2>
+        <p>
+          <strong>Mailpit</strong> — локальная почта для этой сборки. Письма для
+          входа в демонстрационные аккаунты приходят туда. Для каждого аккаунта
+          используется та же процедура.
+        </p>
+        <ol>
+          <li>
+            Открой <a href="http://localhost:3000/login">страницу входа</a>. В
+            поле «Электронная почта» введи нужный адрес из таблицы ниже, затем
+            нажми <strong>«Получить ссылку»</strong>.
+          </li>
+          <li>
+            Во второй вкладке <strong>этого же профиля браузера</strong> открой
+            <a href="http://localhost:8025">Mailpit</a>. Обнови страницу, найди
+            свежее письмо «Ссылка для входа в учебную платформу» и сверяй поле
+            получателя. В Mailpit лежат письма для всех демонстрационных
+            аккаунтов.
+          </li>
+          <li>
+            Открой ссылку из письма в том же профиле, где нажимала «Получить
+            ссылку». На странице платформы нажми
+            <strong>«Подтвердить вход»</strong>. Ссылка одноразовая. При
+            истечении срока запроси новую и используй самое свежее письмо.
+          </li>
+          <li>
+            При первом входе на экране «Давайте познакомимся» укажи
+            демонстрационное имя, например «Преподаватель демо». Вуз и курс
+            можно оставить пустыми. Подтверди согласие на обработку данных и
+            нажми <strong>«Продолжить»</strong>.
+          </li>
+        </ol>
+        <aside>
+          <p>
+            <strong>Чтобы переключаться без повторного входа</strong>, открой
+            три отдельных профиля браузера или три разных браузера. Подпиши их
+            для себя «Админ», «Студент» и «Преподаватель». Обычные вкладки
+            одного профиля используют общую сессию. Два окна инкогнито одного
+            браузера тоже могут использовать общую сессию.
+          </p>
+        </aside>
+      </section>
+
+      <section id="roles">
+        <h2>3. Какие аккаунты открыть</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Роль</th>
+                <th scope="col">Почта для входа</th>
+                <th scope="col">Что показать</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Администратор</td>
+                <td><code>owner@example.ru</code></td>
+                <td>
+                  <a href="http://localhost:3000/admin">«Предметы и уроки»</a>,
+                  медицинский курс в предпросмотре, создание приглашения,
+                  управление группами.
+                </td>
+              </tr>
+              <tr>
+                <td>Преподаватель</td>
+                <td><code>teacher@example.ru</code></td>
+                <td>
+                  <a href="http://localhost:3000/teacher/groups"
+                    >«Учебные группы»</a
+                  >, журнал закреплённой «Демо-группы 101», карточка, анализ
+                  заданий, CSV.
+                </td>
+              </tr>
+              <tr>
+                <td>Студент с готовым прогрессом</td>
+                <td><code>demo-student-01@example.ru</code></td>
+                <td>
+                  <a href="http://localhost:3000/cabinet">Личный кабинет</a>,
+                  пройденные задания и
+                  <a href="http://localhost:3000/review">повторение</a>. Студент
+                  уже в «Демо-группе 101».
+                </td>
+              </tr>
+              <tr>
+                <td>Студент для регистрации в группе</td>
+                <td><code>student@example.ru</code></td>
+                <td>
+                  Подходит для новой заявки и первой попытки в уроке. Проверь,
+                  не вступил ли он в группу во время репетиции.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          У преподавателя журнал открывается по назначению на пару «группа +
+          предмет». Подготовленный аккаунт уже назначен. Общие настройки и
+          полный медицинский курс открывай под администратором. Студенту
+          доступны собственные результаты.
+        </p>
+      </section>
+
+      <section id="walkthrough">
+        <h2>4. Как провести показ за 10–12 минут</h2>
+        <h3>Минута 1 · объясни идею MVP</h3>
+        <p>
+          «Студент читает материал, отвечает в уроке и проходит тест. Затем
+          видит, что нужно повторить. Преподаватель по журналу группы понимает,
+          где студенты ошибаются и кому нужна помощь».
+        </p>
+        <h3>Минуты 2–4 · медицинский урок из методички КФУ</h3>
+        <ol>
+          <li>
+            Под администратором открой
+            <a href="http://localhost:3000/admin/subjects/preview-sopr-complete"
+              >«Слизистая оболочка полости рта · Курс по методичке КФУ»</a
+            >. Покажи структуру и выбери «Открыть книгу и редактор уроков» для
+            перехода к тексту темы.
+          </li>
+          <li>
+            Для показа интерактива проще сразу открыть
+            <a
+              href="http://localhost:3000/admin/topics/preview-sopr-complete-demo/student-preview"
+              >«Пятно, папула, пузырёк, эрозия и язва»</a
+            >. В редакторе тот же режим открывается кнопкой
+            <strong>«Открыть как ученик»</strong>.
+          </li>
+          <li>
+            Подведи курсор к пропуску «Небольшой выступающий элемент с полостью
+            и жидкостью — …». Выбери «папула», затем нажми кнопку проверки рядом
+            с пропуском. После появления «Неверно» нажми <strong>?</strong>,
+            чтобы показать правильный ответ «пузырёк».
+          </li>
+          <li>
+            Прокрути до «Тест по теме». Ответь на один вопрос. Например, для
+            различия эрозии и язвы выбери «Вовлечение соединительнотканного
+            слоя». Покажи объяснение после проверки. В любом другом уроке курса
+            тоже есть пропуски и тест.
+          </li>
+        </ol>
+        <p>
+          Медицинские уроки открываются в режиме черновика с пометкой о
+          необходимости экспертной проверки. Этот режим создаёт предпросмотр
+          интерфейса. Для демонстрации сохранения прогресса используй
+          опубликованный учебный пример ниже.
+        </p>
+        <h3>Минуты 5–7 · что видит студент</h3>
+        <ol>
+          <li>
+            Перейди в профиль студента. Открой
+            <a href="http://localhost:3000/learn/learning-demo/practice"
+              >«Проверка понимания»</a
+            >
+            из предмета «Знакомство с обучением».
+          </li>
+          <li>
+            В первом пропуске «Проверить понимание помогает …» выбери «меню» и
+            нажми <strong>✓</strong>. Правильный ответ — «тест». Если первый
+            ответ уже сохранён, открой «История ответов» или выбери «Пройти
+            заново», чтобы показать тренировку.
+          </li>
+          <li>
+            Нажми <strong>«Начать тест»</strong>. В этом демонстрационном уроке
+            на вопрос о проверке понимания правильный вариант — «Тест». Чтобы
+            показать итог, ответь на все пять вопросов. Затем открой
+            <a href="http://localhost:3000/cabinet">кабинет</a> и
+            <a href="http://localhost:3000/review">«Повторение»</a>. На карточке
+            нажми «Показать ответ» и выбери оценку вспоминания.
+          </li>
+        </ol>
+        <h3>Минуты 8–10 · преподаватель и журнал</h3>
+        <ol>
+          <li>
+            Переключись в профиль преподавателя. Открой
+            <a href="http://localhost:3000/teacher/groups">«Учебные группы»</a>.
+            На карточке <strong>«Демо-группа 101»</strong> выбери
+            <strong>«Журнал · Знакомство с обучением»</strong>.
+          </li>
+          <li>
+            Покажи одну строку и столбец. В строке видны темы, баллы, повторение
+            и активность. Нажми имя студента, разверни тему и пропуск. Здесь
+            видны первый ответ, правильный ответ и попытки практики.
+          </li>
+          <li>
+            Вернись в журнал. Поставь галочку
+            <strong>«Только отстающие»</strong> и нажми
+            <strong>«Показать»</strong>. Открой «Анализ заданий», затем скачай
+            CSV, если хочешь показать выгрузку.
+          </li>
+        </ol>
+        <h3>Последняя минута · что можно добавить к показу</h3>
+        <p>
+          Если осталось время, покажи групповой код и QR, раздел повторения или
+          <a href="http://localhost:3000/tutor">тьютора</a>. В preview почта
+          локальная, ИИ и оплата работают в тестовом режиме. Для показа учебной
+          цепочки достаточно курса, студента и журнала. Для Rutube нужен
+          интернет.
+        </p>
+      </section>
+
+      <section id="invite">
+        <h2>5. Как получить ссылку для вступления в группу</h2>
+        <p>
+          Ссылка из <strong>Mailpit</strong> подтверждает вход в аккаунт. Ссылка
+          <strong>«Код вступления»</strong> привязана к учебной группе. Для
+          аудитории можно показать обе механики.
+        </p>
+        <ol>
+          <li>
+            Под администратором открой
+            <a href="http://localhost:3000/teacher/groups"
+              >«Группы и прогресс»</a
+            >
+            → нажми на название <strong>«Демо-группа 101»</strong>. В блоке «Код
+            вступления» нажми <strong>«Создать код»</strong>. Скопируй
+            показанную ссылку с <code>/join/</code> или используй код из восьми
+            символов. Там же отображается QR.
+          </li>
+          <li>
+            В профиле <code>student@example.ru</code> открой ссылку. После входа
+            через Mailpit откроется форма группы. Если открыла
+            <a href="http://localhost:3000/cabinet/groups">«Мои группы»</a>
+            напрямую, вставь код в поле «Код группы». Заполни имя и фамилию
+            вымышленными данными, отметь «Я прочитал(а) и принимаю уведомление»
+            и нажми <strong>«Вступить»</strong>.
+          </li>
+          <li>
+            При зачислении по заявкам переключись в профиль преподавателя.
+            Открой группу, прокрути до <strong>«Заявки и участники»</strong>,
+            нажми <strong>«Одобрить»</strong> рядом с демонстрационным
+            студентом. Под студентом обнови «Мои группы» и покажи, что
+            зачисление появилось. Если включено автоматическое зачисление, оно
+            произойдёт сразу.
+          </li>
+        </ol>
+        <aside>
+          <p>
+            Ссылки этого preview начинаются с <code>localhost</code> и
+            открываются на MacBook, где запущен Docker. Показывай QR на экране,
+            а переход делай в профиле студента на этом же MacBook. Для
+            подключения аудитории с других устройств понадобится отдельный
+            доступный стенд.
+          </p>
+        </aside>
+      </section>
+
+      <section id="trouble">
+        <h2>6. Если что-то не работает</h2>
+        <details open>
+          <summary>На Mac не запускается сайт</summary>
+          <p>
+            Проверь, что Docker Desktop уже запущен, и повтори
+            <code>bash start-mac.command</code> из папки проекта. Открой
+            <a href="http://localhost:3000/subjects">каталог</a> в адресной
+            строке. Если ошибка осталась, сохрани вывод двух команд и покажи его
+            владельцу.
+          </p>
+          <div class="command">
+            <pre>
+cd ~/Downloads/emil2-codex-sopr-complete-preview
+docker compose -f docker-compose.yml -f docker-compose.preview.yml ps -a
+docker compose -f docker-compose.yml -f docker-compose.preview.yml logs --tail 100 web migrate</pre>
+          </div>
+          <p>
+            Если Terminal сообщает «port is already allocated», сначала останови
+            предыдущий preview или другое приложение, занимающее указанный порт,
+            затем повтори запуск.
+          </p>
+        </details>
+        <details>
+          <summary>В Mailpit нет письма или ссылка устарела</summary>
+          <p>
+            Обнови Mailpit, проверь получателя и вернись на
+            <a href="http://localhost:3000/login">вход</a>, чтобы запросить
+            ссылку ещё раз. Открывай письмо в том профиле браузера, где начался
+            вход. Проверь работу Mailpit и сайта по указанным адресам.
+          </p>
+        </details>
+        <details>
+          <summary>Преподаватель не находит медицинский курс</summary>
+          <p>
+            Курс в этой сборке — черновик владельца. Открой его под
+            <code>owner@example.ru</code>. Для преподавателя используй
+            «Демо-группу 101» и журнал «Знакомство с обучением».
+          </p>
+        </details>
+        <details>
+          <summary>В журнале нет нового ответа</summary>
+          <p>
+            Проверь три вещи: ты выбрала правильный предмет, ученик зачислен в
+            эту группу, и ответ был дан под его аккаунтом в опубликованном
+            уроке. Обнови журнал. В предпросмотре медицинского черновика
+            ученические попытки не сохраняются в журнал.
+          </p>
+        </details>
+        <details>
+          <summary>Закончилась связь</summary>
+          <p>
+            Если сборка уже запущена, каталог, уроки без внешнего видео, почта
+            Mailpit и журнал идут с ноутбука. Пропусти Rutube и сохрани основной
+            показ. На случай, если Docker вообще недоступен, держи рядом
+            исходный <code>Metodichka_Khafizova_SOPR.pdf</code> из ZIP.
+          </p>
+        </details>
+      </section>
+
+      <section id="stop">
+        <h2>7. Остановка и повторный запуск</h2>
+        <p>
+          После показа останови контейнеры. Команда сохраняет данные preview.
+        </p>
+        <div class="command">
+          <pre>
+cd ~/Downloads/emil2-codex-sopr-complete-preview &amp;&amp; docker compose -f docker-compose.yml -f docker-compose.preview.yml down</pre>
+        </div>
+        <p>
+          При следующем показе повтори <code>bash start-mac.command</code> из
+          папки проекта. Для переключения со старого архива запускай команду
+          остановки из папки старого preview. Docker-том с учебными данными
+          остаётся на MacBook.
+        </p>
+      </section>
+      <footer>
+        Руководство для локальной демонстрации. Исходник медицинских уроков —
+        методическое пособие КФУ под редакцией и авторством, указанными в самом
+        пособии.
+        <a
+          href="https://github.com/emmustfan/emil2/blob/codex/sopr-complete-preview/Metodichka_Khafizova_SOPR.pdf"
+          >PDF методички</a
+        >
+      </footer>
+    </main>
+    <script>
+      for (const block of document.querySelectorAll(".command")) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "Скопировать";
+        block.prepend(button);
+        button.addEventListener("click", async () => {
+          const command = block.querySelector("pre");
+          try {
+            await navigator.clipboard.writeText(command.textContent);
+            button.textContent = "Скопировано";
+          } catch {
+            const range = document.createRange();
+            range.selectNodeContents(command);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            button.textContent = "Выделено · нажми ⌘C";
+          }
+          window.setTimeout(() => {
+            button.textContent = "Скопировать";
+          }, 2000);
+        });
+      }
+    </script>
+  </body>
+</html>

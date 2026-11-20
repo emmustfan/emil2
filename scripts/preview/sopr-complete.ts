@@ -5,10 +5,12 @@ import { lock } from "../../lib/auth/session";
 import { withTopicDraft } from "../../lib/content/drafts";
 import { imageMarkdown } from "../../lib/content/image-reference";
 import { imageLimits, normalizeImage } from "../../lib/content/images";
+import { lockTopicForChange } from "../../lib/content/locks";
 import { parseTopic } from "../../lib/content/parse";
 import { questionFields } from "../../lib/content/validation";
 import { getDb } from "../../lib/db";
 import { getEnv } from "../../lib/env";
+import type { Prisma, Topic } from "../../lib/generated/prisma/client";
 import { withSettingsSnapshot } from "../../lib/settings";
 import { createStorageDriver } from "../../lib/storage";
 import catalog from "../../content-seed/sopr-complete/catalog.json";
@@ -16,11 +18,86 @@ import quiz from "../../content-seed/sopr-complete/questions.json";
 import { assertStudentPreview } from "./student-profiles";
 
 const subjectId = "preview-sopr-complete";
+const readyKey = "preview.soprInteractiveReady";
 const folder = "content-seed/sopr-complete";
+const title = "Слизистая оболочка полости рта · Курс по методичке КФУ";
+const shortDescription =
+  "Десять уроков по СОПР с иллюстрациями, заданиями с пропусками и тестами.";
 const references =
-  "Хафизов Р. Г., Хафизова Ф. А., Малышев Н. В., Фасахов А. Р. Патоморфологические процессы и элементы поражения при заболеваниях слизистой оболочки полости рта. Казань: Издательство Казанского университета, 2019. 54 с.";
+  "Хафизов Р. Г., Хафизова Ф. А., Малышев Н. В., Фасахов А. Р. Патоморфологические процессы и элементы поражения при заболеваниях слизистой оболочки полости рта. Казань, Издательство Казанского университета, 2019. 54 с.";
+const demo = {
+  slug: "demo",
+  title: "Пятно, папула, пузырёк, эрозия и язва",
+  section: "Пробный урок",
+  first: 23,
+  last: 32,
+};
 type FigureName = keyof typeof catalog.figures;
-const markers = /\{\{image:([^}]+)\}\}/g;
+type LessonSlug = keyof typeof quiz;
+
+function isSeedDraft(topic: Topic) {
+  return (
+    !topic.editRevision &&
+    !topic.version &&
+    topic.status === "DRAFT" &&
+    topic.draftState === "DRAFT" &&
+    !topic.draftUpdatedById &&
+    !topic.draftReviewed
+  );
+}
+
+async function removePreface(tx: Prisma.TransactionClient) {
+  const id = `${subjectId}-preface`;
+  await lockTopicForChange(tx, id);
+  const preface = await tx.topic.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: { images: true, gap_topicId: true, question_topicId: true },
+      },
+    },
+  });
+  if (!preface || preface.subjectId !== subjectId) return;
+  if (preface.version || preface.status === "PUBLISHED") {
+    // Keep the publication's links, attempts and history.
+    return;
+  }
+
+  if (
+    isSeedDraft(preface) &&
+    Object.values(preface._count).every((count) => !count)
+  ) {
+    await tx.topic.delete({ where: { id } });
+  } else {
+    // Remove the chapter from the course while keeping any changes made in the editor.
+    const archive = await tx.subject.upsert({
+      where: { id: "preview-sopr-archive" },
+      create: {
+        id: "preview-sopr-archive",
+        slug: "sopr-archived-drafts",
+        title: "СОПР · архив черновиков",
+        shortDescription: "Черновики, снятые из учебного курса.",
+        courses: [2, 3],
+        status: "DRAFT",
+      },
+      update: {},
+    });
+    await tx.topic.update({
+      where: { id },
+      data: { subjectId: archive.id, sectionId: null },
+    });
+  }
+  if (preface.sectionId)
+    await tx.section.deleteMany({
+      where: {
+        id: preface.sectionId,
+        editRevision: 0,
+        title: "О пособии",
+        topic_sectionId: { none: {} },
+        importJob_sectionId: { none: {} },
+      },
+    });
+}
 
 export async function ensureSoprComplete() {
   assertStudentPreview(process.env.DATABASE_URL, process.env.NODE_ENV);
@@ -28,47 +105,80 @@ export async function ensureSoprComplete() {
   if (env.STORAGE_DRIVER !== "local")
     throw new Error("Для предпросмотра пособия требуется локальное хранилище.");
   const db = getDb();
+  if (await db.appSetting.findUnique({ where: { key: readyKey } })) return;
+
   const storage = createStorageDriver(env);
   const limits = await withSettingsSnapshot(imageLimits);
   const staged: string[] = [];
+  const replaced: string[] = [];
+  async function cleanup(keys: string[]) {
+    const results = await Promise.allSettled(
+      keys.map((key) => storage.remove(key)),
+    );
+    if (results.some((result) => result.status === "rejected"))
+      console.error("sopr_preview_image_cleanup_failed");
+  }
+
   try {
     await db.$transaction(
       async (tx) => {
         await lock(tx, subjectId);
-        const exists = await tx.subject.findUnique({
+        if (await tx.appSetting.findUnique({ where: { key: readyKey } }))
+          return;
+
+        const subject = await tx.subject.upsert({
           where: { id: subjectId },
-        });
-        if (exists) return;
-        await tx.subject.create({
-          data: {
+          create: {
             id: subjectId,
             slug: "sopr-khafizov-complete",
-            title: "Слизистая оболочка полости рта · Полная методичка КФУ",
-            shortDescription:
-              "54 страницы пособия, 22 иллюстрации и пробный интерактивный урок в закрытом предпросмотре.",
+            title,
+            shortDescription,
             descriptionMd: references,
             status: "DRAFT",
             courses: [2, 3],
           },
+          update: {},
         });
+        if (
+          subject.status === "DRAFT" &&
+          !subject.editRevision &&
+          subject.title !== title
+        )
+          await tx.subject.update({
+            where: { id: subjectId },
+            data: { title, shortDescription },
+          });
 
-        const chapters = [
-          {
-            slug: "demo",
-            title: "Пробный урок. Пятно, папула, пузырёк, эрозия и язва",
-            section: "Пробный урок",
-            first: 23,
-            last: 32,
-          },
-          ...catalog.chapters,
-        ];
+        await removePreface(tx);
+
         const sections = new Map<string, string>();
-        for (const [order, chapter] of chapters.entries()) {
+        for (const [order, chapter] of [demo, ...catalog.chapters].entries()) {
+          const id = `${subjectId}-${chapter.slug}`;
+          await lockTopicForChange(tx, id);
+          const existing = await tx.topic.findUnique({
+            where: { id },
+            include: { images: { select: { storageKey: true } } },
+          });
+          if (
+            existing &&
+            (existing.subjectId !== subjectId || !isSeedDraft(existing))
+          )
+            continue;
+
           let sectionId = sections.get(chapter.section);
           if (!sectionId) {
-            const section = await tx.section.create({
-              data: { subjectId, title: chapter.section, order: sections.size },
-            });
+            const section =
+              (await tx.section.findFirst({
+                where: { subjectId, title: chapter.section },
+                orderBy: { order: "asc" },
+              })) ??
+              (await tx.section.create({
+                data: {
+                  subjectId,
+                  title: chapter.section,
+                  order: sections.size,
+                },
+              }));
             sectionId = section.id;
             sections.set(chapter.section, sectionId);
           }
@@ -77,97 +187,111 @@ export async function ensureSoprComplete() {
             join(folder, `${chapter.slug}.md`),
             "utf8",
           );
-          const found = [...contentMd.matchAll(markers)];
+          const found = [...contentMd.matchAll(/\{\{image:([^}]+)\}\}/g)];
           if (found.length > limits.maxPerTopic)
             throw new Error(`Превышен лимит иллюстраций. ${chapter.title}`);
+
           const images = [];
           for (const [marker, name] of found) {
             if (!Object.hasOwn(catalog.figures, name))
               throw new Error(`Иллюстрация отсутствует в каталоге. ${name}`);
             const figure = catalog.figures[name as FigureName];
-            const png = name.endsWith(".png");
             const original = await readFile(join(folder, "figures", name));
             const { body, width, height } = await normalizeImage(
               original,
-              png ? "image/png" : "image/jpeg",
+              name.endsWith(".png") ? "image/png" : "image/jpeg",
               limits,
             );
-            const id = randomUUID();
-            const storageKey = `image_${id}`;
+            const imageKey = randomUUID();
+            const storageKey = `image_${imageKey}`;
             await storage.put(storageKey, body);
             staged.push(storageKey);
-            images.push({ id, storageKey, width, height, bytes: body.length });
+            images.push({
+              id: imageKey,
+              storageKey,
+              width,
+              height,
+              bytes: body.length,
+            });
             contentMd = contentMd.replace(
               marker,
-              imageMarkdown(
-                id,
-                `${figure.alt}. Пособие, с. ${figure.page}.`,
-                width,
-                height,
-              ),
+              imageMarkdown(imageKey, figure.alt, width, height),
             );
           }
-          const parsed = parseTopic(contentMd);
-          if (parsed.errors.length)
-            throw new Error(
-              `Ошибка в тексте «${chapter.title}». ${JSON.stringify(parsed.errors)}`,
-            );
-          const isDemo = chapter.slug === "demo";
-          const questions = isDemo
-            ? quiz.map(({ sourceHeading, ...question }, index) => {
-                const block = parsed.blocks.find(
-                  (item) =>
-                    item.heading === sourceHeading && item.kind !== "heading",
-                );
-                if (!block)
-                  throw new Error(`Не найден раздел для вопроса ${index + 1}.`);
-                return questionFields.parse({
-                  ...question,
-                  sourceBlockKey: block.blockKey,
-                  order: index,
-                  isDiagnostic: false,
-                });
-              })
-            : [];
 
-          await tx.topic.create({
-            data: withTopicDraft({
-              id: `${subjectId}-${chapter.slug}`,
-              subjectId,
-              sectionId,
-              slug: chapter.slug,
-              title: chapter.title,
-              contentMd,
-              order,
-              isFree: false,
-              status: "DRAFT",
-              needsExpertReview: true,
-              aiGenerated: isDemo,
-              readingMinutes: isDemo ? 4 : null,
-              referencesMd: `${references}\n\nСтраницы ${chapter.first}–${chapter.last}.`,
-              gap_topicId: {
-                create: parsed.gaps.map((gap) => ({
-                  gapKey: gap.gapKey,
-                  blockKey: gap.blockKey,
-                  order: gap.order,
-                  answer: gap.answer,
-                  distractors: gap.distractors,
-                  sentence: gap.sentence,
-                })),
-              },
-              images: { create: images },
-              question_topicId: { create: questions },
-            }),
+          const parsed = parseTopic(contentMd);
+          if (parsed.errors.length || parsed.gaps.length !== 3)
+            throw new Error(
+              `Проверьте пропуски в уроке «${chapter.title}». ${JSON.stringify(parsed.errors)}`,
+            );
+          const rows = quiz[chapter.slug as LessonSlug];
+          if (rows?.length !== 5)
+            throw new Error(`Отсутствует тест в уроке «${chapter.title}».`);
+          const questions = rows.map(
+            ({ sourceHeading, ...question }, index) => {
+              const block = parsed.blocks.find(
+                (item) =>
+                  item.heading === sourceHeading && item.kind !== "heading",
+              );
+              if (!block)
+                throw new Error(
+                  `Не найден источник для вопроса ${index + 1} в уроке «${chapter.title}».`,
+                );
+              return questionFields.parse({
+                ...question,
+                sourceBlockKey: block.blockKey,
+                order: index,
+                isDiagnostic: false,
+              });
+            },
+          );
+
+          const material = withTopicDraft({
+            subjectId,
+            sectionId,
+            slug: chapter.slug,
+            title: chapter.title,
+            contentMd,
+            order,
+            isFree: false,
+            status: "DRAFT",
+            needsExpertReview: true,
+            aiGenerated: true,
+            readingMinutes: chapter.slug === "demo" ? 4 : 6,
+            referencesMd: `${references}\n\nСтраницы ${chapter.first}–${chapter.last}.`,
+            gap_topicId: {
+              create: parsed.gaps.map((gap) => ({
+                gapKey: gap.gapKey,
+                blockKey: gap.blockKey,
+                order: gap.order,
+                answer: gap.answer,
+                distractors: gap.distractors,
+                sentence: gap.sentence,
+              })),
+            },
+            images: { create: images },
+            question_topicId: { create: questions },
           });
+          if (existing) {
+            replaced.push(...existing.images.map((image) => image.storageKey));
+            await tx.gap.deleteMany({ where: { topicId: id } });
+            await tx.question.deleteMany({ where: { topicId: id } });
+            await tx.topicImage.deleteMany({ where: { topicId: id } });
+            await tx.topic.update({ where: { id }, data: material });
+          } else {
+            await tx.topic.create({ data: { id, ...material } });
+          }
         }
+        await tx.appSetting.create({ data: { key: readyKey, value: true } });
       },
       { timeout: 60000 },
     );
   } catch (error) {
-    await Promise.all(staged.map((key) => storage.remove(key)));
+    await cleanup(staged);
     throw error;
   }
+  await cleanup(replaced);
   console.log(
-    "Полная методичка доступна в предпросмотре: /admin/subjects/preview-sopr-complete",
+    "Интерактивный курс по СОПР доступен в предпросмотре: /admin/subjects/preview-sopr-complete",
   );
 }
