@@ -4,6 +4,7 @@ import {
 } from "../../lib/content/drafts";
 import { ensureFunnelDemo } from "./demo-funnel";
 import { ensureVideoDemo } from "./video-demo";
+import { ensureSoprComplete } from "./sopr-complete";
 import { ensureDemoStudents } from "./students-demo";
 import { ensureRoleDemo } from "./role-demo";
 import { ensureExerciseDemo } from "./exercise-demo";
@@ -138,6 +139,7 @@ await ensureDentalDemo();
 await ensureRoleDemo();
 await ensureDemoStudents();
 await ensureVideoDemo();
+await ensureSoprComplete();
 await db.$disconnect();
 console.log(
   "Preview lessons are ready: /subjects/platform-demo and /learn/platform-demo/first-lesson",
