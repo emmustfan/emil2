@@ -67,8 +67,14 @@ test.beforeEach(async ({ context }) => {
   admin = await user("ADMIN");
   teacher = await user("EDITOR");
   student = await user("USER");
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
   png = await sharp({
     create: { width: 80, height: 40, channels: 3, background: "#08634f" },
@@ -83,9 +89,9 @@ test.afterEach(async () => {
     where: { topic: { subjectId: f.subject.id } },
     select: { storageKey: true },
   });
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ teacherId: { in: users } }, { assignedById: { in: users } }],
+      OR: [{ userId: { in: users } }, { assignedById: { in: users } }],
     },
   });
   await cleanupLessonFixture(f, [], users.splice(0));
@@ -546,8 +552,8 @@ test("content tree exposes the dental draft and interactive student preview with
       await staff.request.get(`/admin/topics/${demo.id}/student-preview`)
     ).status(),
   ).toBe(200);
-  await db.teacherSubject.deleteMany({
-    where: { teacherId: teacher, subjectId: f.subject.id },
+  await db.roleAssignment.deleteMany({
+    where: { userId: teacher, subjectId: f.subject.id },
   });
   expect(
     (

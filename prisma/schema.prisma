@@ -122,24 +122,11 @@ model User {
   event_userId             Event[]             @relation("Event_userId")
   featureInterest_userId   FeatureInterest[]   @relation("FeatureInterest_userId")
   importJob_createdById    ImportJob[]         @relation("ImportJob_createdById")
-  teachingAssignments      TeacherSubject[]    @relation("TeacherSubject_teacher")
-  assignedTeachingSubjects TeacherSubject[]    @relation("TeacherSubject_assigner")
   securityChangesMade      SecurityAudit[]     @relation("SecurityAudit_actor")
   securityChangesReceived  SecurityAudit[]     @relation("SecurityAudit_target")
+  staffAssignments RoleAssignment[] @relation("StaffUser")
+  madeAssignments RoleAssignment[] @relation("StaffAssigner")
   @@index([deletedAt, anonymizedAt])
-}
-
-model TeacherSubject {
-  teacherId    String
-  subjectId    String
-  assignedById String?
-  createdAt    DateTime @default(now())
-  teacher      User     @relation("TeacherSubject_teacher", fields: [teacherId], references: [id], onDelete: Restrict)
-  subject      Subject  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  assignedBy   User?    @relation("TeacherSubject_assigner", fields: [assignedById], references: [id], onDelete: SetNull)
-
-  @@id([teacherId, subjectId])
-  @@index([subjectId])
 }
 
 model SecurityAudit {
@@ -211,7 +198,6 @@ model DemoSession {
 
 // ---------- Контент ----------
 model Subject {
-  teachingAssignments         TeacherSubject[]
   editRevision                Int                 @default(0)
   id                          String              @id @default(cuid())
   slug                        String              @unique
@@ -236,6 +222,11 @@ model Subject {
   payment_subjectId           Payment[]           @relation("Payment_subjectId")
   accessGrant_subjectId       AccessGrant[]       @relation("AccessGrant_subjectId")
   importJob_subjectId         ImportJob[]         @relation("ImportJob_subjectId")
+  departmentId String @default("org-unassigned")
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  staffAssignments RoleAssignment[]
+  @@index([departmentId])
+
 }
 
 model Section {
@@ -876,4 +867,56 @@ model ImpersonationSession {
 
   @@index([adminId, startedAt])
   @@index([targetUserId, startedAt])
+}
+
+model Faculty {
+  id String @id @default(cuid())
+  slug String @unique
+  title String
+  order Int @default(0)
+  archivedAt DateTime?
+  departments Department[]
+  staffAssignments RoleAssignment[]
+}
+
+model Department {
+  id String @id @default(cuid())
+  facultyId String
+  slug String
+  title String
+  order Int @default(0)
+  requireSeparateReviewer Boolean @default(false)
+  archivedAt DateTime?
+  faculty Faculty @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  subjects Subject[]
+  staffAssignments RoleAssignment[]
+  @@unique([facultyId, slug])
+}
+
+enum StaffRole {
+  FACULTY_ADMIN
+  DEPARTMENT_HEAD
+  AUTHOR
+  REVIEWER
+}
+
+model RoleAssignment {
+  id String @id @default(cuid())
+  userId String
+  role StaffRole
+  facultyId String?
+  departmentId String?
+  subjectId String?
+  scopeKey String
+  assignedById String?
+  createdAt DateTime @default(now())
+  user User @relation("StaffUser", fields: [userId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("StaffAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  faculty Faculty? @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  @@unique([userId, role, scopeKey])
+  @@index([departmentId])
+  @@index([subjectId])
+  @@index([facultyId])
 }

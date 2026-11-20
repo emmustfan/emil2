@@ -3,10 +3,11 @@ import { getDb } from "../db";
 import { getEnv } from "../env";
 import { createStorageDriver } from "../storage";
 import {
-  contentActor,
-  contentWrite,
-  authorizeSubject,
-} from "../content/permissions";
+  assertCan,
+  lockContentStaff,
+  subjectScope,
+  type ContentReader,
+} from "../org";
 import { ContentError } from "../content/errors";
 import { getContentQueue, CONTENT_IMPORT_QUEUE } from "../content/jobs";
 import { importInput, importLimits, sourceFormat } from "./policy";
@@ -38,7 +39,7 @@ export async function createImport(
 ) {
   const data = importInput.parse(input),
     limits = await importLimits();
-  await authorizeSubject(data.subjectId, actorId);
+  await assertCan(actorId, "content.edit", { subjectId: data.subjectId });
   const format = sourceFormat(filename, body, limits.maxBytes),
     storage = createStorageDriver(getEnv());
   await getContentQueue();
@@ -46,9 +47,14 @@ export async function createImport(
   await storage.put(fileKey, body);
   try {
     return await getDb().$transaction(async (tx) => {
-      await contentWrite(tx, actorId);
+      await lockContentStaff(tx, actorId);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`import:create:${actorId}`},0))`;
-      await authorizeSubject(data.subjectId, actorId, tx);
+      await assertCan(
+        actorId,
+        "content.edit",
+        { subjectId: data.subjectId },
+        tx,
+      );
       if (!(await tx.subject.count({ where: { id: data.subjectId } })))
         throw missing();
       if (
@@ -96,10 +102,9 @@ export async function createImport(
   }
 }
 export async function getImport(actorId: ContentReader, id: string) {
-  await contentActor(actorId);
   const row = await getDb().importJob.findUnique({ where: { id } });
   if (!row) throw missing();
-  await authorizeSubject(row.subjectId, actorId);
+  await assertCan(actorId, "content.read", { subjectId: row.subjectId });
   const topics = await getDb().topic.findMany({
     where: { id: { in: row.topicIds }, subjectId: row.subjectId },
     select: { id: true, title: true, status: true },
@@ -118,16 +123,12 @@ export async function getImport(actorId: ContentReader, id: string) {
   };
 }
 export async function listImports(actorId: ContentReader, subjectId?: string) {
-  const actor = await contentActor(actorId);
-  if (subjectId) await authorizeSubject(subjectId, actorId);
+  if (subjectId)
+    await assertCan(actorId, "content.read", { subjectId: subjectId });
   const rows = await getDb().importJob.findMany({
     where: {
       ...(subjectId ? { subjectId } : {}),
-      ...(actor?.role === "EDITOR"
-        ? {
-            subject: { teachingAssignments: { some: { teacherId: actor.id } } },
-          }
-        : {}),
+      subject: await subjectScope(actorId, "content.read"),
     },
     select: { id: true },
     orderBy: { createdAt: "desc" },
@@ -136,4 +137,3 @@ export async function listImports(actorId: ContentReader, subjectId?: string) {
   return Promise.all(rows.map((row) => getImport(actorId, row.id)));
 }
 export type ImportDTO = Awaited<ReturnType<typeof getImport>>;
-import type { ContentReader } from "../content/permissions";

@@ -6,7 +6,15 @@ import { contentRu as t } from "@/lib/i18n/ru";
 import type { SubjectDTO } from "@/lib/content/types";
 import { headingSlug } from "@/lib/content/slug";
 import { fieldClass, requestContent } from "./helpers";
-export function SubjectForm({ initial }: { initial?: SubjectDTO }) {
+export function SubjectForm({
+  initial,
+  departments = [],
+  departmentId,
+}: {
+  initial?: SubjectDTO;
+  departments?: { id: string; title: string }[];
+  departmentId?: string;
+}) {
   const router = useRouter();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [slug, setSlug] = useState(initial?.slug ?? "");
@@ -32,7 +40,9 @@ export function SubjectForm({ initial }: { initial?: SubjectDTO }) {
         status: String(values.get("status")),
         seoTitle: String(values.get("seoTitle")) || null,
         seoDescription: String(values.get("seoDescription")) || null,
-        ...(initial ? { revision: initial.editRevision } : {}),
+        ...(initial
+          ? { revision: initial.editRevision }
+          : { departmentId: String(values.get("departmentId")) }),
       };
       const row = await requestContent<SubjectDTO>(
         initial ? `subjects/${initial.id}` : "subjects",
@@ -63,6 +73,27 @@ export function SubjectForm({ initial }: { initial?: SubjectDTO }) {
   return (
     <form onSubmit={save} className="space-y-5">
       <fieldset disabled={pending} className="grid gap-5 sm:grid-cols-2">
+        {!initial && (
+          <label className="text-sm font-medium sm:col-span-2">
+            Кафедра
+            <select
+              className={fieldClass}
+              name="departmentId"
+              defaultValue={
+                departments.some((d) => d.id === departmentId)
+                  ? departmentId
+                  : departments[0]?.id
+              }
+              required
+            >
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="text-sm font-medium">
           {t.name}
           <input

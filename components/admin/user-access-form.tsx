@@ -1,4 +1,6 @@
 "use client";
+import { z } from "zod";
+import { staffLabels } from "@/lib/org/labels";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ManagedUser } from "@/lib/admin/users";
@@ -219,6 +221,21 @@ export function UserAccessForm({
         </button>
       </form>
       <section className="mt-8">
+        <h2 className="text-xl font-semibold">Назначения в оргструктуре</h2>
+        {data.staffAssignments.length ? (
+          <ul className="mt-3 space-y-2">
+            {data.staffAssignments.map((a) => (
+              <li key={a.id}>
+                {staffLabels[a.role]} ·{" "}
+                {a.faculty?.title ?? a.department?.title ?? a.subject?.title}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm text-stone-500">Назначений пока нет.</p>
+        )}
+      </section>
+      <section className="mt-8">
         <h2 className="text-xl font-semibold">{t.auditTitle}</h2>
         {data.audit.length ? (
           <ol className="mt-4 space-y-3">
@@ -265,7 +282,35 @@ export function UserAccessForm({
                       )}
                     </div>
                   ) : (
-                    <p>{t.auditAction}</p>
+                    <p>
+                      {event.action === "STAFF_ROLE_ASSIGNED"
+                        ? "Назначена роль"
+                        : event.action === "STAFF_ROLE_REVOKED"
+                          ? "Снята роль"
+                          : t.auditAction}
+                      {(event.action === "STAFF_ROLE_ASSIGNED" ||
+                        event.action === "STAFF_ROLE_REVOKED") &&
+                        (() => {
+                          const fields = z
+                            .object({
+                              role: z.enum([
+                                "FACULTY_ADMIN",
+                                "DEPARTMENT_HEAD",
+                                "AUTHOR",
+                                "REVIEWER",
+                              ]),
+                              scopeKey: z.string(),
+                              scopeTitle: z.string().optional(),
+                            })
+                            .safeParse(event.changes);
+                          return fields.success
+                            ? " · " +
+                                staffLabels[fields.data.role] +
+                                " · " +
+                                (fields.data.scopeTitle ?? fields.data.scopeKey)
+                            : "";
+                        })()}
+                    </p>
                   )}
                 </li>
               );

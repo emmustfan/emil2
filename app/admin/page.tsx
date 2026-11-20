@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db";
-import { ContentTree } from "@/components/admin/content-tree";
+import { OrgMaterials } from "@/components/admin/org-materials";
 import { MaterialQueue } from "@/components/admin/material-queue";
 import Link from "next/link";
 import { requireEditor } from "@/lib/auth/server";
@@ -53,6 +53,9 @@ export default async function Admin({
           <Button asChild>
             <Link href="/admin/subjects/new">{t.newSubject}</Link>
           </Button>
+          <Button asChild>
+            <Link href="/admin/org">Факультеты и кафедры</Link>
+          </Button>
         </div>
         <form className="my-6 flex flex-wrap gap-3" role="search">
           <input
@@ -65,7 +68,7 @@ export default async function Admin({
           />
           <Button variant="outline">{t.search}</Button>
         </form>
-        <ContentTree subjects={data.items} canManageSubjects />
+        <OrgMaterials actor={user} subjects={data.items} />
         <Pagination base="/admin" q={q} {...data} />
       </section>
       <MaterialQueue actor={user} />

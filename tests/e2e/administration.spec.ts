@@ -120,9 +120,9 @@ test.afterEach(async () => {
     },
   });
   await db.event.deleteMany({ where: { id: { in: eventIds.splice(0) } } });
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ teacherId: { in: users } }, { assignedById: { in: users } }],
+      OR: [{ userId: { in: users } }, { assignedById: { in: users } }],
     },
   });
   await cleanupLessonFixture(other);
@@ -272,8 +272,14 @@ test("administrator grants and revokes access while teacher sees only their tuto
   await expect(
     learn.getByText("ПЛАТНЫЙ_СЕКРЕТ_ТОЛЬКО_ПО_ДОСТУПУ."),
   ).toHaveCount(0);
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
   for (const [subjectId, content] of [
     [f.subject.id, "Ответ по закреплённому предмету"],

@@ -25,7 +25,11 @@ vi.mock("../../lib/content/jobs", () => ({
   enqueuePublication: vi.fn(async () => {}),
 }));
 const db = getDb();
-let f: LessonFixture, student: string, teacher: string, outsider: string;
+let f: LessonFixture,
+  student: string,
+  teacher: string,
+  outsider: string,
+  head: string;
 const users: string[] = [];
 const fields = (t: TopicDTO): TopicInput => ({
   title: t.title,
@@ -64,7 +68,7 @@ async function publish(t: TopicDTO) {
 }
 beforeEach(async () => {
   f = await createLessonFixture("stage12");
-  for (const role of ["USER", "EDITOR", "EDITOR"] as const) {
+  for (const role of ["USER", "EDITOR", "EDITOR", "EDITOR"] as const) {
     const u = await db.user.create({
       data: {
         role,
@@ -75,12 +79,22 @@ beforeEach(async () => {
     });
     users.push(u.id);
   }
-  [student, teacher, outsider] = users;
-  await db.teacherSubject.create({
+  [student, teacher, outsider, head] = users;
+  await db.roleAssignment.create({
     data: {
-      teacherId: teacher,
+      userId: head,
+      role: "DEPARTMENT_HEAD",
+      departmentId: f.subject.departmentId,
+      scopeKey: "department:" + f.subject.departmentId,
+    },
+  });
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
       subjectId: f.subject.id,
       assignedById: teacher,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
     },
   });
 });
@@ -316,7 +330,10 @@ it("unpublishes separately, leaves the draft intact and returns cards on republi
     { ...fields(t), contentMd: t.contentMd + "\n\nПравки.", reviewed: false },
     teacher,
   );
-  t = await content.unpublishTopic(t.id, t.editRevision, teacher);
+  await expect(
+    content.unpublishTopic(t.id, t.editRevision, teacher),
+  ).rejects.toMatchObject({ status: 403 });
+  t = await content.unpublishTopic(t.id, t.editRevision, head);
   expect(t.status).toBe("DRAFT");
   expect(t.draftState).toBe("DRAFT");
   expect(t.contentMd).toContain("Правки.");
@@ -380,7 +397,10 @@ it("creates immutable snapshots for each publication and restricts history and m
   await expect(
     content.updateTopic(t.id, t.editRevision - 1, fields(t), teacher),
   ).rejects.toMatchObject({ status: 409, code: "stale" });
-  t = await content.unpublishTopic(t.id, t.editRevision, teacher);
+  await expect(
+    content.unpublishTopic(t.id, t.editRevision, teacher),
+  ).rejects.toMatchObject({ status: 403 });
+  t = await content.unpublishTopic(t.id, t.editRevision, head);
   await expect(
     content.deleteTopic(t.id, t.editRevision, teacher),
   ).rejects.toMatchObject({ status: 409 });

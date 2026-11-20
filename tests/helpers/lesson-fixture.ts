@@ -91,9 +91,9 @@ export async function cleanupLessonFixture(
         select: { id: true },
       })
     ).map((t) => t.id);
-  await db.teacherSubject.deleteMany({
+  await db.roleAssignment.deleteMany({
     where: {
-      OR: [{ subjectId: f.subject.id }, { teacherId: { in: userIds } }],
+      OR: [{ subjectId: f.subject.id }, { userId: { in: userIds } }],
     },
   });
   await db.securityAudit.deleteMany({

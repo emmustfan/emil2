@@ -1,3 +1,4 @@
+import { subjectScope } from "@/lib/org";
 import type { Metadata } from "next";
 import { requireEditor } from "@/lib/auth/server";
 import { getDb } from "@/lib/db";
@@ -17,10 +18,7 @@ export default async function ImportsPage({
   const user = await requireEditor(),
     query = await searchParams;
   const subjects = await getDb().subject.findMany({
-    where:
-      user.role === "EDITOR"
-        ? { teachingAssignments: { some: { teacherId: user.id } } }
-        : {},
+    where: await subjectScope(user, "content.edit"),
     select: {
       id: true,
       title: true,

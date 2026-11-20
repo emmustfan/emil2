@@ -28,11 +28,13 @@ export async function createImpersonationFixture() {
   const admin = await user("ADMIN", "Администратор просмотра"),
     student = await user("USER", "Демо ученик просмотра (демо)"),
     teacher = await user("EDITOR", "Учитель просмотра");
-  await db.teacherSubject.create({
+  await db.roleAssignment.create({
     data: {
-      teacherId: teacher.id,
+      userId: teacher.id,
       subjectId: f.subject.id,
       assignedById: admin.id,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
     },
   });
   await db.accessGrant.create({
@@ -147,7 +149,7 @@ export const protectedImpersonationTables = [
   "Question",
   "Gap",
   "TopicRevision",
-  "TeacherSubject",
+  "RoleAssignment",
 ] as const;
 export async function snapshotImpersonationData() {
   const result: Record<string, { count: number; digest: string }> = {};

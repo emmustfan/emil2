@@ -1,19 +1,22 @@
 import { z } from "zod";
 import { Prisma } from "../generated/prisma/client";
 import { getDb } from "../db";
-import { contentActor } from "../content/permissions";
+import { orgActor, subjectScope } from "../org";
 import { redactPersonalData } from "../tutor/privacy";
 import { readCitations } from "../tutor/service";
 import { reportInput, reportRange, identifier } from "./policy";
 import { getSetting } from "../settings";
+import { AuthError } from "../auth/errors";
 import { ContentError } from "../content/errors";
 export const logInput = reportInput.omit({ source: true }).extend({
   subjectId: identifier.optional(),
   inaccurate: z.enum(["", "yes"]).default(""),
 });
 export async function tutorLogs(actorId: string, raw: unknown) {
-  const actor = await contentActor(actorId),
-    input = logInput.parse(raw);
+  const actor = { id: actorId };
+  if ((await orgActor(actor)).role === "USER")
+    throw new AuthError("forbidden", 403);
+  const input = logInput.parse(raw);
   let range: ReturnType<typeof reportRange>;
   try {
     range = reportRange({ ...input, source: "" });
@@ -21,10 +24,7 @@ export async function tutorLogs(actorId: string, raw: unknown) {
     throw new ContentError("Выберите корректный период не длиннее года.");
   }
   const subjects = await getDb().subject.findMany({
-    where:
-      actor?.role === "EDITOR"
-        ? { teachingAssignments: { some: { teacherId: actor.id } } }
-        : {},
+    where: await subjectScope(actor, "content.edit"),
     select: { id: true, title: true },
     orderBy: { title: "asc" },
   });

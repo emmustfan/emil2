@@ -1,6 +1,6 @@
 import { getDb } from "../db";
 import { billingLock } from "../billing/service";
-import { assertAdmin } from "./users";
+import { assertPlatformAdmin } from "../org";
 import { adminAudit } from "./write";
 import { grantInput } from "./policy";
 import { ContentError } from "../content/errors";
@@ -16,7 +16,7 @@ export async function grantAccess(
     throw new ContentError("Срок превышает разрешённый лимит ручного доступа.");
   return getDb().$transaction(async (tx) => {
     await billingLock(tx, userId);
-    await assertAdmin(actorId, tx);
+    await assertPlatformAdmin(actorId, tx);
     const existing = await tx.accessGrant.findUnique({
       where: { id: input.requestId },
     });
@@ -74,7 +74,7 @@ export async function revokeGrant(
 ) {
   await getDb().$transaction(async (tx) => {
     await billingLock(tx, userId, true);
-    await assertAdmin(actorId, tx);
+    await assertPlatformAdmin(actorId, tx);
     const row = await tx.accessGrant.findFirst({ where: { id, userId } });
     if (!row) throw new ContentError("Доступ не найден.", 404);
     if (row.expiresAt <= now) return;

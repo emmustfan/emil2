@@ -7,9 +7,11 @@ import { contentRu } from "@/lib/i18n/ru";
 export async function ContentTree({
   subjects,
   canManageSubjects = false,
+  teacherLinks = false,
 }: {
   subjects: { id: string; title: string }[];
   canManageSubjects?: boolean;
+  teacherLinks?: boolean;
 }) {
   const data = await getDb().subject.findMany({
     where: { id: { in: subjects.map((s) => s.id) } },
@@ -66,7 +68,11 @@ export async function ContentTree({
               <BookOpen size={19} />
               <span className="content-level">Предмет</span>
               <Link href={`/admin/subjects/${subject.id}`}>
-                {subject.title}
+                {teacherLinks ? (
+                  <h2 className="inline text-inherit">{subject.title}</h2>
+                ) : (
+                  subject.title
+                )}
               </Link>
               <span className="material-status">
                 {contentRu.statuses[subject.status]}
@@ -74,6 +80,11 @@ export async function ContentTree({
               <small>{subject.topic_subjectId.length} ур.</small>
             </summary>
             <div className="content-tree-subject-actions">
+              {teacherLinks && (
+                <Link href={`/admin/subjects/${subject.id}`}>
+                  Открыть материалы
+                </Link>
+              )}
               <Link href={`/admin/subjects/${subject.id}/editor`}>
                 Открыть книгу →
               </Link>

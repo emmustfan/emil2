@@ -165,6 +165,7 @@ async function routeRequest(
     });
   if (
     ([
+      "/admin/org",
       "/admin/users",
       "/admin/payments",
       "/admin/subscriptions",

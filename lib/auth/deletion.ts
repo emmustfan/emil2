@@ -74,7 +74,7 @@ export async function requestAccountDeletion(id: string, now = new Date()) {
         },
         data: { usedAt: now },
       });
-      await tx.teacherSubject.deleteMany({ where: { teacherId: id } });
+      await tx.roleAssignment.deleteMany({ where: { userId: id } });
       await tx.securityAudit.create({
         data: {
           actorId: id,
@@ -215,8 +215,8 @@ export async function anonymizeAccount(id: string, now = new Date()) {
           nextRetryAt: null,
         },
       });
-      await tx.teacherSubject.deleteMany({ where: { teacherId: id } });
-      await tx.teacherSubject.updateMany({
+      await tx.roleAssignment.deleteMany({ where: { userId: id } });
+      await tx.roleAssignment.updateMany({
         where: { assignedById: id },
         data: { assignedById: null },
       });

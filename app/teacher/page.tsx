@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MaterialQueue } from "@/components/admin/material-queue";
-import Link from "next/link";
+import { OrgMaterials } from "@/components/admin/org-materials";
 import { requireEditor } from "@/lib/auth/server";
 import { listSubjects } from "@/lib/content/service";
 import { searchState } from "@/lib/content/page";
@@ -56,26 +56,7 @@ export default async function Teacher({
           />
           <button className="lesson-primary">{t.search}</button>
         </form>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {data.items.map((s) => (
-            <article
-              key={s.id}
-              className="min-w-0 rounded-2xl border border-stone-200 bg-white p-6"
-            >
-              <h2 className="text-xl font-semibold break-words">{s.title}</h2>
-              <p className="mt-3 text-xs leading-6 text-stone-500">
-                {contentRu.statuses[s.status]} · Тем: {s._count.topic_subjectId}{" "}
-                · Разделов: {s._count.section_subjectId}
-              </p>
-              <Link
-                href={`/admin/subjects/${s.id}`}
-                className="lesson-primary mt-5"
-              >
-                {t.editMaterials}
-              </Link>
-            </article>
-          ))}
-        </div>
+        <OrgMaterials actor={user} subjects={data.items} />
         {!data.items.length && (
           <p className="mt-6 rounded-xl bg-emerald-50 p-5 text-sm leading-8">
             {q ? contentRu.empty : t.teacherEmpty}

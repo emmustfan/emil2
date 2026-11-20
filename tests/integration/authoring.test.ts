@@ -92,8 +92,14 @@ beforeEach(async () => {
   admin = await user("ADMIN");
   teacher = await user("EDITOR");
   student = await user("USER");
-  await db.teacherSubject.create({
-    data: { teacherId: teacher, subjectId: f.subject.id, assignedById: admin },
+  await db.roleAssignment.create({
+    data: {
+      userId: teacher,
+      subjectId: f.subject.id,
+      assignedById: admin,
+      role: "AUTHOR",
+      scopeKey: "subject:" + f.subject.id,
+    },
   });
   png = await sharp({
     create: { width: 40, height: 20, channels: 3, background: "#08634f" },
@@ -217,9 +223,13 @@ it("rechecks assignments on subsequent reads and uploads", async () => {
     data: { status: "DRAFT" },
   });
   const image = await uploadTopicImage(teacher, f.free.id, png, "image/png");
-  await db.teacherSubject.delete({
+  await db.roleAssignment.delete({
     where: {
-      teacherId_subjectId: { teacherId: teacher, subjectId: f.subject.id },
+      userId_role_scopeKey: {
+        userId: teacher,
+        role: "AUTHOR",
+        scopeKey: "subject:" + f.subject.id,
+      },
     },
   });
   await expect(readTopicImage(image.id, teacher)).rejects.toMatchObject({

@@ -5,7 +5,7 @@ import { getDb } from "../db";
 import { getEnv } from "../env";
 import { getSetting } from "../settings";
 import { createStorageDriver } from "../storage";
-import { contentActor, contentWrite, authorizeSubject } from "./permissions";
+import { assertContent, can, lockContentStaff } from "../org";
 import { ContentError } from "./errors";
 import { lockTopicForChange } from "./locks";
 import { consumeLimit, hasAccess } from "../access";
@@ -79,13 +79,12 @@ export async function uploadTopicImage(
   body: Buffer,
   mime: string,
 ) {
-  await contentActor(actorId);
   const topic = await getDb().topic.findUnique({
     where: { id: topicId },
     select: { subjectId: true },
   });
   if (!topic) throw new ContentError("Тема не найдена.", 404);
-  await authorizeSubject(topic.subjectId, actorId);
+  await assertContent(actorId, "content.edit", { subjectId: topic.subjectId });
   const limits = await imageLimits();
   await consumeLimit(`user:${actorId}`, {
     feature: "content-image",
@@ -99,12 +98,17 @@ export async function uploadTopicImage(
   await storage.put(storageKey, image.body);
   try {
     return await getDb().$transaction(async (tx) => {
-      await contentWrite(tx, actorId);
+      await lockContentStaff(tx, actorId);
       await lockTopicForChange(tx, topicId);
       const current = await tx.topic.findUniqueOrThrow({
         where: { id: topicId },
       });
-      await authorizeSubject(current.subjectId, actorId, tx);
+      await assertContent(
+        actorId,
+        "content.edit",
+        { subjectId: current.subjectId },
+        tx,
+      );
       if (
         (await tx.topicImage.count({ where: { topicId } })) >=
         limits.maxPerTopic
@@ -164,12 +168,9 @@ export async function readTopicImage(
     throw new ContentError("Изображение недоступно.", 404);
   let editor = false;
   if (user && (await hasCurrentConsent(user)))
-    editor =
-      user.role === "ADMIN" ||
-      (user.role === "EDITOR" &&
-        !!(await getDb().teacherSubject.count({
-          where: { teacherId: user.id, subjectId: image.topic.subjectId },
-        })));
+    editor = await can({ id: user.id, readOnly }, "content.read", {
+      subjectId: image.topic.subjectId,
+    });
   if (
     !editor &&
     (!(!user || (await hasCurrentConsent(user))) ||
