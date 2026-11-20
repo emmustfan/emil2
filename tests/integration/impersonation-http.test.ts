@@ -439,7 +439,11 @@ it("keeps closed Rutube credentials out of unauthorised HTML, lesson payloads, e
   const { topic, video } = await makeVideo(f.f);
   const clean = (value: unknown) => {
     const serialized =
-      typeof value === "string" ? value : JSON.stringify(value);
+      typeof value === "string"
+        ? value
+        : JSON.stringify(value, (_key, property) =>
+            typeof property === "bigint" ? property.toString() : property,
+          );
     for (const secret of [testVideoExternalId, testVideoKey])
       expect(serialized).not.toContain(secret);
   };
@@ -454,6 +458,11 @@ it("keeps closed Rutube credentials out of unauthorised HTML, lesson payloads, e
   const html = await closed.text();
   clean(html);
   expect(html).not.toContain("/play/embed/");
+  const opened = await request(url, `sid=${f.studentSid}`);
+  expect(opened.status).toBe(200);
+  const allowed = await opened.text();
+  expect(allowed).toContain(testVideoExternalId);
+  expect(allowed).toContain(testVideoKey);
   const bad = await request(
     `/api/videos/${video.id}/progress`,
     `sid=${f.teacherSid}`,
