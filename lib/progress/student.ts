@@ -1,13 +1,20 @@
 import { getDb } from "../db";
 import { Prisma } from "../generated/prisma/client";
 import { assertCanViewStudent } from "./access";
-import { activitySQL } from "./queries";
+import { activitySQL, visibleTopic } from "./queries";
+import type { ContentReader } from "../org";
+import { topicVideoIds } from "../video/catalog";
+import { videoCoverage, videoMethod } from "./video";
 import { progressSettings, readProgressRows } from "./summary";
 import { isLagging } from "./policy";
 import { snapshotReader } from "./snapshots";
 export async function studentProgress(
   studentId: string,
-  options: { viewerId: string | null | undefined; subjectId?: string },
+  options: {
+    viewerId: ContentReader | null | undefined;
+    subjectId?: string;
+    groupId?: string;
+  },
   now = new Date(),
 ) {
   return getDb().$transaction(
@@ -17,7 +24,74 @@ export async function studentProgress(
         studentId,
         options.subjectId,
         db,
+        options.groupId,
       ))!;
+      const pair = options.groupId
+        ? await db.groupSubject.findUniqueOrThrow({
+            where: {
+              groupId_subjectId: {
+                groupId: options.groupId,
+                subjectId: options.subjectId!,
+              },
+            },
+            select: {
+              group: { select: { id: true, name: true } },
+              subject: { select: { id: true, title: true } },
+            },
+          })
+        : null;
+      const group = pair?.group ?? null;
+      const deleted = !!(user.deletedAt || user.anonymizedAt);
+      const identity = {
+        id: user.id,
+        name: user.name ?? user.email ?? "Без имени",
+        email: group ? null : user.email,
+        studentNumber: group ? user.studentNumber : null,
+        deleted,
+        timezone: user.timezone,
+      };
+      await db.studentDataAccess.create({
+        data: {
+          viewerId:
+            typeof options.viewerId === "string"
+              ? options.viewerId
+              : options.viewerId!.id,
+          studentId,
+          subjectId: options.subjectId ?? null,
+          groupId: group?.id ?? null,
+          view: "student_card",
+        },
+      });
+      // A deletion can be pending while storage cleanup is in progress.
+      if (pair && deleted)
+        return {
+          user: identity,
+          group,
+          subjects: [pair.subject],
+          subjectId: pair.subject.id,
+          summary: {
+            id: studentId,
+            name: identity.name,
+            email: null,
+            subjects: pair.subject.title,
+            completed: 0,
+            totalTopics: 0,
+            average: null,
+            due: 0,
+            overdue: 0,
+            lastActivity: null,
+            lagging: false,
+          },
+          review: {
+            total: 0,
+            due: 0,
+            overdue: 0,
+            ratings: { HARD: 0, GOOD: 0, EASY: 0 },
+          },
+          activity: [],
+          tutor: { total: 0, topics: [] },
+          topics: [],
+        };
       const settings = await progressSettings(),
         start = new Date(+now - 29 * 86400000);
       start.setUTCHours(0, 0, 0, 0);
@@ -28,7 +102,12 @@ export async function studentProgress(
         { subjects: { id: string; title: string }[]; topicIds: string[] }[]
       >(Prisma.sql`
       WITH activity AS (${activitySQL()})
-      SELECT COALESCE((SELECT jsonb_agg(s ORDER BY s.title) FROM(SELECT DISTINCT s.id,s.title FROM activity a JOIN "Subject" s ON s.id=a."subjectId" WHERE a."userId"=${studentId} ${user.canViewAllSubjects ? Prisma.empty : scope})s),'[]'::jsonb) AS subjects,
+      SELECT COALESCE((SELECT jsonb_agg(s ORDER BY s.title) FROM(
+        SELECT s.id,s.title FROM "Subject" s WHERE ${
+          !user.canViewAllSubjects
+            ? Prisma.sql`s.id=${options.subjectId}`
+            : Prisma.sql`EXISTS(SELECT 1 FROM activity a WHERE a."subjectId"=s.id AND a."userId"=${studentId})`
+        })s),'[]'::jsonb) AS subjects,
       COALESCE((SELECT array_agg(DISTINCT a."topicId") FILTER(WHERE a."topicId" IS NOT NULL) FROM activity a WHERE a."userId"=${studentId} ${scope}),ARRAY[]::text[]) AS "topicIds"
     `);
       const topicScope = {
@@ -39,14 +118,7 @@ export async function studentProgress(
       const topics = await db.topic.findMany({
         where: {
           ...topicScope,
-          OR: [
-            {
-              status: "PUBLISHED",
-              needsExpertReview: false,
-              subject: { status: "PUBLISHED" },
-            },
-            { id: { in: subjects.topicIds } },
-          ],
+          OR: [visibleTopic, { id: { in: subjects.topicIds } }],
         },
         select: {
           id: true,
@@ -54,6 +126,7 @@ export async function studentProgress(
           title: true,
           slug: true,
           version: true,
+          contentMd: true,
           status: true,
           needsExpertReview: true,
           order: true,
@@ -74,6 +147,7 @@ export async function studentProgress(
         tutor,
         days,
         summary,
+        videos,
       ] = await Promise.all([
         db.gap.findMany({ where, orderBy: [{ order: "asc" }, { id: "asc" }] }),
         db.question.findMany({
@@ -123,6 +197,25 @@ export async function studentProgress(
           settings,
           now,
         ),
+        db.videoLecture.findMany({
+          where,
+          select: {
+            id: true,
+            topicId: true,
+            title: true,
+            durationSec: true,
+            archivedAt: true,
+            progress: {
+              where: { userId: studentId },
+              select: {
+                watchedSec: true,
+                selfReported: true,
+                completedAt: true,
+              },
+            },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        }),
       ]);
       const attempts = await db.gapAttempt.findMany({
         where: { userId: studentId, gapId: { in: gaps.map((g) => g.id) } },
@@ -147,25 +240,14 @@ export async function studentProgress(
           now,
           settings,
         );
-      await db.studentDataAccess.create({
-        data: {
-          viewerId: options.viewerId!,
-          studentId,
-          subjectId: options.subjectId ?? null,
-          view: "student_card",
-        },
-      });
       return {
-        user: {
-          id: user.id,
-          name: user.name ?? user.email ?? "Без имени",
-          email: user.email,
-          deleted: !!user.deletedAt || !!user.anonymizedAt,
-          timezone: user.timezone,
-        },
+        user: identity,
+        group,
         subjects: subjects.subjects,
         subjectId: options.subjectId ?? null,
-        summary: summaryRow,
+        summary: group
+          ? { ...summaryRow, name: identity.name, email: null }
+          : summaryRow,
         review: {
           total: cards.length,
           due: summary.items[0]?.due ?? 0,
@@ -177,45 +259,13 @@ export async function studentProgress(
           total: tutor.reduce((sum, t) => sum + t.count, 0),
           topics: tutor,
         },
-        topics: topics.map((t) => ({
-          ...t,
-          progress: progress.find((p) => p.topicId === t.id) ?? null,
-          gaps: gaps
-            .filter((g) => g.topicId === t.id)
-            .map((g) => {
-              const first = firstAnswers.find((a) => a.gapId === g.id);
-              return {
-                id: g.id,
-                sentence: g.sentence,
-                archived: !!g.archivedAt,
-                correct: historical.gap(g, t.version, t.version).correct,
-                first: first
-                  ? {
-                      chosen: first.chosenValues.length
-                        ? first.chosenValues
-                        : [first.chosen],
-                      correct: first.isCorrect,
-                    }
-                  : null,
-                attempts: attempts
-                  .filter((a) => a.gapId === g.id)
-                  .map((a) => ({
-                    id: a.id,
-                    chosen: a.chosenValues,
-                    text: a.chosenText,
-                    isCorrect: a.isCorrect,
-                    practice: a.practice,
-                    at: a.createdAt.toISOString(),
-                    version: a.topicVersion,
-                    oldVersion: a.topicVersion !== t.version,
-                    ...historical.gap(g, a.topicVersion, t.version),
-                  })),
-              };
-            }),
-          tests: runs
-            .filter((r) => r.topicId === t.id && r.mode !== "VIDEO")
+        topics: topics.map(({ contentMd, ...t }) => {
+          const linkedVideos = topicVideoIds(contentMd);
+          const topicRuns = runs
+            .filter((r) => r.topicId === t.id)
             .map((r) => ({
               id: r.id,
+              mode: r.mode,
               at: r.startedAt.toISOString(),
               score: r.score,
               finished: !!r.finishedAt,
@@ -235,6 +285,8 @@ export async function studentProgress(
                 return [
                   {
                     id: a.id,
+                    videoId: snapshot.videoId,
+                    at: a.createdAt.toISOString(),
                     stem: snapshot.stem,
                     chosen:
                       a.chosenText !== null
@@ -249,9 +301,80 @@ export async function studentProgress(
                   },
                 ];
               }),
-            })),
-          tutorQuestions: tutor.find((q) => q.topicId === t.id)?.count ?? 0,
-        })),
+            }));
+          const videoAnswers = topicRuns
+            .filter((r) => r.mode === "VIDEO")
+            .flatMap((r) =>
+              r.answers.map((a) => ({
+                ...a,
+                version: r.version,
+                oldVersion: r.oldVersion,
+              })),
+            );
+          return {
+            ...t,
+            progress: progress.find((p) => p.topicId === t.id) ?? null,
+            gaps: gaps
+              .filter((g) => g.topicId === t.id)
+              .map((g) => {
+                const first = firstAnswers.find((a) => a.gapId === g.id);
+                return {
+                  id: g.id,
+                  sentence: g.sentence,
+                  archived: !!g.archivedAt,
+                  correct: historical.gap(g, t.version, t.version).correct,
+                  first: first
+                    ? {
+                        chosen: first.chosenValues.length
+                          ? first.chosenValues
+                          : [first.chosen],
+                        correct: first.isCorrect,
+                      }
+                    : null,
+                  attempts: attempts
+                    .filter((a) => a.gapId === g.id)
+                    .map((a) => ({
+                      id: a.id,
+                      chosen: a.chosenValues,
+                      text: a.chosenText,
+                      isCorrect: a.isCorrect,
+                      practice: a.practice,
+                      at: a.createdAt.toISOString(),
+                      version: a.topicVersion,
+                      oldVersion: a.topicVersion !== t.version,
+                      ...historical.gap(g, a.topicVersion, t.version),
+                    })),
+                };
+              }),
+            tests: topicRuns.filter((r) => r.mode !== "VIDEO"),
+            videos: videos
+              .filter((v) => v.topicId === t.id)
+              .flatMap((v) => {
+                const answers = videoAnswers.filter((a) => a.videoId === v.id);
+                const watch = v.progress[0];
+                if (
+                  (!linkedVideos.includes(v.id) || v.archivedAt) &&
+                  !watch &&
+                  !answers.length
+                )
+                  return [];
+                return [
+                  {
+                    id: v.id,
+                    title: v.title,
+                    method: videoMethod(watch),
+                    coverage:
+                      watch?.selfReported && !watch.watchedSec
+                        ? null
+                        : videoCoverage(watch?.watchedSec ?? 0, v.durationSec),
+                    completed: !!watch?.completedAt,
+                    answers,
+                  },
+                ];
+              }),
+            tutorQuestions: tutor.find((q) => q.topicId === t.id)?.count ?? 0,
+          };
+        }),
       };
     },
     { isolationLevel: "RepeatableRead", timeout: 30000 },

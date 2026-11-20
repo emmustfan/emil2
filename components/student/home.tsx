@@ -189,6 +189,11 @@ export async function StudentHome() {
                     ? `Открыт до ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeZone: user.timezone }).format(s.until)}`
                     : "Бесплатные темы"}
               </p>
+              {s.enrolled && (
+                <Link href="/legal/group-notice" className="text-sm underline">
+                  Что видит преподаватель
+                </Link>
+              )}
             </article>
           ))}
         </div>

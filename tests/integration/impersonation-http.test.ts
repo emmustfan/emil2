@@ -1,4 +1,8 @@
 import {
+  createTeacherProgressFixture,
+  teacherProgressSession,
+} from "../helpers/teacher-progress-fixture";
+import {
   makeVideo,
   testVideoExternalId,
   testVideoKey,
@@ -138,6 +142,8 @@ function pathFor(pattern: string) {
     .replace("[slug]", f.f.subject.slug)
     .replace("[kind]", "privacy")
     .replace("[topicId]", f.f.free.id)
+    .replace("[subjectId]", f.f.subject.id)
+    .replace("[groupId]", "fixture-group")
     .replace("[paymentId]", f.payment.id)
     .replace("[userId]", f.student.id)
     .replace("[gapId]", f.f.free.gap_topicId[0].id)
@@ -509,3 +515,69 @@ it("keeps closed Rutube credentials out of unauthorised HTML, lesson payloads, e
   expect(logs.join("")).toContain("[REDACTED]");
   clean(logs);
 }, 35000);
+
+it("serves the scoped journal, student card, analysis and CSV only to the staff allowed for the pair", async () => {
+  const g = await createTeacherProgressFixture();
+  try {
+    const [teacher, head, facultyAdmin, learner] = await Promise.all(
+      [g.teacher, g.head, g.facultyAdmin, g.student].map(
+        async (u) => `sid=${await teacherProgressSession(u.id)}`,
+      ),
+    );
+    const journal = (pair: typeof g.ax) =>
+      `/teacher/groups/${pair.groupId}/subjects/${pair.subjectId}`;
+    const card = (pair: typeof g.ax, userId: string) =>
+      `${journal(pair)}/students/${userId}`;
+    const exporter = (pair: typeof g.ax) => `/api${journal(pair)}/export`;
+    for (const [cookie, pair, student] of [
+      [teacher, g.ax, g.student],
+      [head, g.bx, g.outsider],
+      [facultyAdmin, g.ay, g.student],
+    ] as const) {
+      expect((await request(journal(pair), cookie)).status).toBe(200);
+      expect((await request(card(pair, student.id), cookie)).status).toBe(200);
+      expect((await request(journal(pair) + "/analysis", cookie)).status).toBe(
+        200,
+      );
+      const file = await request(exporter(pair), cookie, "POST");
+      expect(file.status).toBe(200);
+      expect([...new Uint8Array(await file.arrayBuffer()).slice(0, 3)]).toEqual(
+        [0xef, 0xbb, 0xbf],
+      );
+    }
+    for (const [cookie, pair] of [
+      [teacher, g.ay],
+      [teacher, g.bx],
+      [head, g.ay],
+      [facultyAdmin, g.bx],
+      [learner, g.ax],
+      ["", g.ax],
+    ] as const) {
+      for (const [path, method] of [
+        [journal(pair), "GET"],
+        [journal(pair) + "/analysis", "GET"],
+        [card(pair, g.student.id), "GET"],
+        [exporter(pair), "POST"],
+      ]) {
+        const response = await request(path, cookie, method);
+        expect(response.status, path).toBe(404);
+        expect(await response.text()).not.toContain("верный-один");
+      }
+    }
+    expect((await request(card(g.ax, g.outsider.id), teacher)).status).toBe(
+      404,
+    );
+    expect((await request(card(g.ax, g.pending.id), teacher)).status).toBe(404);
+    const safe = await request(card(g.ax, g.student.id), teacher);
+    const html = await safe.text();
+    for (const forbidden of [
+      "Предмет Y вне журнала",
+      "Петров Студент",
+      testVideoKey,
+      testVideoExternalId,
+    ])
+      expect(html).not.toContain(forbidden);
+  } finally {
+    await g.cleanup();
+  }
+}, 90000);

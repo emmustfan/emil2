@@ -6,6 +6,7 @@ import { ContentError } from "../content/errors";
 import { decide, roleAllows, type Action, type Area } from "./policy";
 import { orgActor, type ContentReader } from "./actor";
 import { createGroupStatus, groupStatus } from "./groups";
+import { progressSubjectScope } from "./progress";
 export { orgActor, type ContentReader } from "./actor";
 export type { Action } from "./policy";
 export const UNASSIGNED_DEPARTMENT_ID = "org-unassigned";
@@ -15,7 +16,10 @@ type ContentTarget =
   | { subjectId: string; draftUpdatedById?: string | null }
   | { departmentId: string }
   | { facultyId: string };
-export type Target = ContentTarget | { groupId: string; subjectId?: string };
+export type Target =
+  | ContentTarget
+  | { groupId: string; subjectId?: string }
+  | { allProgress: true };
 
 async function areaFor(db: Db, target: ContentTarget): Promise<Area | null> {
   const select = {
@@ -67,6 +71,22 @@ async function decision(
   target: Target,
   db?: Db,
 ) {
+  if (action === "progress.view") {
+    const conn = db ?? getDb();
+    const user = await orgActor(actor, db);
+    if ("allProgress" in target)
+      return user.role === "ADMIN" && !user.readOnly ? 200 : 404;
+    if (!("groupId" in target) || !target.subjectId) return 404;
+    const pair = await conn.groupSubject.count({
+      where: {
+        AND: [
+          { groupId: target.groupId, subjectId: target.subjectId },
+          progressSubjectScope(user),
+        ],
+      },
+    });
+    return pair ? 200 : 404;
+  }
   if (action === "group.manage" || action === "group.members") {
     const conn = db ?? getDb();
     if ("groupId" in target)
@@ -75,7 +95,7 @@ async function decision(
       return createGroupStatus(actor, target.facultyId, conn);
     return 404;
   }
-  if ("groupId" in target) return 404;
+  if ("groupId" in target || "allProgress" in target) return 404;
   const [user, area] = await Promise.all([
     orgActor(actor, db),
     areaFor(db ?? getDb(), target),

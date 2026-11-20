@@ -1,6 +1,5 @@
 import type { StudentProgress } from "@/lib/progress/student";
-const percent = (n: number | null | undefined) =>
-  n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`;
+import { percent } from "@/lib/progress/display";
 export function StudentProgressCard({
   data,
   timeZone,
@@ -190,6 +189,55 @@ export function StudentProgressCard({
               ))}
               {!topic.tests.length && (
                 <p className="text-sm">Тесты пока не запускались.</p>
+              )}
+              {topic.videos.length > 0 && (
+                <section className="space-y-3">
+                  <h3 className="text-lg font-medium">Видео</h3>
+                  {topic.videos.map((video) => (
+                    <details key={video.id} className="rounded-xl border p-4">
+                      <summary className="cursor-pointer">
+                        {video.title} · {video.method} ·{" "}
+                        {video.coverage === null
+                          ? video.method === "Самоотметка"
+                            ? "Доля просмотра не измерялась"
+                            : "Длительность неизвестна"
+                          : `Просмотрено ${percent(video.coverage)}`}
+                        {video.completed ? " · Просмотр засчитан" : ""}
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        {!video.answers.length && (
+                          <p className="text-sm">
+                            Ответов на вопросы в видео пока нет.
+                          </p>
+                        )}
+                        {video.answers.map((answer) => (
+                          <div
+                            className="rounded bg-stone-50 p-3 text-sm"
+                            key={answer.id}
+                          >
+                            <p className="font-medium">
+                              {answer.stem} ·{" "}
+                              {answer.isCorrect ? "Верно" : "Неверно"}
+                            </p>
+                            <p>
+                              {date(answer.at)}
+                              {answer.oldVersion
+                                ? ` · Ответ к версии ${answer.version ?? "неизвестной"}`
+                                : ""}
+                            </p>
+                            <p>Ответ студента: {answer.chosen.join("; ")}</p>
+                            <p>
+                              Правильный ответ:{" "}
+                              {answer.correct.length
+                                ? answer.correct.join("; ")
+                                : "Эталон прежней версии недоступен"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </section>
               )}
             </div>
           </details>

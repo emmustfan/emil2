@@ -3,7 +3,13 @@ import { getDb } from "../db";
 import { getSetting } from "../settings";
 import { assertCanViewStudent } from "./access";
 import { progressFilters } from "./policy";
-import { activitySQL, availableCardSQL, visibleTopicSQL } from "./queries";
+import {
+  activitySQL,
+  availableCardSQL,
+  cardCountsSQL,
+  safeTimezoneSQL,
+  visibleTopicSQL,
+} from "./queries";
 export type ProgressRow = {
   id: string;
   name: string;
@@ -59,16 +65,16 @@ export async function readProgressRows(
   >(Prisma.sql`
     WITH people AS (
       SELECT id,CASE WHEN "deletedAt" IS NOT NULL OR "anonymizedAt" IS NOT NULL THEN 'Удалённый пользователь' ELSE COALESCE(name,email,'Без имени') END AS name,
-      CASE WHEN "deletedAt" IS NOT NULL OR "anonymizedAt" IS NOT NULL THEN NULL ELSE email END AS email,"createdAt",CASE WHEN timezone IN (SELECT name FROM pg_timezone_names) THEN timezone ELSE 'Europe/Moscow' END AS timezone
-      FROM "User" WHERE role='USER' AND ${input.studentId ? Prisma.sql`id=${input.studentId}` : Prisma.sql`"deletedAt" IS NULL`}
+      CASE WHEN "deletedAt" IS NOT NULL OR "anonymizedAt" IS NOT NULL THEN NULL ELSE email END AS email,"createdAt",${safeTimezoneSQL} AS timezone
+      FROM "User" u WHERE role='USER' AND ${input.studentId ? Prisma.sql`id=${input.studentId}` : Prisma.sql`"deletedAt" IS NULL`}
     ), activity AS (${activitySQL()}), scoped_activity AS (SELECT a.* FROM activity a JOIN people u ON u.id=a."userId" WHERE true ${scope}),
     subject_activity AS (SELECT DISTINCT "userId","subjectId" FROM scoped_activity),
     subject_totals AS (SELECT t."subjectId",count(*)::int AS n FROM "Topic" t JOIN "Subject" s ON s.id=t."subjectId" WHERE ${visibleTopicSQL} GROUP BY t."subjectId"),
     subject_stats AS (SELECT a."userId",string_agg(s.title,' · ' ORDER BY s.title) AS subjects,COALESCE(sum(n),0)::int AS total FROM subject_activity a JOIN "Subject" s ON s.id=a."subjectId" LEFT JOIN subject_totals st ON st."subjectId"=s.id GROUP BY a."userId"),
     progress_stats AS (SELECT p."userId",count(*) FILTER(WHERE p."completedAt" IS NOT NULL)::int AS completed,avg(p."testBestScore")::float AS average FROM "TopicProgress" p JOIN people u ON u.id=p."userId" JOIN "Topic" t ON t.id=p."topicId" JOIN "Subject" s ON s.id=t."subjectId" WHERE ${visibleTopicSQL} ${input.subjectId ? Prisma.sql`AND t."subjectId"=${input.subjectId}` : Prisma.empty} GROUP BY p."userId"),
-    card_stats AS (SELECT c."userId",count(*) FILTER(WHERE c."dueAt"<=${now})::int AS due,count(*) FILTER(WHERE c."dueAt"<date_trunc('day',${now}::timestamptz AT TIME ZONE u.timezone) AT TIME ZONE u.timezone AT TIME ZONE 'UTC')::int AS overdue FROM "Card" c JOIN people u ON u.id=c."userId" JOIN "Topic" t ON t.id=c."topicId" JOIN "Subject" s ON s.id=t."subjectId" WHERE ${availableCardSQL(now, settings.graceDays)} ${input.subjectId ? Prisma.sql`AND c."subjectId"=${input.subjectId}` : Prisma.empty} GROUP BY c."userId"),
+    card_stats AS (SELECT c."userId",${cardCountsSQL(now)} FROM "Card" c JOIN people u ON u.id=c."userId" JOIN "Topic" t ON t.id=c."topicId" JOIN "Subject" s ON s.id=t."subjectId" WHERE ${availableCardSQL(now, settings.graceDays)} ${input.subjectId ? Prisma.sql`AND c."subjectId"=${input.subjectId}` : Prisma.empty} GROUP BY c."userId"),
     last_activity AS (SELECT "userId",max(at) AS at FROM scoped_activity GROUP BY "userId"),
-    statistics AS (SELECT u.id,u.name,u.email,COALESCE(ss.subjects,'') AS subjects,COALESCE(ss.total,0) AS "totalTopics",COALESCE(ps.completed,0) AS completed,ps.average,COALESCE(cs.due,0) AS due,COALESCE(cs.overdue,0) AS overdue,to_char(la.at,'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "lastActivity",
+    statistics AS (SELECT u.id,u.name,u.email,COALESCE(ss.subjects,'') AS subjects,${input.subjectId ? Prisma.sql`COALESCE((SELECT n FROM subject_totals WHERE "subjectId"=${input.subjectId}),0)` : Prisma.sql`COALESCE(ss.total,0)`} AS "totalTopics",COALESCE(ps.completed,0) AS completed,ps.average,COALESCE(cs.due,0) AS due,COALESCE(cs.overdue,0) AS overdue,to_char(la.at,'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "lastActivity",
       (CASE WHEN COALESCE(ss.total,0)>0 THEN COALESCE(ps.completed,0)::float/ss.total*100 ELSE 0 END<${settings.minCompletionPercent} OR COALESCE(la.at,u."createdAt")<${now}::timestamp-${settings.inactiveDays}*interval '1 day') AS lagging
       FROM people u LEFT JOIN subject_stats ss ON ss."userId"=u.id LEFT JOIN progress_stats ps ON ps."userId"=u.id LEFT JOIN card_stats cs ON cs."userId"=u.id LEFT JOIN last_activity la ON la."userId"=u.id
     ), filtered AS (SELECT * FROM statistics WHERE (name ILIKE ${"%" + input.q + "%"} OR email ILIKE ${"%" + input.q + "%"}) ${input.filter === "lagging" ? Prisma.sql`AND lagging` : Prisma.empty})

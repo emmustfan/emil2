@@ -1,3 +1,4 @@
+import type { Prisma } from "../generated/prisma/client";
 import type { StaffActor } from "./policy";
 
 export function groupScopes(actor: StaffActor) {
@@ -31,5 +32,36 @@ export function groupPermissions(
     roster,
     manage: active && oversees && !actor.readOnly,
     members: active && roster && !actor.readOnly,
+  };
+}
+
+export const activeDepartment = {
+  archivedAt: null,
+  faculty: { archivedAt: null },
+};
+
+export function teachingScope(
+  actor: StaffActor,
+): Prisma.GroupSubjectWhereInput {
+  const assignments = actor.role === "EDITOR" ? actor.assignments : [];
+  return {
+    teachers: { some: { teacherId: actor.id } },
+    subject: {
+      department: activeDepartment,
+      OR: [
+        {
+          id: {
+            in: assignments.flatMap((a) => (a.subjectId ? [a.subjectId] : [])),
+          },
+        },
+        {
+          departmentId: {
+            in: assignments.flatMap((a) =>
+              a.departmentId ? [a.departmentId] : [],
+            ),
+          },
+        },
+      ],
+    },
   };
 }

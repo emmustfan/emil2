@@ -89,7 +89,11 @@ export function WorkspaceFrame({
           label: admin ? "Обзор и статистика" : "Мои предметы",
           icon: admin ? ChartNoAxesCombined : Home,
         },
-        { href: "/teacher/groups", label: "Учебные группы", icon: Users },
+        {
+          href: "/teacher/groups",
+          label: admin ? "Группы и прогресс" : "Учебные группы",
+          icon: Users,
+        },
         ...(admin
           ? [
               { href: "/admin", label: "Предметы и уроки", icon: BookOpen },
