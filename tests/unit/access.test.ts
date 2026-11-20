@@ -4,12 +4,14 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   subscriptions: vi.fn(),
   grants: vi.fn(),
+  enrollments: vi.fn(),
 }));
 vi.mock("../../lib/db", () => ({
   getDb: () => ({
     user: { findUnique: mocks.user },
     subscription: { findMany: mocks.subscriptions },
     accessGrant: { findMany: mocks.grants },
+    groupSubject: { findMany: mocks.enrollments },
   }),
 }));
 vi.mock("../../lib/settings", () => ({ getSetting: async () => 3 }));
@@ -38,6 +40,23 @@ describe("access policy", () => {
   it("opens free lessons and denies paid lessons without rights", () => {
     expect(check({}, true)).toBe(true);
     expect(check({})).toBe(false);
+  });
+  it("accepts active enrollment only for the enrolled subject and combines it with a subscription", () => {
+    const enrollments = [{ subjectId: topic.subjectId }];
+    expect(check({ enrollments })).toBe(true);
+    expect(check({ enrollments: [{ subjectId: "other" }] })).toBe(false);
+    expect(
+      check({
+        enrollments,
+        subscriptions: [subscription({ status: "EXPIRED" })],
+      }),
+    ).toBe(true);
+    expect(
+      check({
+        enrollments: [{ subjectId: "other" }],
+        subscriptions: [subscription()],
+      }),
+    ).toBe(true);
   });
   it("scopes active subscriptions to one subject or all subjects", () => {
     expect(check({ subscriptions: [subscription()] })).toBe(true);
@@ -117,6 +136,7 @@ describe("hasAccess account checks", () => {
     mocks.user.mockResolvedValue({ blockedAt: null, deletedAt: null });
     mocks.subscriptions.mockResolvedValue([]);
     mocks.grants.mockResolvedValue([]);
+    mocks.enrollments.mockResolvedValue([]);
   });
   it("serves free topics to guests and rejects paid guest access without querying user data", async () => {
     expect(await hasAccess(null, { ...topic, isFree: true })).toBe(true);
@@ -136,6 +156,22 @@ describe("hasAccess account checks", () => {
       expect(await hasAccess("u", topic)).toBe(false);
     }
     expect(mocks.grants).not.toHaveBeenCalled();
+  });
+  it("uses a single enrollment lookup restricted to active members of active groups", async () => {
+    expect(await hasAccess("u", topic)).toBe(false);
+    expect(mocks.enrollments).toHaveBeenCalledExactlyOnceWith({
+      where: {
+        group: {
+          archivedAt: null,
+          faculty: { archivedAt: null },
+          members: { some: { userId: "u", status: "ACTIVE" } },
+        },
+      },
+      select: { subjectId: true },
+      distinct: ["subjectId"],
+    });
+    mocks.enrollments.mockResolvedValue([{ subjectId: topic.subjectId }]);
+    expect(await hasAccess("u", topic)).toBe(true);
   });
   it("reads actual entitlements for a valid account", async () => {
     mocks.grants.mockResolvedValue([

@@ -150,6 +150,10 @@ export const protectedImpersonationTables = [
   "Gap",
   "TopicRevision",
   "RoleAssignment",
+  "StudyGroup",
+  "GroupMember",
+  "GroupSubject",
+  "GroupTeacher",
 ] as const;
 export async function snapshotImpersonationData() {
   const result: Record<string, { count: number; digest: string }> = {};

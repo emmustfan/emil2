@@ -4,6 +4,23 @@ import { getSetting } from "../settings";
 import { lock } from "../auth/session";
 import { ContentError } from "../content/errors";
 import { allowsAccess } from "./policy";
+export function enrolledSubjects(
+  userId: string,
+  db: Prisma.TransactionClient = getDb(),
+) {
+  return db.groupSubject.findMany({
+    where: {
+      group: {
+        archivedAt: null,
+        faculty: { archivedAt: null },
+        members: { some: { userId, status: "ACTIVE" } },
+      },
+    },
+    select: { subjectId: true },
+    distinct: ["subjectId"],
+  });
+}
+
 export async function hasAccess(
   userId: string | null,
   topic: { subjectId: string; isFree: boolean },
@@ -16,7 +33,7 @@ export async function hasAccess(
     select: { blockedAt: true, deletedAt: true },
   });
   if (!user || user.blockedAt || user.deletedAt) return false;
-  const [subscriptions, grants, grace] = await Promise.all([
+  const [subscriptions, grants, enrollments, grace] = await Promise.all([
     db.subscription.findMany({
       where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] } },
       include: { plan: { select: { kind: true } } },
@@ -25,9 +42,15 @@ export async function hasAccess(
       where: { userId, expiresAt: { gt: new Date() } },
       select: { subjectId: true, expiresAt: true },
     }),
+    enrolledSubjects(userId, db),
     getSetting("billing.graceDays"),
   ]);
-  return allowsAccess(topic, { subscriptions, grants }, new Date(), grace);
+  return allowsAccess(
+    topic,
+    { subscriptions, grants, enrollments },
+    new Date(),
+    grace,
+  );
 }
 // All reservations share atomic database counters; callers may supply a transaction.
 export async function consumeLimit(

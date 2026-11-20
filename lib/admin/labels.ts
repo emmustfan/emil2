@@ -80,6 +80,8 @@ export const settingLabels: Record<string, string> = {
   "admin.usersPageSize": "Пользователей на странице",
   "admin.maxTeacherSubjects": "Максимум предметов учителя",
   "admin.maxGrantDays": "Максимальный срок ручного доступа: дней",
+  "group.joinCodeDays": "Срок действия кода группы: дней",
+  "group.joinAttemptsPerMinute": "Попыток вступления в группу в минуту (до 10)",
   "admin.defaultGrantDays": "Начальный срок в форме ручного доступа: дней",
 };
 export const legalLabels: Record<string, string> = {
@@ -87,4 +89,5 @@ export const legalLabels: Record<string, string> = {
   privacy: "Политика обработки персональных данных",
   consent: "Согласие на обработку персональных данных",
   refund: "Правила возврата",
+  "group-notice": "Что видит преподаватель",
 };

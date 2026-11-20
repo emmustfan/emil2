@@ -123,6 +123,71 @@ it("seeds twelve consistent preview learners through domain services, preserves 
         ).rows[0].count,
       ),
     ).toBe(0);
+    const group = (
+      await db.query(`
+      SELECT id, course, "academicYear" FROM "StudyGroup" WHERE name='Демо-группа 101'
+    `)
+    ).rows[0];
+    expect(group).toMatchObject({ course: 1, academicYear: /^\d{4}\/\d{4}$/ });
+    const groupMembers = (
+      await db.query(
+        `
+      SELECT m.status, u.email, m."noticeVersion", m."noticeAcceptedAt"
+      FROM "GroupMember" m JOIN "User" u ON m."userId"=u.id WHERE m."groupId"=$1 ORDER BY u.email
+    `,
+        [group.id],
+      )
+    ).rows;
+    expect(
+      groupMembers.filter((m) => m.status === "ACTIVE").map((m) => m.email),
+    ).toEqual(users.map((u) => u.email));
+    expect(
+      groupMembers.filter((m) => m.status === "PENDING").map((m) => m.email),
+    ).toEqual(["demo-applicant-01@example.ru", "demo-applicant-02@example.ru"]);
+    expect(
+      groupMembers.every((m) => m.noticeVersion && m.noticeAcceptedAt),
+    ).toBe(true);
+    expect(
+      (
+        await db.query(
+          `
+      SELECT s.slug, u.email FROM "GroupSubject" gs JOIN "Subject" s ON s.id=gs."subjectId"
+      JOIN "GroupTeacher" gt ON (gt."groupId",gt."subjectId")=(gs."groupId",gs."subjectId")
+      JOIN "User" u ON u.id=gt."teacherId" WHERE gs."groupId"=$1 ORDER BY s.slug
+    `,
+          [group.id],
+        )
+      ).rows,
+    ).toEqual(
+      ["learning-demo", "platform-demo", "progress-dental-demo"].map(
+        (slug) => ({ slug, email: "teacher@example.ru" }),
+      ),
+    );
+    const teacherView = run(process.execPath, [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      `
+      import { getDb } from "./lib/db.ts";
+      import { staffGroup } from "./lib/groups/queries.ts";
+      const db = getDb();
+      const teacher = await db.user.findUniqueOrThrow({ where: { email: "teacher@example.ru" } });
+      const group = await db.studyGroup.findFirstOrThrow({ where: { name: "Демо-группа 101" } });
+      const data = await staffGroup(teacher.id, group.id, "");
+      console.log(JSON.stringify(data.members.filter((m) => m.status === "PENDING").map((m) => m.user.email)));
+      await db.$disconnect();
+    `,
+    ]);
+    expect(teacherView.status, teacherView.stdout + teacherView.stderr).toBe(0);
+    expect(JSON.parse(teacherView.stdout.trim())).toEqual([
+      "demo-applicant-01@example.ru",
+      "demo-applicant-02@example.ru",
+    ]);
+    await db.query(
+      `UPDATE "GroupMember" SET status='REJECTED' WHERE "groupId"=$1 AND "userId"=(SELECT id FROM "User" WHERE email='demo-applicant-01@example.ru')`,
+      [group.id],
+    );
     await db.query(
       `UPDATE "User" SET name='Ручная правка (демо)',email='manual-demo-email@example.test' WHERE id=$1`,
       [users[0].id],
@@ -145,6 +210,10 @@ it("seeds twelve consistent preview learners through domain services, preserves 
       "TutorMessage",
       "Event",
       "AppSetting",
+      "StudyGroup",
+      "GroupMember",
+      "GroupSubject",
+      "GroupTeacher",
     ];
     async function snapshot() {
       const result: Record<string, string> = {};

@@ -1,3 +1,4 @@
+import { GROUP_NOTICE_KIND } from "../groups/notice";
 import { z } from "zod";
 import {
   DEFAULT_SETTINGS,
@@ -54,7 +55,7 @@ export const grantInput = z
   .strict();
 export const legalInput = z
   .object({
-    kind: z.enum(["oferta", "privacy", "consent", "refund"]),
+    kind: z.enum(["oferta", "privacy", "consent", "refund", GROUP_NOTICE_KIND]),
     version: z
       .string()
       .trim()

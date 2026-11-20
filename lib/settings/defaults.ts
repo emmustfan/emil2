@@ -78,6 +78,8 @@ export const DEFAULT_SETTINGS = {
   "admin.usersPageSize": 20,
   "admin.impersonationMinutes": 30,
   "admin.impersonationHistoryLimit": 50,
+  "group.joinCodeDays": 30,
+  "group.joinAttemptsPerMinute": 10,
   "progress.pageSize": 20,
   "progress.minCompletionPercent": 50,
   "progress.inactiveDays": 7,
@@ -116,6 +118,9 @@ export function decodeSetting<K extends SettingKey>(
   if (key === "progress.pageSize") schema = z.number().int().min(1).max(100);
   if (key === "progress.inactiveDays")
     schema = z.number().int().min(1).max(3650);
+  if (key === "group.joinCodeDays") schema = z.number().int().min(1).max(365);
+  if (key === "group.joinAttemptsPerMinute")
+    schema = z.number().int().min(1).max(10);
   const result = schema.safeParse(value);
   // Bounds for security settings; avoid fractional session counts and unbounded cookies.
   if (

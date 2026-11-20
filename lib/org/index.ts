@@ -1,81 +1,23 @@
-import { cache } from "react";
 import { getDb } from "../db";
 import type { Prisma } from "../generated/prisma/client";
 import { lockRoleAccess } from "../auth/role-lock";
 import { AuthError } from "../auth/errors";
 import { ContentError } from "../content/errors";
-import {
-  decide,
-  roleAllows,
-  type Action,
-  type Area,
-  type Assignment,
-} from "./policy";
+import { decide, roleAllows, type Action, type Area } from "./policy";
+import { orgActor, type ContentReader } from "./actor";
+import { createGroupStatus, groupStatus } from "./groups";
+export { orgActor, type ContentReader } from "./actor";
 export type { Action } from "./policy";
 export const UNASSIGNED_DEPARTMENT_ID = "org-unassigned";
 
 type Db = Prisma.TransactionClient;
-export type ContentReader = string | { id: string; readOnly?: boolean };
-type OrgActor = {
-  id: string;
-  role: string;
-  assignments: Assignment[];
-  readOnly?: boolean;
-};
-export type Target =
-  | { subjectId: string; draftUpdatedById?: string | null; groupId?: string }
+type ContentTarget =
+  | { subjectId: string; draftUpdatedById?: string | null }
   | { departmentId: string }
   | { facultyId: string };
+export type Target = ContentTarget | { groupId: string; subjectId?: string };
 
-async function loadActor(
-  db: Db,
-  id: string,
-  readOnly: boolean,
-): Promise<OrgActor> {
-  const row = await db.user.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      role: true,
-      blockedAt: true,
-      deletedAt: true,
-      staffAssignments: {
-        select: {
-          role: true,
-          facultyId: true,
-          departmentId: true,
-          subjectId: true,
-        },
-      },
-    },
-  });
-  if (!row || row.deletedAt || (row.blockedAt && !readOnly))
-    throw new AuthError("unauthorized", 401);
-  return {
-    id: row.id,
-    role: row.role,
-    assignments: row.staffAssignments,
-    readOnly,
-  };
-}
-
-const cachedActor = cache((id: string, readOnly: boolean) =>
-  loadActor(getDb(), id, readOnly),
-);
-const requestActors = new WeakMap<object, Promise<OrgActor>>();
-export function orgActor(actor: ContentReader, db?: Db) {
-  const id = typeof actor === "string" ? actor : actor.id;
-  const readOnly = typeof actor === "object" && actor.readOnly === true;
-  if (db && db !== getDb()) return loadActor(db, id, readOnly);
-  if (typeof actor === "string") return cachedActor(id, readOnly);
-  const existing = requestActors.get(actor);
-  if (existing) return existing;
-  const loaded = cachedActor(id, readOnly);
-  requestActors.set(actor, loaded);
-  return loaded;
-}
-
-async function areaFor(db: Db, target: Target): Promise<Area | null> {
+async function areaFor(db: Db, target: ContentTarget): Promise<Area | null> {
   const select = {
     id: true,
     facultyId: true,
@@ -125,6 +67,15 @@ async function decision(
   target: Target,
   db?: Db,
 ) {
+  if (action === "group.manage" || action === "group.members") {
+    const conn = db ?? getDb();
+    if ("groupId" in target)
+      return groupStatus(actor, action, target.groupId, conn);
+    if (action === "group.manage" && "facultyId" in target)
+      return createGroupStatus(actor, target.facultyId, conn);
+    return 404;
+  }
+  if ("groupId" in target) return 404;
   const [user, area] = await Promise.all([
     orgActor(actor, db),
     areaFor(db ?? getDb(), target),

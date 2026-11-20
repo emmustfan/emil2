@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { enrolledSubjects } from "../access";
 import { allowsAccess } from "../access/policy";
 import { getSetting } from "../settings";
 import { getTutorQuota } from "../tutor/quota";
@@ -7,7 +8,7 @@ export async function studentOverview(
   now = new Date(),
   readOnly = false,
 ) {
-  const [progress, subs, grants, grace, quota] = await Promise.all([
+  const queries = [
     getDb().topicProgress.findMany({
       where: {
         userId,
@@ -36,11 +37,18 @@ export async function studentOverview(
       where: { userId, status: { in: ["ACTIVE", "PAST_DUE"] } },
       include: { plan: { select: { kind: true } } },
     }),
-    getDb().accessGrant.findMany({ where: { userId, expiresAt: { gt: now } } }),
+    getDb().accessGrant.findMany({
+      where: { userId, expiresAt: { gt: now } },
+    }),
+    enrolledSubjects(userId),
     getSetting("billing.graceDays"),
     getTutorQuota({ userId, readOnly }),
-  ]);
+  ] as const;
+  const [progress, subs, grants, enrollments, grace, quota] =
+    await Promise.all(queries);
+  const groupSubjectIds = new Set(enrollments.map((e) => e.subjectId));
   const ids = new Set([
+    ...groupSubjectIds,
     ...progress.map((p) => p.topic.subjectId),
     ...subs.flatMap((s) => (s.subjectId ? [s.subjectId] : [])),
     ...grants.flatMap((g) => (g.subjectId ? [g.subjectId] : [])),
@@ -75,6 +83,10 @@ export async function studentOverview(
     },
     orderBy: { order: "asc" },
   });
+  subjects.sort(
+    (a, b) =>
+      Number(groupSubjectIds.has(b.id)) - Number(groupSubjectIds.has(a.id)),
+  );
   return {
     quota,
     recent: progress[0] ?? null,
@@ -85,7 +97,7 @@ export async function studentOverview(
         );
       const permitted = allowsAccess(
         { subjectId: s.id, isFree: false },
-        { subscriptions: subs, grants },
+        { subscriptions: subs, grants, enrollments },
         now,
         grace,
       );
@@ -120,6 +132,7 @@ export async function studentOverview(
           ? scores.reduce((a, b) => a + b, 0) / scores.length
           : null,
         permitted,
+        enrolled: groupSubjectIds.has(s.id),
         until: ends.length ? new Date(Math.max(...ends.map(Number))) : null,
       };
     }),

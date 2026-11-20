@@ -7,6 +7,7 @@ export type Entitlements = {
     plan: { kind: string };
   }[];
   grants: { subjectId: string | null; expiresAt: Date }[];
+  enrollments?: { subjectId: string }[];
 };
 export function allowsAccess(
   topic: { subjectId: string; isFree: boolean },
@@ -16,6 +17,7 @@ export function allowsAccess(
 ) {
   if (topic.isFree) return true;
   return (
+    rights.enrollments?.some((e) => e.subjectId === topic.subjectId) ||
     rights.grants.some(
       (g) =>
         (g.subjectId === null || g.subjectId === topic.subjectId) &&

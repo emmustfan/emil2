@@ -89,6 +89,7 @@ export function WorkspaceFrame({
           label: admin ? "Обзор и статистика" : "Мои предметы",
           icon: admin ? ChartNoAxesCombined : Home,
         },
+        { href: "/teacher/groups", label: "Учебные группы", icon: Users },
         ...(admin
           ? [
               { href: "/admin", label: "Предметы и уроки", icon: BookOpen },
@@ -119,6 +120,7 @@ export function WorkspaceFrame({
         ...(role
           ? [
               { href: "/subjects", label: "Мои предметы", icon: BookOpen },
+              { href: "/cabinet/groups", label: "Мои группы", icon: Users },
               { href: "/review", label: "Повторение", icon: Layers },
               { href: "/tutor", label: "ИИ-тьютор", icon: MessageSquare },
               {
@@ -152,6 +154,7 @@ export function WorkspaceFrame({
         path.startsWith("/admin/topics") ||
         path === "/admin/imports"
       );
+    if (href === "/teacher") return path === "/teacher";
     if (href === "/student") return path === "/student" || path === "/cabinet";
     return path === href || path.startsWith(href + "/");
   }
