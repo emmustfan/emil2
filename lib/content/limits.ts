@@ -1,0 +1,1 @@
+export const MAX_MARKDOWN_CHARS = 100000;

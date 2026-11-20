@@ -13,6 +13,8 @@ import {
 } from "./table-spans";
 import { imageId } from "./image-reference";
 import { readGapBody } from "./gap-id";
+import { MAX_MARKDOWN_CHARS } from "./limits";
+export { MAX_MARKDOWN_CHARS } from "./limits";
 export type ParseError = {
   code: string;
   message: string;
@@ -64,7 +66,6 @@ type Node = {
   };
 };
 const parser = unified().use(remarkParse).use(remarkGfm);
-export const MAX_MARKDOWN_CHARS = 100000;
 export function normalizeSentence(text: string) {
   return text.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }

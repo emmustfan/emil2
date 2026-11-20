@@ -490,8 +490,10 @@ export function TopicEditor({
   }
   if (row.archivedAt)
     return (
-      <section className="emal-panel space-y-4">
-        <h1 className="text-2xl font-semibold">{row.title}</h1>
+      <section
+        aria-label="Действия с архивным уроком"
+        className="emal-panel space-y-4"
+      >
         <p>Урок в архиве. Восстановление вернёт его в редактор как черновик.</p>
         {error && (
           <p role="alert" className="text-red-700">

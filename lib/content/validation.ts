@@ -4,7 +4,7 @@ import {
   gapExercisesSchema,
 } from "../exercises";
 import { z } from "zod";
-import { MAX_MARKDOWN_CHARS } from "./parse";
+import { MAX_MARKDOWN_CHARS } from "./limits";
 export const revisionSchema = z.number().int().nonnegative();
 const slug = z
   .string()
